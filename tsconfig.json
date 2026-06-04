@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./pi-core" },
+    { "path": "./pi-profiles" },
+    { "path": "./pi-memory" },
+    { "path": "./pi-mcp" },
+    { "path": "./pi-service" },
+    { "path": "./pi-channels" },
+    { "path": "./pi-tools" },
+    { "path": "./pi-governance" },
+    { "path": "./pi-crew" }
+  ]
+}

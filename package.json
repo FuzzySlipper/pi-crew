@@ -1,0 +1,31 @@
+{
+  "name": "pi-crew-monorepo",
+  "private": true,
+  "workspaces": [
+    "pi-core",
+    "pi-profiles",
+    "pi-memory",
+    "pi-mcp",
+    "pi-service",
+    "pi-channels",
+    "pi-tools",
+    "pi-governance",
+    "pi-crew"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}
