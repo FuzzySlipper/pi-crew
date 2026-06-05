@@ -11,7 +11,8 @@
   "dependencies": {
     "@pi-crew/core": "*",
     "@pi-crew/profiles": "*",
-    "@pi-crew/mcp": "*"
+    "@pi-crew/mcp": "*",
+    "zod": "^3"
   },
   "scripts": {
     "test": "vitest run",
