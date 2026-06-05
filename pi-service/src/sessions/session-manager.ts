@@ -13,6 +13,7 @@ import type {
   EventBus,
   ChannelProvider,
   ChannelMessage,
+  ChannelContent,
 } from "@pi-crew/core";
 import type {
   SessionConfig,
@@ -193,8 +194,66 @@ export class SessionManagerImpl implements SessionManager {
     channel: ChannelProvider,
     message: ChannelMessage,
   ): Promise<void> {
+    const record = await this.resolveSession(message.channelId);
+
+    // Retrieve the session's agent instance and process the message.
+    const instanceId = record.instanceId;
+    if (!instanceId) {
+      this.logger.warn("Session has no instance, cannot process message", {
+        sessionId: record.id,
+      });
+      return;
+    }
+
+    const instance = this.pool.get(instanceId);
+    if (!instance) {
+      this.logger.warn("Instance not found in pool", {
+        instanceId,
+        sessionId: record.id,
+      });
+      return;
+    }
+
+    try {
+      const response: ChannelContent =
+        await instance.processMessage(message);
+
+      await channel.sendMessage(message.channelId, response);
+
+      this.logger.debug("Agent response sent", {
+        sessionId: record.id,
+        channelId: message.channelId,
+      });
+    } catch (error) {
+      this.logger.error("Agent processMessage failed", {
+        sessionId: record.id,
+        channelId: message.channelId,
+        error: (error as Error).message,
+      });
+
+      // Send an error message back to the channel.
+      await channel.sendMessage(message.channelId, {
+        kind: "text",
+        text: `[pi-service] Agent error: ${(error as Error).message}`,
+      });
+    }
+  }
+
+  /**
+   * Resolve (or create) the session for a channel.
+   *
+   * 1. Look for an existing in-progress session bound to the channel.
+   * 2. If found, route to it.
+   * 3. If not found, create a new conversational session as a visible
+   *    fallback (emits `session.routing` with reason `fallback_created`).
+   *
+   * @returns The resolved session record.
+   */
+  private async resolveSession(
+    channelId: string,
+  ): Promise<SessionRecord> {
     // 1. Look for an existing in-progress session bound to this channel.
-    const existing = await this.findByChannel(message.channelId);
+    const existing = await this.findByChannel(channelId);
 
     if (existing && existing.state !== "archived") {
       // Touch the instance to prevent idle eviction.
@@ -206,17 +265,17 @@ export class SessionManagerImpl implements SessionManager {
         event: "session.routing",
         payload: {
           sessionId: existing.id,
-          channelId: message.channelId,
+          channelId,
           reason: "existing_session",
         },
       });
 
       this.logger.debug("Message routed to existing session", {
         sessionId: existing.id,
-        channelId: message.channelId,
+        channelId,
       });
 
-      return;
+      return existing;
     }
 
     // 2. No suitable session — create a new conversational session as
@@ -224,22 +283,24 @@ export class SessionManagerImpl implements SessionManager {
     const newSession = await this.create({
       profileId: "default",
       kind: "conversational",
-      channelBindings: [message.channelId],
+      channelBindings: [channelId],
     });
 
     this.eventBus.emit({
       event: "session.routing",
       payload: {
         sessionId: newSession.id,
-        channelId: message.channelId,
+        channelId,
         reason: "fallback_created",
       },
     });
 
     this.logger.info("Fallback session created for routing", {
       sessionId: newSession.id,
-      channelId: message.channelId,
+      channelId,
     });
+
+    return newSession;
   }
 
   async archive(sessionId: string): Promise<void> {

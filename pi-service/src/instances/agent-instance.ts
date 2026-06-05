@@ -7,6 +7,8 @@
  * @module pi-service/instances/agent-instance
  */
 
+import type { ChannelMessage, ChannelContent } from "@pi-crew/core";
+
 // ── AgentInstance interface ─────────────────────────────────────
 
 /**
@@ -27,6 +29,17 @@ export interface AgentInstance {
 
   /** Whether the instance has been disposed. */
   readonly isDisposed: boolean;
+
+  /**
+   * Process an inbound message and produce a response.
+   *
+   * In the spike implementation this echoes back the message text.
+   * Full provider/model invocation will be wired in follow-up tasks.
+   *
+   * @param message — The inbound channel message.
+   * @returns The agent's response content.
+   */
+  processMessage(message: ChannelMessage): Promise<ChannelContent>;
 
   /**
    * Release all resources held by this instance.
@@ -61,6 +74,17 @@ export class AgentInstanceImpl implements AgentInstance {
 
   get isDisposed(): boolean {
     return this._disposed;
+  }
+
+  processMessage(
+    message: ChannelMessage,
+  ): Promise<ChannelContent> {
+    // Spike echo: return "received: [text]"
+    const text =
+      message.content.kind === "text"
+        ? message.content.text
+        : "[non-text content]";
+    return Promise.resolve({ kind: "text", text: `received: ${text}` });
   }
 
   dispose(): Promise<void> {

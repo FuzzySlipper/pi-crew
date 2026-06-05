@@ -79,6 +79,13 @@ export interface InstancePool {
 
   /** Check whether an instance is currently tracked. */
   has(instanceId: string): boolean;
+
+  /**
+   * Retrieve a tracked instance by ID.
+   *
+   * Returns undefined if the instance is not in the pool.
+   */
+  get(instanceId: string): AgentInstance | undefined;
 }
 
 // ── InstancePool implementation ─────────────────────────────────
@@ -196,5 +203,10 @@ export class InstancePoolImpl implements InstancePool {
   /** Check whether an instance is tracked. */
   has(instanceId: string): boolean {
     return this.entries.has(instanceId);
+  }
+
+  /** Retrieve a tracked instance by ID. */
+  get(instanceId: string): AgentInstance | undefined {
+    return this.entries.get(instanceId)?.instance;
   }
 }
