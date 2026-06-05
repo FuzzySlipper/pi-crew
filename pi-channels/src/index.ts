@@ -31,3 +31,33 @@ export async function connectAll(
     }
   }
 }
+
+// ── Den Channels adapter ────────────────────────────────────────
+
+export { DenChannelsAdapter } from "./den-channels/den-channels-adapter.js";
+export type { DenChannelsAdapterConfig } from "./den-channels/den-channels-adapter.js";
+
+export {
+  DenWebSocketConnection,
+  SimulatedDenConnection,
+} from "./den-channels/connection.js";
+export type {
+  DenConnection,
+  DenConnectionConfig,
+  DenConnectionEvents,
+  DenInboundMessage,
+  DenOutboundPayload,
+  DenSender,
+  DenContent,
+  DenBreadcrumbPayload,
+  DenSendResult,
+} from "./den-channels/connection.js";
+
+export {
+  translateInboundMessage,
+  translateDenSender,
+  translateDenContent,
+  translateOutboundContent,
+  channelContentToDenContent,
+  translateBreadcrumbToDen,
+} from "./den-channels/message-format.js";
