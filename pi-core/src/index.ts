@@ -78,3 +78,12 @@ export {
   DEFAULT_RETRY_POLICY,
   retryWithBackoff,
 } from "./retry.js";
+
+// ── Test helpers ───────────────────────────────────────────────
+export {
+  InMemoryRepository,
+  FakeEventBus,
+  FakeLogger,
+  type LogEntry,
+  FakeChannelProvider,
+} from "./test-helpers/index.js";
