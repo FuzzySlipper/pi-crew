@@ -16,6 +16,13 @@ export interface SessionCreatedPayload {
   readonly kind: "conversational" | "worker";
 }
 
+/** Fired when a session is routed to (including fallback-creation visibility). */
+export interface SessionRoutingPayload {
+  readonly sessionId: string;
+  readonly channelId: string;
+  readonly reason: "existing_session" | "fallback_created";
+}
+
 /** Fired when a session expires or is explicitly released. */
 export interface SessionExpiredPayload {
   readonly sessionId: string;
@@ -119,6 +126,7 @@ export interface GatewayShutdownPayload {
  */
 export type GatewayEvent =
   | { event: "session.created"; payload: SessionCreatedPayload }
+  | { event: "session.routing"; payload: SessionRoutingPayload }
   | { event: "session.expired"; payload: SessionExpiredPayload }
   | { event: "tool.called"; payload: ToolCalledPayload }
   | { event: "tool.completed"; payload: ToolCompletedPayload }

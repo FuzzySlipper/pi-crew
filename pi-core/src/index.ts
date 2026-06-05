@@ -41,6 +41,7 @@ export {
   type GatewayEvent,
   type EventPayload,
   type SessionCreatedPayload,
+  type SessionRoutingPayload,
   type SessionExpiredPayload,
   type ToolCalledPayload,
   type ToolCompletedPayload,
