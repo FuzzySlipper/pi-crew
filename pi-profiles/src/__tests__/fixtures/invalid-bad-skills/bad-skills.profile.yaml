@@ -1,0 +1,4 @@
+name: "Bad Skills Profile"
+description: "Has a malformed skills array"
+skills:
+  - not_an_object_string

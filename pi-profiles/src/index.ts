@@ -1,22 +1,30 @@
 // pi-profiles — Agent personality, skill definitions, and system prompt assembly.
-// Depends on: pi-core
+// Depends on: pi-core, js-yaml
+//
+// Profiles are global service-install configuration, NOT per-user or
+// per-frontend runtime state. See planning-clarifications-v1 §1, §4.
 
-export interface Skill {
-  name: string;
-  description: string;
-  version: string;
-}
+// ── Types ────────────────────────────────────────────────────
+export {
+  type Profile,
+  type Skill,
+  type ModelConfig,
+  type ToolPolicy,
+} from "./profile.js";
 
-export interface Profile {
-  name: string;
-  description: string;
-  skills: Skill[];
-}
+// ── Loader ────────────────────────────────────────────────────
+export {
+  type ProfileSource,
+  FilesystemProfileSource,
+  loadProfiles,
+  loadProfile,
+} from "./loader.js";
 
-export function loadProfile(name: string): Profile {
-  return {
-    name,
-    description: `Profile: ${name}`,
-    skills: [],
-  };
-}
+// ── System prompt assembler ───────────────────────────────────
+export {
+  type BlackboardHeadings,
+  type RuntimeContext,
+  type PromptAssemblyOptions,
+  assembleSystemPrompt,
+  assembleProfilePrompt,
+} from "./system-prompt.js";

@@ -1,0 +1,19 @@
+# pi-crew-planner profile YAML definition
+name: "Pi Crew Planner"
+description: >-
+  Planning and task-shaping agent. Breaks down project goals into
+  well-scoped, dependency-ordered tasks with clear acceptance criteria.
+skills:
+  - name: task-decomposition
+    description: Break project goals into well-scoped tasks with clear acceptance criteria.
+    version: "0.1.0"
+  - name: dependency-ordering
+    description: Order tasks by dependency graph and identify parallelizable work.
+    version: "0.1.0"
+  - name: estimation
+    description: Estimate task complexity and scope with explicit assumptions.
+    version: "0.1.0"
+modelConfig:
+  temperature: 0.4
+toolPolicy:
+  mode: allow_all

@@ -1,0 +1,22 @@
+# pi-crew-runner profile YAML definition
+name: "Pi Crew Runner"
+description: >-
+  Execution and implementation agent. Carries out well-scoped implementation
+  tasks, runs tests, and produces verifiable completion evidence.
+skills:
+  - name: implementation
+    description: Implement code changes against clear acceptance criteria.
+    version: "0.1.0"
+  - name: testing
+    description: Write and run tests that verify acceptance criteria.
+    version: "0.1.0"
+  - name: debugging
+    description: Diagnose and fix bugs with root-cause analysis.
+    version: "0.1.0"
+  - name: code-review-preparation
+    description: Prepare clean, reviewable commits with clear messages.
+    version: "0.1.0"
+modelConfig:
+  temperature: 0.2
+toolPolicy:
+  mode: allow_all

@@ -1,0 +1,6 @@
+name: "Test Agent"
+description: "A test profile for unit tests."
+skills:
+  - name: "test-skill"
+    description: "A test skill"
+    version: "0.1.0"

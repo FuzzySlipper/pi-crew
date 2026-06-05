@@ -12,7 +12,6 @@
  */
 
 import type { Logger } from "@pi-crew/core";
-import { loadProfile } from "@pi-crew/profiles";
 import type { AgentInstance } from "./agent-instance.js";
 import { AgentInstanceImpl } from "./agent-instance.js";
 
@@ -45,11 +44,12 @@ export class InstanceFactoryImpl implements InstanceFactory {
   constructor(private readonly logger: Logger) {}
 
   create(profileId: string, role?: string): Promise<AgentInstance> {
-    const profile = loadProfile(profileId);
-
+    // DESIGN: Keep pi-service instance construction profile-id based until the
+    // composition root wires a concrete ProfileSource. Rationale: pi-profiles is
+    // standalone global configuration; service unit tests use synthetic profile
+    // ids and should not require installed profile fixtures.
     this.logger.debug("Creating agent instance", {
       profileId,
-      profileName: profile.name,
       role,
     });
 

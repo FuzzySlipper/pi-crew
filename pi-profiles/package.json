@@ -9,7 +9,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@pi-crew/core": "*"
+    "@pi-crew/core": "*",
+    "js-yaml": "^4.2.0"
   },
   "scripts": {
     "test": "vitest run",
