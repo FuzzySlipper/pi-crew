@@ -7,12 +7,12 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { FakeLogger } from "@pi-crew/core";
-import {
-  SimulatedDenConnection,
-  type DenInboundMessage,
-  type DenOutboundPayload,
-  type DenBreadcrumbPayload,
-} from "../den-channels/connection.js";
+import { SimulatedDenConnection } from "../den-channels/connection-simulated.js";
+import type {
+  DenInboundMessage,
+  DenOutboundPayload,
+  DenBreadcrumbPayload,
+} from "../den-channels/connection-types.js";
 
 function makeInboundMessage(
   overrides?: Partial<DenInboundMessage>,

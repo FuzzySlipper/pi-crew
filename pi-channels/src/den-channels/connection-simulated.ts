@@ -1,8 +1,7 @@
 /**
- * Simulated (in-memory) Den Channels Gateway connection for testing.
+ * In-memory simulated Den Channels Gateway connection for testing.
  *
- * Implements {@link DenConnection} so the adapter and message-format
- * layers can be exercised without a real WebSocket.
+ * Implements {@link DenConnection} for unit tests.
  *
  * @module pi-channels/den-channels/connection-simulated
  */
@@ -16,25 +15,19 @@ import type {
   DenOutboundPayload,
   DenBreadcrumbPayload,
   DenSendResult,
-} from "./connection.js";
+} from "./connection-types.js";
 
 /**
  * In-memory {@link DenConnection} that simulates the Den Channels Gateway.
  *
- * Used in unit tests.  Captures all sent payloads and breadcrumbs,
- * supports inbound message injection, and simulates connection drops.
+ * Used in unit tests so the adapter and message-format layers can be
+ * exercised without a real WebSocket.
  */
 export class SimulatedDenConnection implements DenConnection {
-  readonly #listeners: {
-    readonly [K in keyof DenConnectionEvents]: Set<DenConnectionEvents[K]>;
-  } = {
-    connected: new Set(),
-    disconnected: new Set(),
-    reconnecting: new Set(),
-    connectionFailed: new Set(),
-    message: new Set(),
-    error: new Set(),
-  };
+  #listeners = new Map<
+    keyof DenConnectionEvents,
+    Set<DenConnectionEvents[keyof DenConnectionEvents]>
+  >();
 
   #open = false;
   readonly #logger: Logger;
@@ -171,10 +164,14 @@ export class SimulatedDenConnection implements DenConnection {
     event: K,
     listener: DenConnectionEvents[K],
   ): () => void {
-    const listeners = this.#listeners[event] as Set<DenConnectionEvents[K]>;
-    listeners.add(listener);
+    let set = this.#listeners.get(event);
+    if (!set) {
+      set = new Set();
+      this.#listeners.set(event, set);
+    }
+    set.add(listener);
     return () => {
-      listeners.delete(listener);
+      set.delete(listener);
     };
   }
 
@@ -220,13 +217,12 @@ export class SimulatedDenConnection implements DenConnection {
     event: K,
     ...args: Parameters<DenConnectionEvents[K]>
   ): void {
-    const listeners = this.#listeners[event] as ReadonlySet<DenConnectionEvents[K]>;
-    for (const listener of listeners) {
+    const set = this.#listeners.get(event);
+    if (!set) return;
+    for (const listener of set) {
       try {
-        const typedListener = listener as (
-          ...listenerArgs: Parameters<DenConnectionEvents[K]>
-        ) => void;
-        typedListener(...args);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (listener as any)(...args);
       } catch {
         // listener errors must not crash the connection
       }

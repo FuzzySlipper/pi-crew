@@ -1,11 +1,7 @@
 /**
  * WebSocket-based connection to the Den Channels Gateway.
  *
- * Handles:
- * - WebSocket lifecycle (open / close)
- * - Authentication via token in the initial handshake
- * - Exponential-backoff reconnection on unexpected close
- * - Heartbeat ping/pong to detect stale connections
+ * Handles auth, exponential-backoff reconnection, and heartbeat/ping.
  *
  * @module pi-channels/den-channels/connection-websocket
  */
@@ -24,6 +20,15 @@ import type {
   DenConnectionConfig,
 } from "./connection-types.js";
 
+/**
+ * Real WebSocket-based connection to the Den Channels Gateway.
+ *
+ * Handles:
+ * - WebSocket lifecycle (open / close)
+ * - Authentication via token in the initial handshake
+ * - Exponential-backoff reconnection on unexpected close
+ * - Heartbeat ping/pong to detect stale connections
+ */
 export class DenWebSocketConnection implements DenConnection {
   readonly #url: string;
   readonly #token: string;
@@ -58,7 +63,7 @@ export class DenWebSocketConnection implements DenConnection {
   }
 
   async open(): Promise<void> {
-    if (this.#opened) return;
+    if (this.#opened) return; // idempotent
 
     this.#closed = false;
     this.#reconnectAttempt = 0;
@@ -79,6 +84,7 @@ export class DenWebSocketConnection implements DenConnection {
       ws.close(1000, "client-close");
     }
     this.#opened = false;
+    // satisfy require-await
     await Promise.resolve();
   }
 
@@ -174,6 +180,7 @@ export class DenWebSocketConnection implements DenConnection {
 
       ws.onopen = () => {
         clearTimeout(timeout);
+        // Authenticate via token in the first message
         this.#authenticate(ws)
           .then(() => {
             this.#opened = true;
@@ -188,6 +195,7 @@ export class DenWebSocketConnection implements DenConnection {
 
       ws.onerror = () => {
         clearTimeout(timeout);
+        // onclose will fire next; don't reject here
       };
 
       ws.onclose = (event) => {
