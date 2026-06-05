@@ -1,38 +1,31 @@
 // pi-mcp — MCP client for connecting to MCP servers (e.g. den-mcp).
-// Depends on: pi-core
+// Depends on: pi-core, @modelcontextprotocol/sdk
+//
+// This barrel re-exports every public symbol from the individual
+// source modules so consumers can write:
+//
+//   import { MCPClient, ToolRegistry, convertTool } from "@pi-crew/mcp";
 
-import type { Logger } from "@pi-crew/core";
+// ── Types ────────────────────────────────────────────────────────
+export {
+  type AgentTool,
+  type ToolCallResult,
+  type ToolCallContentBlock,
+  type TextContentBlock,
+  type ImageContentBlock,
+  type ResourceContentBlock,
+  type TransportKind,
+  type ServerConfig,
+} from "./types.js";
 
-export interface MCPClientConfig {
-  serverName: string;
-  transport: "stdio" | "http";
-  endpoint?: string;
-}
+// ── Connection ────────────────────────────────────────────────────
+export { MCPConnection } from "./connection.js";
 
-export interface MCPTool {
-  name: string;
-  description: string;
-  schema: Record<string, unknown>;
-}
+// ── Client ────────────────────────────────────────────────────────
+export { MCPClient } from "./client.js";
 
-export class MCPClient {
-  constructor(
-    private readonly config: MCPClientConfig,
-    private readonly logger: Logger,
-  ) {}
+// ── Tool converter ────────────────────────────────────────────────
+export { convertTool, convertTools } from "./tool-converter.js";
 
-  async start(): Promise<void> {
-    await Promise.resolve();
-    this.logger.info("MCPClient starting", { serverName: this.config.serverName });
-  }
-
-  async discoverTools(): Promise<MCPTool[]> {
-    await Promise.resolve();
-    return [];
-  }
-
-  async stop(): Promise<void> {
-    await Promise.resolve();
-    this.logger.info("MCPClient stopping", { serverName: this.config.serverName });
-  }
-}
+// ── Tool registry ─────────────────────────────────────────────────
+export { ToolRegistry } from "./tool-registry.js";
