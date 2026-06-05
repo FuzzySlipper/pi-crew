@@ -1,0 +1,102 @@
+# pi-crew gateway — default configuration template
+#
+# Every field has a safe default. Den connection and database path
+# are the only settings that typically need per-environment overrides.
+# Use environment variables (PI_DB_PATH, PI_DEN_CORE_URL, etc.) for
+# secrets and host-specific values.
+
+# ── Den Core / Channels ───────────────────────────────────────────
+den:
+  # REST API base URL for Den Core (required at startup by default).
+  # Set PI_DEN_CORE_URL env var to override.
+  coreUrl: "http://den-k8plus:3030"
+
+  # Den Channels Gateway WebSocket URL.
+  channelsUrl: "ws://den-k8plus:4201"
+
+  # Auth token for the Den Channels Gateway.
+  # Override via PI_DEN_CHANNELS_TOKEN env var. Do NOT commit real tokens.
+  channelsToken: ""
+
+  # Refuse startup if Den Core is unreachable (default: true).
+  requiredAtStartup: true
+
+# ── MCP server (den-mcp) ──────────────────────────────────────────
+mcp:
+  # Transport kind: "stdio" or "streamable-http".
+  transport: "streamable-http"
+
+  # MCP server endpoint (when transport is streamable-http).
+  endpoint: "http://den-k8plus:3100/mcp"
+
+  # Request timeout in milliseconds.
+  requestTimeout: 30000
+
+  # Maximum MCP client reconnect attempts.
+  maxReconnectAttempts: 3
+
+  # Base delay (ms) for exponential backoff reconnection.
+  reconnectBaseDelay: 1000
+
+# ── Local runtime database ────────────────────────────────────────
+database:
+  # Absolute path to the SQLite runtime database.
+  # Override via PI_DB_PATH env var.
+  path: "/var/lib/pi-crew/runtime.db"
+
+  # Enable WAL mode for read concurrency.
+  wal: true
+
+# ── Session / instance limits ─────────────────────────────────────
+sessions:
+  # Maximum total instances across all profiles.
+  maxTotal: 16
+
+  # Maximum instances per profile.
+  maxPerProfile: 4
+
+  # Idle timeout in milliseconds before an instance is eligible for eviction.
+  idleTimeoutMs: 28800000  # 8 hours
+
+# ── Logging ───────────────────────────────────────────────────────
+logging:
+  # Minimum log level: "debug", "info", "warn", or "error".
+  level: "info"
+
+  # Output JSON to stdout instead of human-readable text.
+  json: false
+
+# ── Health check endpoint ─────────────────────────────────────────
+health:
+  # Port the health-check HTTP server listens on.
+  # Override via PI_HEALTH_PORT env var.
+  port: 9236
+
+  # Host/IP to bind the health server to.
+  # Override via PI_HEALTH_HOST env var.
+  host: "127.0.0.1"
+
+# ── Tool policy defaults ─────────────────────────────────────────
+# Applied to every worker session unless overridden by profile.
+toolPolicy:
+  # Tool allowlist (empty = all tools allowed, subject to denylist).
+  allowedTools: []
+
+  # Explicitly denied tools.
+  deniedTools: []
+
+  # Allowed network hosts (empty = all allowed).
+  allowedHosts: []
+
+  # Explicitly denied hosts.
+  deniedHosts: []
+
+# ── Cron (DEFERRED — not required for this task) ──────────────────
+# cron:
+#   # Future cron integration hook.
+#   enabled: false
+
+# ── Memory / Blackboard (DEFERRED — not required for this task) ───
+# memory:
+#   # Future memory integration hook. pi-memory is deferred.
+#   enabled: false

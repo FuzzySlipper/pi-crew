@@ -9,17 +9,21 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@pi-crew/core": "*",
-    "@pi-crew/profiles": "*",
-    "@pi-crew/memory": "*",
-    "@pi-crew/mcp": "*",
-    "@pi-crew/service": "*",
     "@pi-crew/channels": "*",
+    "@pi-crew/core": "*",
+    "@pi-crew/governance": "*",
+    "@pi-crew/mcp": "*",
+    "@pi-crew/memory": "*",
+    "@pi-crew/profiles": "*",
+    "@pi-crew/service": "*",
     "@pi-crew/tools": "*",
-    "@pi-crew/governance": "*"
+    "js-yaml": "^4.2.0"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
   }
 }
