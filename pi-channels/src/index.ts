@@ -19,15 +19,15 @@ export class ChannelRegistry {
   }
 }
 
-export async function startAll(
+export async function connectAll(
   registry: ChannelRegistry,
   logger: Logger,
 ): Promise<void> {
   for (const name of registry.list()) {
     const provider = registry.get(name);
     if (provider) {
-      logger.info("Starting channel provider", { name });
-      await provider.start();
+      logger.info("Connecting channel provider", { name });
+      await provider.connect();
     }
   }
 }

@@ -1,78 +1,80 @@
 // pi-core — Foundation types, interfaces, and utilities.
 // Zero internal dependencies. Everything else builds on this.
+//
+// This barrel re-exports every public symbol from the individual
+// source modules so consumers can write:
+//
+//   import { Result, GatewayError, ChannelProvider } from "@pi-crew/core";
+//
 
 // ── Domain types ──────────────────────────────────────────────
-export type GatewayEvent = {
-  event: string;
-  payload: unknown;
-};
-
-export type Result<T, E = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+export {
+  type Result,
+  type ProjectId,
+  type TaskId,
+  type AssignmentId,
+  type SessionId,
+  type AgentIdentity,
+  type RunId,
+  type IsoTimestamp,
+  ok,
+  err,
+} from "./types.js";
 
 // ── Error hierarchy ───────────────────────────────────────────
-export class GatewayError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-  ) {
-    super(message);
-    this.name = "GatewayError";
-  }
-}
+export {
+  GatewayError,
+  ConfigurationError,
+  ConnectionError,
+  SessionLimitError,
+  ProviderError,
+  TimeoutError,
+  AuthenticationError,
+} from "./errors.js";
 
-// ── Logger interface ──────────────────────────────────────────
-export interface Logger {
-  info(msg: string, data?: Record<string, unknown>): void;
-  warn(msg: string, data?: Record<string, unknown>): void;
-  error(msg: string, data?: Record<string, unknown>): void;
-  debug(msg: string, data?: Record<string, unknown>): void;
-}
+// ── Logger ────────────────────────────────────────────────────
+export { type Logger, type LogContext } from "./logging.js";
 
-// ── EventBus interface ────────────────────────────────────────
-export interface EventBus {
-  emit(event: GatewayEvent): void;
-  on(event: string, handler: (payload: unknown) => void): void;
-  off(event: string, handler: (payload: unknown) => void): void;
-}
+// ── Events ────────────────────────────────────────────────────
+export {
+  type EventBus,
+  type GatewayEvent,
+  type EventPayload,
+  type SessionCreatedPayload,
+  type SessionExpiredPayload,
+  type ToolCalledPayload,
+  type ToolCompletedPayload,
+  type BlackboardWrittenPayload,
+  type AssignmentClaimedPayload,
+  type AssignmentReleasedPayload,
+  type TurnStartedPayload,
+  type TurnCompletedPayload,
+  type TurnErroredPayload,
+  type TurnExhaustedPayload,
+  type CheckpointWaitingPayload,
+  type ContextPressurePayload,
+  type WorkerStuckPayload,
+  type GatewayShutdownPayload,
+} from "./events.js";
 
-// ── ChannelProvider interface (canonical vocabulary) ──────────
-export interface ChannelProvider {
-  readonly name: string;
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  sendMessage(target: string, content: string): Promise<void>;
-}
+// ── Repository ────────────────────────────────────────────────
+export { type Repository } from "./repository.js";
 
-// ── Repository interface ──────────────────────────────────────
-export interface Repository<T> {
-  getById(id: string): Promise<T | null>;
-  save(entity: T): Promise<void>;
-  delete(id: string): Promise<void>;
-}
+// ── Channel ───────────────────────────────────────────────────
+export {
+  type ChannelProvider,
+  type ChannelMessage,
+  type ChannelParticipant,
+  type ChannelContent,
+  type MessageHandler,
+  type SentMessage,
+  type ChannelInfo,
+  type ChannelBreadcrumb,
+} from "./channel.js";
 
-// ── Retry utilities ───────────────────────────────────────────
-export interface RetryPolicy {
-  maxAttempts: number;
-  baseDelayMs: number;
-  maxDelayMs: number;
-}
-
-export async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  policy: RetryPolicy,
-): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= policy.maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      if (attempt === policy.maxAttempts) break;
-      const delay = Math.min(policy.baseDelayMs * 2 ** (attempt - 1), policy.maxDelayMs);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-  }
-  throw lastError;
-}
+// ── Retry ─────────────────────────────────────────────────────
+export {
+  type RetryPolicy,
+  DEFAULT_RETRY_POLICY,
+  retryWithBackoff,
+} from "./retry.js";
