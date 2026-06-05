@@ -130,3 +130,56 @@ export class AuthenticationError extends GatewayError {
     this.name = "AuthenticationError";
   }
 }
+
+/**
+ * A worker policy constraint was violated (denied tool, path, host, etc.).
+ * **Not retryable** — the policy explicitly forbids this action.
+ */
+export class PolicyViolationError extends GatewayError {
+  public readonly code = "POLICY_VIOLATION_ERROR";
+  public readonly statusCode = 403;
+  public readonly retryable = false;
+
+  /** Which policy check was violated. */
+  public readonly checkKind: "path" | "tool" | "host" | "timeout" | "credential";
+
+  constructor(message: string, checkKind: "path" | "tool" | "host" | "timeout" | "credential") {
+    super(message);
+    this.name = "PolicyViolationError";
+    this.checkKind = checkKind;
+  }
+}
+
+/**
+ * A tool call was denied by the per-session tool filter.
+ * **Not retryable** — the tool is not in the session's allowlist.
+ */
+export class ToolDeniedError extends GatewayError {
+  public readonly code = "TOOL_DENIED_ERROR";
+  public readonly statusCode = 403;
+  public readonly retryable = false;
+
+  /** Name of the tool that was denied. */
+  public readonly toolName: string;
+
+  constructor(message: string, toolName: string) {
+    super(message);
+    this.name = "ToolDeniedError";
+    this.toolName = toolName;
+  }
+}
+
+/**
+ * A structured completion packet was rejected by Den Core.
+ * **May be retryable** — depends on the rejection reason.
+ */
+export class CompletionRejectedError extends GatewayError {
+  public readonly code = "COMPLETION_REJECTED_ERROR";
+  public readonly statusCode = 422;
+  public readonly retryable = false;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "CompletionRejectedError";
+  }
+}

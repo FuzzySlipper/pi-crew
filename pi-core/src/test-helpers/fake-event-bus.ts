@@ -58,7 +58,7 @@ export class FakeEventBus implements EventBus {
   ): void {
     const subs = this.handlers.get(event);
     if (subs) {
-      subs.delete(handler);
+      subs.delete(handler as (payload: unknown) => void);
     }
   }
 

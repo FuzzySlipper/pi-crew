@@ -120,6 +120,56 @@ export interface GatewayShutdownPayload {
   readonly reason: string;
 }
 
+/** Fired when a tool call is denied by the policy enforcer. */
+export interface ToolDeniedPayload {
+  readonly toolName: string;
+  readonly sessionId: string;
+  readonly reason: string;
+  /** Den correlation IDs. */
+  readonly assignmentId?: string;
+  readonly runId?: string;
+  readonly taskId?: string;
+}
+
+/** Fired when drain mode is activated for a session. */
+export interface DrainActivatedPayload {
+  readonly sessionId: string;
+  readonly reason: "iteration_budget" | "context_limit" | "timeout" | "policy";
+  /** Den correlation IDs. */
+  readonly assignmentId?: string;
+  readonly runId?: string;
+  readonly taskId?: string;
+}
+
+/** Fired when drain mode is deactivated (e.g., fresh session start). */
+export interface DrainDeactivatedPayload {
+  readonly sessionId: string;
+  /** Den correlation IDs. */
+  readonly assignmentId?: string;
+  readonly runId?: string;
+}
+
+/** Fired when a policy enforcement check occurs (e.g., path/network/tool). */
+export interface PolicyEnforcedPayload {
+  readonly sessionId: string;
+  readonly checkKind: "path" | "tool" | "host" | "timeout" | "credential";
+  readonly allowed: boolean;
+  readonly detail: string;
+  /** Den correlation IDs. */
+  readonly assignmentId?: string;
+  readonly runId?: string;
+  readonly taskId?: string;
+}
+
+/** Fired when a worker posts a structured completion packet. */
+export interface CompletionPostedPayload {
+  readonly assignmentId: string;
+  readonly runId: string;
+  readonly taskId: string;
+  readonly status: string;
+  readonly accepted: boolean;
+}
+
 // ── GatewayEvent union ──────────────────────────────────────────
 
 /**
@@ -144,7 +194,12 @@ export type GatewayEvent =
   | { event: "checkpoint.waiting"; payload: CheckpointWaitingPayload }
   | { event: "context.pressure"; payload: ContextPressurePayload }
   | { event: "worker.stuck"; payload: WorkerStuckPayload }
-  | { event: "gateway.shutdown"; payload: GatewayShutdownPayload };
+  | { event: "gateway.shutdown"; payload: GatewayShutdownPayload }
+  | { event: "tool.denied"; payload: ToolDeniedPayload }
+  | { event: "drain.activated"; payload: DrainActivatedPayload }
+  | { event: "drain.deactivated"; payload: DrainDeactivatedPayload }
+  | { event: "policy.enforced"; payload: PolicyEnforcedPayload }
+  | { event: "completion.posted"; payload: CompletionPostedPayload };
 
 /**
  * Helper to extract the payload type for a specific event name.

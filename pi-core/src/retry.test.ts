@@ -17,7 +17,7 @@ describe("retryWithBackoff", () => {
 
   it("retries on failure and returns success", async () => {
     const fn = vi
-      .fn<[], Promise<string>>()
+      .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new Error("fail 1"))
       .mockRejectedValueOnce(new Error("fail 2"))
       .mockResolvedValue("ok");

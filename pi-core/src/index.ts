@@ -17,6 +17,15 @@ export {
   type AgentIdentity,
   type RunId,
   type IsoTimestamp,
+  type WorkerPolicy,
+  type DrainModeState,
+  type ContextPressureSnapshot,
+  type CompletionStatus,
+  type CompletionPacket,
+  type CompletionArtifact,
+  type CompletionBlocker,
+  type CompletionPostResult,
+  DRAIN_MODE_ESSENTIAL_TOOLS,
   ok,
   err,
 } from "./types.js";
@@ -30,6 +39,9 @@ export {
   ProviderError,
   TimeoutError,
   AuthenticationError,
+  PolicyViolationError,
+  ToolDeniedError,
+  CompletionRejectedError,
 } from "./errors.js";
 
 // ── Logger ────────────────────────────────────────────────────
@@ -56,6 +68,11 @@ export {
   type ContextPressurePayload,
   type WorkerStuckPayload,
   type GatewayShutdownPayload,
+  type ToolDeniedPayload,
+  type DrainActivatedPayload,
+  type DrainDeactivatedPayload,
+  type PolicyEnforcedPayload,
+  type CompletionPostedPayload,
 } from "./events.js";
 
 // ── Repository ────────────────────────────────────────────────
