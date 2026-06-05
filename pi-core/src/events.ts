@@ -33,6 +33,8 @@ export interface SessionExpiredPayload {
 export interface ToolCalledPayload {
   readonly toolName: string;
   readonly sessionId: string;
+  /** Optional raw parameters for audit logging. */
+  readonly params?: unknown;
 }
 
 /** Fired when an agent tool invocation completes (success or failure). */
@@ -41,6 +43,8 @@ export interface ToolCompletedPayload {
   readonly sessionId: string;
   readonly success: boolean;
   readonly durationMs: number;
+  /** Optional raw result for audit logging. */
+  readonly result?: unknown;
 }
 
 /** Fired when structured data is written to the blackboard. */
