@@ -55,3 +55,28 @@ export {
   type AgentFactory,
   AgentFactoryImpl,
 } from "./agents/agent-factory.js";
+
+// ── Persistence ──────────────────────────────────────────────────
+export {
+  RuntimeDb,
+  type RuntimeDbHealth,
+  SqliteSessionRepository,
+  SqliteMessageRepository,
+  SqliteAuditRepository,
+  StartupHydrator,
+  type HydrationResult,
+  type SessionRow,
+  type MessageRow,
+  type AuditRow,
+  type RuntimeKVRow,
+  type MessageInput,
+  type AuditEventInput,
+  type Migration,
+  type MessageRepository,
+  type AuditRepository,
+  type SqliteSessionStore,
+  type DenAssignmentStatus,
+  type DenAssignmentReader,
+  rowToRecord,
+  recordToRow,
+} from "./persistence/index.js";
