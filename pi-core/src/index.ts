@@ -99,10 +99,8 @@ export {
 } from "./retry.js";
 
 // ── Test helpers ───────────────────────────────────────────────
-export {
-  InMemoryRepository,
-  FakeEventBus,
-  FakeLogger,
-  type LogEntry,
-  FakeChannelProvider,
-} from "./test-helpers/index.js";
+// Co-located in test-helpers/ but exported directly (no nested barrel).
+export { InMemoryRepository } from "./test-helpers/in-memory-repository.js";
+export { FakeEventBus } from "./test-helpers/fake-event-bus.js";
+export { FakeLogger, type LogEntry } from "./test-helpers/fake-logger.js";
+export { FakeChannelProvider } from "./test-helpers/fake-channel-provider.js";
