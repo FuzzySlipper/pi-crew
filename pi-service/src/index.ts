@@ -48,6 +48,17 @@ export {
   EchoAgentResponderFactory,
 } from "./instances/agent-responder.js";
 export {
+  type DeterministicArithmeticRequest,
+  type DeterministicArithmeticResult,
+  type DeterministicRuntimeTool,
+  type DeterministicToolAgentResponderFactoryOptions,
+  type DeterministicToolAgentResponderOptions,
+  DeterministicArithmeticTool,
+  DeterministicToolAgentResponder,
+  DeterministicToolAgentResponderFactory,
+  parseDeterministicArithmeticRequest,
+} from "./instances/deterministic-tool-responder.js";
+export {
   type InstanceFactory,
   InstanceFactoryImpl,
 } from "./instances/instance-factory.js";
