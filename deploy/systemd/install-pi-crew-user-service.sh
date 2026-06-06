@@ -14,7 +14,11 @@ start the service.
 Environment overrides:
   PI_CREW_REPO_DIR              Repo checkout path (default: $HOME/pi-crew)
   PI_DEN_CORE_URL               Den Core URL (default: http://den-k8plus:3030)
-  PI_DEN_CHANNELS_URL           Den Channels WS URL (default: ws://den-k8plus:4201)
+  PI_DEN_CHANNELS_URL           Den Channels HTTP URL (default: http://192.168.1.10:18081)
+  PI_DEN_CHANNELS_PROJECT_ID    Direct-agent-events project scope (default: pi-crew)
+  PI_DEN_CHANNELS_MEMBER_ID     Service member identity (default: pi-crew-gateway)
+  PI_DEN_CHANNELS_POLL_MS       HTTP cursor poll interval ms (default: 5000)
+  PI_DEN_CHANNELS_POLL_LIMIT    HTTP cursor poll batch size (default: 10)
   PI_DEN_CHANNELS_TOKEN         Optional token; never printed by this script
   PI_DEN_MCP_ENDPOINT           Den MCP endpoint (default: http://den-k8plus:3100/mcp)
   PI_CREW_HEALTH_HOST           Health bind host (default: 127.0.0.1)
@@ -48,7 +52,11 @@ state_db="$state_dir/runtime.db"
 health_host="${PI_CREW_HEALTH_HOST:-127.0.0.1}"
 health_port="${PI_CREW_HEALTH_PORT:-9236}"
 core_url="${PI_DEN_CORE_URL:-http://den-k8plus:3030}"
-channels_url="${PI_DEN_CHANNELS_URL:-ws://den-k8plus:4201}"
+channels_url="${PI_DEN_CHANNELS_URL:-http://192.168.1.10:18081}"
+channels_project_id="${PI_DEN_CHANNELS_PROJECT_ID:-pi-crew}"
+channels_member_id="${PI_DEN_CHANNELS_MEMBER_ID:-pi-crew-gateway}"
+channels_poll_ms="${PI_DEN_CHANNELS_POLL_MS:-5000}"
+channels_poll_limit="${PI_DEN_CHANNELS_POLL_LIMIT:-10}"
 mcp_endpoint="${PI_DEN_MCP_ENDPOINT:-http://den-k8plus:3100/mcp}"
 channels_token="${PI_DEN_CHANNELS_TOKEN:-}"
 
@@ -81,6 +89,9 @@ pi-crew user-service deployment plan
   health URL:        http://$health_host:$health_port/
   Den Core URL:      $core_url
   Channels URL:      $channels_url
+  Channels project:  $channels_project_id
+  Channels member:   $channels_member_id
+  Channels polling:  every ${channels_poll_ms}ms, limit $channels_poll_limit
   Channels token:    $redacted_token_state
 SUMMARY
 
@@ -120,6 +131,10 @@ den:
   coreUrl: "$core_url"
   channelsUrl: "$channels_url"
   channelsToken: "$channels_token"
+  channelsProjectId: "$channels_project_id"
+  channelsMemberIdentity: "$channels_member_id"
+  channelsPollIntervalMs: $channels_poll_ms
+  channelsPollLimit: $channels_poll_limit
   channelsRetryMaxAttempts: 5
   channelsRetryBaseDelayMs: 200
   channelsRetryMaxDelayMs: 30000

@@ -41,8 +41,12 @@ mkdir -p ~/.config/pi-crew ~/.local/state/pi-crew
 cat > ~/.config/pi-crew/config.yaml <<EOF
 den:
   coreUrl: "http://den-k8plus:3030"
-  channelsUrl: "ws://den-k8plus:4201"
+  channelsUrl: "http://192.168.1.10:18081"
   channelsToken: ""
+  channelsProjectId: "pi-crew"
+  channelsMemberIdentity: "pi-crew-gateway"
+  channelsPollIntervalMs: 5000
+  channelsPollLimit: 10
   channelsRetryMaxAttempts: 5
   channelsRetryBaseDelayMs: 200
   channelsRetryMaxDelayMs: 30000
@@ -78,7 +82,7 @@ EOF
 chmod 0600 ~/.config/pi-crew/config.yaml
 ```
 
-If the live Channels endpoint requires a token, inject it in the installed config only and redact it from logs/messages as `[REDACTED]`.
+If the live Channels endpoint requires a token, inject it in the installed config only and redact it from logs/messages as `[REDACTED]`. For the #2026 HTTP ingress path, `channelsUrl` must point at the Den Channels HTTP base (for example `http://192.168.1.10:18081`) and include the project/member cursor fields shown above.
 
 ## Install commands
 
@@ -176,6 +180,6 @@ rm -rf ~/.local/state/pi-crew
 | Unit fails to load | `systemd-analyze --user verify ~/.config/systemd/user/pi-crew.service` |
 | Service exits immediately | `journalctl --user -u pi-crew.service -n 100 --no-pager` |
 | `npm` unavailable | `command -v npm`; unit uses `/usr/bin/env npm` |
-| Config rejected | Validate against current `pi-service/src/config.ts`; check `den.channelsUrl` is empty or `ws://`/`wss://` |
+| Config rejected | Validate against current `pi-service/src/config.ts`; check `den.channelsUrl` is empty, `http://`/`https://`, or legacy `ws://`/`wss://`; HTTP mode also requires `channelsProjectId` and `channelsMemberIdentity` |
 | Health check fails | Confirm `health.host`/`health.port`; inspect journal for startup errors |
-| Den Channels reconnect loop | Check `den.channelsUrl`, token, and endpoint reachability from den-k8 |
+| Den Channels polling/reconnect issue | Check `den.channelsUrl`, project/member identity, token, and endpoint reachability from den-k8 |
