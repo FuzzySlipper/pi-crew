@@ -49,6 +49,24 @@ interface LifecycleEventPayload {
   readonly summary: string;
 }
 
+interface LegacyLifecycleActivityPayload {
+  readonly channelId: number;
+  readonly projectId?: string | null;
+  readonly agentIdentity: string;
+  readonly deliveryRequestId: string;
+  readonly workerRunId?: string | null;
+  readonly workerRole?: string | null;
+  readonly taskId?: number | null;
+  readonly assignmentId?: string | null;
+  readonly eventType: "lifecycle_status";
+  readonly status: string;
+  readonly deliveryStage: "observability";
+  readonly terminal: boolean;
+  readonly summary: string;
+  readonly metadataJson: string;
+  readonly dedupeKey: string;
+}
+
 interface GatewaySystemMessagePayload {
   readonly channelId: number;
   readonly senderIdentity: string;
@@ -155,11 +173,66 @@ export class HttpDirectAgentClient {
           eventType,
           status: response.status,
         });
+        if (response.status >= 500) {
+          await this.#postLegacyLifecycleActivityEvent(payload, signal);
+        }
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
       this.#logger.warn("Lifecycle event POST failed", {
         eventType,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  async #postLegacyLifecycleActivityEvent(
+    payload: LifecycleEventPayload,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const legacyPayload: LegacyLifecycleActivityPayload = {
+      channelId: payload.channelId,
+      projectId: payload.projectId,
+      agentIdentity: payload.agentIdentity,
+      deliveryRequestId: payload.directAgentEventId,
+      workerRunId: payload.workerRunId,
+      workerRole: payload.workerRole,
+      taskId: payload.taskId,
+      assignmentId: payload.assignmentId,
+      eventType: "lifecycle_status",
+      status: legacyLifecycleStatus(payload.eventType),
+      deliveryStage: "observability",
+      terminal: isTerminalLifecycleEvent(payload.eventType),
+      summary: payload.summary,
+      metadataJson: JSON.stringify({
+        canonicalLifecycleEventType: payload.eventType,
+        directAgentEventId: payload.directAgentEventId,
+        sourceMessageId: payload.sourceMessageId,
+        lastActivityAt: payload.lastActivityAt,
+      }),
+      dedupeKey: `pi-crew-http:lifecycle:${payload.eventType}:${payload.directAgentEventId}`,
+    };
+
+    try {
+      const response = await this.#fetchWithTimeout(
+        `${this.#baseUrl()}/api/channel-activity-events`,
+        {
+          method: "POST",
+          headers: this.#jsonHeaders(),
+          body: JSON.stringify(legacyPayload),
+          signal,
+        },
+      );
+      if (!response.ok) {
+        this.#logger.warn("Legacy lifecycle activity POST returned non-OK", {
+          eventType: payload.eventType,
+          status: response.status,
+        });
+      }
+    } catch (err: unknown) {
+      if (isAbortError(err)) return;
+      this.#logger.warn("Legacy lifecycle activity POST failed", {
+        eventType: payload.eventType,
         error: errorMessage(err),
       });
     }
@@ -315,6 +388,26 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
     );
   }
   return controller.signal;
+}
+
+function legacyLifecycleStatus(eventType: string): string {
+  if (eventType === "completed" || eventType === "cleanup_completed") {
+    return "completed";
+  }
+  if (eventType === "failed" || eventType === "timed_out") {
+    return "failed";
+  }
+  if (eventType === "blocked") {
+    return "blocked";
+  }
+  if (eventType === "heartbeat" || eventType === "checkpoint_seen") {
+    return "interim";
+  }
+  return "started";
+}
+
+function isTerminalLifecycleEvent(eventType: string): boolean {
+  return ["blocked", "completed", "failed", "timed_out"].includes(eventType);
 }
 
 function isAbortError(err: unknown): boolean {

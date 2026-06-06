@@ -344,6 +344,74 @@ describe("DenHttpDirectAgentConnection", () => {
     expect(gatewayUrls.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("falls back to legacy activity events when canonical lifecycle POST fails server-side", async () => {
+    const legacyBodies: string[] = [];
+    const mockFetch = vi.fn((input: string | URL, init?: RequestInit) => {
+      const urlStr = urlFromInput(input);
+      if (urlStr.includes("/api/direct-agent-events")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                id: 3001,
+                channelId: 604,
+                memberIdentity: "pi-crew-gateway",
+                sourceProjectId: "pi-crew",
+                targetProjectId: "pi-crew",
+                targetTaskId: 2044,
+                workerRunId: "piw_lifecycle_probe",
+                workerRole: "runtime-smoke",
+                body: "msg1",
+                createdAt: "2026-06-06T08:20:00Z",
+              },
+            ]),
+            { status: 200 },
+          ),
+        );
+      }
+      if (urlStr.includes("/api/agent-work/lifecycle-events")) {
+        return Promise.resolve(new Response("schema mismatch", { status: 500 }));
+      }
+      if (urlStr.includes("/api/channel-activity-events")) {
+        if (typeof init?.body === "string") legacyBodies.push(init.body);
+        return Promise.resolve(new Response("{\"status\":\"recorded\"}", { status: 200 }));
+      }
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+
+    const conn = new DenHttpDirectAgentConnection(
+      makeConfig({ pollLimit: 1 }),
+      logger,
+      cursorStore,
+      { fetchFn: mockFetch as unknown as typeof fetch },
+    );
+
+    await conn.open();
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    await conn.close();
+
+    expect(legacyBodies).toHaveLength(3);
+    const payloads = legacyBodies.map((body) => JSON.parse(body) as Record<string, unknown>);
+    expect(payloads.map((payload) => payload.eventType)).toEqual([
+      "lifecycle_status",
+      "lifecycle_status",
+      "lifecycle_status",
+    ]);
+    expect(payloads.map((payload) => payload.status)).toEqual([
+      "started",
+      "started",
+      "completed",
+    ]);
+    expect(payloads.map((payload) => payload.deliveryStage)).toEqual([
+      "observability",
+      "observability",
+      "observability",
+    ]);
+    const metadata = JSON.parse(String(payloads[0]?.metadataJson)) as Record<string, unknown>;
+    expect(metadata.canonicalLifecycleEventType).toBe("runtime_received");
+    expect(metadata.directAgentEventId).toBe("3001");
+  });
+
   it("passes auth headers when token is set", async () => {
     const capturedHeaders: Array<Record<string, string>> = [];
     const mockFetch = vi.fn((input: string | URL, init?: RequestInit) => {
