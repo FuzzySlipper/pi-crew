@@ -1,48 +1,31 @@
-# pi-crew systemd user service unit
+# pi-crew systemd user service unit template
 #
-# Installed under ~/.config/systemd/user/
-# Managed by systemctl --user commands only; no root required.
-#
-# Prerequisites:
-#   - Node.js (>=20) and npm installed on den-k8
-#   - pi-crew repository checked out at ~/pi-crew
-#   - npm dependencies installed (cd ~/pi-crew && npm ci)
-#   - PI_CREW_CONFIG environment variable set in
-#     ~/.config/pi-crew/config.yaml (or passed via Environment= below)
-#
-# Dependencies / start order:
-#   After=network-online.target (pi-crew needs Den Channels WebSocket)
-#
-# Non-root, user-scoped only:
-#   All paths under ~/.config, ~/.local, and the pi-crew checkout.
-#   No /etc/systemd/system, sudoers, system accounts, or firewall rules.
+# Install to: ~/.config/systemd/user/pi-crew.service
+# Managed only with systemctl --user; no root/system unit required.
 
 [Unit]
 Description=pi-crew agent crew runtime
-Documentation=https://github.com/nous/pi-crew
-After=network-online.target
+Documentation=file:%h/pi-crew/deploy/systemd/README.md
+After=default.target network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=%h/pi-crew
-Environment=PI_CREW_CONFIG=%h/.config/pi-crew/config.yaml
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/npm start -w @pi-crew/crew
-ExecReload=/bin/kill -HUP $MAINPID
+Environment=PI_CREW_CONFIG=%h/.config/pi-crew/config.yaml
+ExecStart=/usr/bin/env npm start -w @pi-crew/crew -- --config %h/.config/pi-crew/config.yaml
 Restart=on-failure
 RestartSec=5s
+TimeoutStopSec=20s
+KillSignal=SIGTERM
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pi-crew
 
-# Health / readiness
-# pi-crew logs "connected to Den Channels" on successful WebSocket connect.
-# Check with: journalctl --user -u pi-crew.service -n 20 -f
-
-# Runtime state lives here:
-#   SQLite DB:  %h/.local/state/pi-crew/runtime.db
-#   Config:     %h/.config/pi-crew/config.yaml
+# User-scoped runtime paths expected by config:
+#   Config: %h/.config/pi-crew/config.yaml
+#   State:  %h/.local/state/pi-crew/runtime.db
 
 [Install]
 WantedBy=default.target

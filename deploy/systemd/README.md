@@ -1,156 +1,169 @@
-# pi-crew — den-k8 `systemd --user` deployment
+# pi-crew — den-k8 `systemd --user` deployment assets
 
-User-scoped deployment for running pi-crew on `den-k8` under the agent user.
-No root, sudo, system accounts, or firewall changes required.
+This directory contains the user-scoped service unit and runbook for live testing pi-crew on `den-k8` without root/system service changes.
+
+## Scope boundary
+
+- Use `systemctl --user` only.
+- Install the unit under `~/.config/systemd/user/pi-crew.service`.
+- Store config under `~/.config/pi-crew/config.yaml`.
+- Store runtime state under `~/.local/state/pi-crew/runtime.db`.
+- Do not edit `/etc/systemd/system`, sudoers, system accounts, firewall rules, or root-owned service directories for this deployment path.
+
+Task #2012 performs the actual install through a sysadmin handoff; this document is the repo-side asset and rollback reference.
 
 ## File layout
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/systemd/user/pi-crew.service` | Unit file (copy from `deploy/systemd/pi-crew.service`) |
-| `~/.config/pi-crew/config.yaml` | pi-crew runtime config |
-| `~/.local/state/pi-crew/runtime.db` | SQLite runtime state (auto-created) |
-| `~/pi-crew/` | Repo checkout (this repo) |
+| `deploy/systemd/pi-crew.service` | Versioned unit template |
+| `~/.config/systemd/user/pi-crew.service` | Installed user unit |
+| `~/.config/pi-crew/config.yaml` | Installed runtime config |
+| `~/.local/state/pi-crew/runtime.db` | SQLite runtime state |
+| `~/pi-crew/` | Repo checkout used by the unit |
 
-## Prerequisites
+## Prerequisites on den-k8
 
 ```bash
-# Node.js and npm (den-k8 already has these)
-node --version   # >= 20
+node --version   # expected >= 20; current dev host verified with Node 26
 npm --version
-
-# Install pi-crew dependencies (one-time)
 cd ~/pi-crew
 npm ci
+npm run build
 ```
 
-## Install
+## Runtime config template
+
+Create `~/.config/pi-crew/config.yaml` with user-owned mode `0600` if it contains a token. The config parser does not expand `~`, so generate an absolute state path from `$HOME`:
 
 ```bash
-# 1. Create user systemd directory if missing
-mkdir -p ~/.config/systemd/user
-
-# 2. Copy the unit file into place
-cp ~/pi-crew/deploy/systemd/pi-crew.service ~/.config/systemd/user/
-
-# 3. Create config directory
-mkdir -p ~/.config/pi-crew
-
-# 4. Create a minimal config (adjust for your Den Channels setup)
-cat > ~/.config/pi-crew/config.yaml << 'EOF'
+mkdir -p ~/.config/pi-crew ~/.local/state/pi-crew
+cat > ~/.config/pi-crew/config.yaml <<EOF
 den:
-  channels:
-    url: "ws://192.168.1.10:8080/ws"
-    token: "[REDACTED]"
-runtime:
-  dbPath: "~/.local/state/pi-crew/runtime.db"
+  coreUrl: "http://den-k8plus:3030"
+  channelsUrl: "ws://den-k8plus:4201"
+  channelsToken: ""
+  channelsRetryMaxAttempts: 5
+  channelsRetryBaseDelayMs: 200
+  channelsRetryMaxDelayMs: 30000
+  channelsPingIntervalMs: 30000
+  channelsConnectionTimeoutMs: 10000
+  requiredAtStartup: true
+
+mcp:
+  transport: "streamable-http"
+  endpoint: "http://den-k8plus:3100/mcp"
+  requestTimeout: 30000
+  maxReconnectAttempts: 3
+  reconnectBaseDelay: 1000
+
+database:
+  path: "$HOME/.local/state/pi-crew/runtime.db"
+  wal: true
+
+sessions:
+  maxTotal: 16
+  maxPerProfile: 4
+  idleTimeoutMs: 28800000
+  fallbackProfileId: "system-architect"
+
+logging:
+  level: "info"
+  json: false
+
+health:
+  port: 9236
+  host: "127.0.0.1"
 EOF
+chmod 0600 ~/.config/pi-crew/config.yaml
+```
 
-# 5. Reload user systemd and enable
+If the live Channels endpoint requires a token, inject it in the installed config only and redact it from logs/messages as `[REDACTED]`.
+
+## Install commands
+
+```bash
+mkdir -p ~/.config/systemd/user ~/.config/pi-crew ~/.local/state/pi-crew
+cp ~/pi-crew/deploy/systemd/pi-crew.service ~/.config/systemd/user/pi-crew.service
+chmod 0644 ~/.config/systemd/user/pi-crew.service
+chmod 0700 ~/.config/pi-crew ~/.local/state/pi-crew
+# Write ~/.config/pi-crew/config.yaml from the template above, then:
+chmod 0600 ~/.config/pi-crew/config.yaml
 systemctl --user daemon-reload
-systemctl --user enable pi-crew.service
+systemctl --user enable --now pi-crew.service
 ```
 
-## Start / stop / restart
+## Status, logs, and health
 
 ```bash
-systemctl --user start pi-crew.service
-systemctl --user stop pi-crew.service
-systemctl --user restart pi-crew.service
-```
-
-## Status and health check
-
-```bash
-# Service status
-systemctl --user status pi-crew.service
-
-# Recent logs
-journalctl --user -u pi-crew.service -n 50
-
-# Follow logs (Ctrl-C to exit)
-journalctl --user -u pi-crew.service -f
-
-# Check for WebSocket connect confirmation
-journalctl --user -u pi-crew.service | grep -i "connected to Den"
-
-# Is the service active and running?
+systemctl --user status pi-crew.service --no-pager
 systemctl --user is-active pi-crew.service
+journalctl --user -u pi-crew.service -n 100 --no-pager
+journalctl --user -u pi-crew.service -f
+curl -fsS http://127.0.0.1:9236/
 ```
 
-## Logs
+Expected health response shape:
 
-All output goes to the user journal. No log files on disk by default.
+```json
+{"status":"ok","uptime":1.23}
+```
+
+## Restart / upgrade
 
 ```bash
-# Last hour
-journalctl --user -u pi-crew.service --since "1 hour ago"
+cd ~/pi-crew
+git fetch --all --prune
+git checkout main
+git pull --ff-only
+npm ci
+npm run build
+systemctl --user restart pi-crew.service
+systemctl --user status pi-crew.service --no-pager
+curl -fsS http://127.0.0.1:9236/
+```
 
-# Last 100 lines, no pager
-journalctl --user -u pi-crew.service -n 100 --no-pager
+## Unit validation
 
-# Export to file
-journalctl --user -u pi-crew.service --since today > /tmp/pi-crew-today.log
+Preferred syntax validation when available:
+
+```bash
+systemd-analyze --user verify ~/pi-crew/deploy/systemd/pi-crew.service
+```
+
+Fallback readback after installing the unit:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user cat pi-crew.service >/dev/null
+systemctl --user show pi-crew.service -p LoadState -p FragmentPath --no-pager
 ```
 
 ## Disable and rollback
 
+Rollback is intentionally user-scoped:
+
 ```bash
-# 1. Stop the service
-systemctl --user stop pi-crew.service
-
-# 2. Disable (prevents auto-start on login)
-systemctl --user disable pi-crew.service
-
-# 3. Remove the unit file
-rm ~/.config/systemd/user/pi-crew.service
-
-# 4. Reload so systemd forgets it
+systemctl --user disable --now pi-crew.service || true
+rm -f ~/.config/systemd/user/pi-crew.service
 systemctl --user daemon-reload
-
-# 5. Optionally remove config and state
-#    (only do this if you want a clean slate)
-rm ~/.config/pi-crew/config.yaml
-rm -rf ~/.local/state/pi-crew/
+systemctl --user reset-failed pi-crew.service || true
 ```
 
-## Upgrade (deploy new version)
+Preserve config/state by default for investigation. Remove them only when a clean slate is explicitly desired:
 
 ```bash
-cd ~/pi-crew
-git pull
-npm ci
-systemctl --user restart pi-crew.service
-```
-
-## Validation
-
-If `systemd-analyze` is available:
-
-```bash
-# Verify unit syntax (run from deploy directory)
-systemd-analyze --user verify ~/pi-crew/deploy/systemd/pi-crew.service
-```
-
-If not available, manual syntax checks:
-
-```bash
-# Check that all directives are recognised (quiet = no errors)
-systemctl --user cat pi-crew.service > /dev/null 2>&1 && echo "unit readable"
-
-# Verify the unit loads without errors
-systemctl --user show pi-crew.service -p LoadState 2>/dev/null
-
-# Check for syntax errors via daemon-reload return code
-systemctl --user daemon-reload && echo "syntax OK"
+rm -f ~/.config/pi-crew/config.yaml
+rm -rf ~/.local/state/pi-crew
 ```
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---------|-------|
-| Service fails to start | `journalctl --user -u pi-crew.service -n 30` |
-| `npm` not found in ExecStart | Use full path: `which npm` → `/usr/bin/npm` |
-| `@pi-crew/crew` workspace not found | Run `npm ls -w @pi-crew/crew` from `~/pi-crew` |
-| Config not loaded | Verify `PI_CREW_CONFIG` path; check file permissions |
-| WebSocket refused | Check Den Channels is running on the configured host:port |
+| Unit fails to load | `systemd-analyze --user verify ~/.config/systemd/user/pi-crew.service` |
+| Service exits immediately | `journalctl --user -u pi-crew.service -n 100 --no-pager` |
+| `npm` unavailable | `command -v npm`; unit uses `/usr/bin/env npm` |
+| Config rejected | Validate against current `pi-service/src/config.ts`; check `den.channelsUrl` is empty or `ws://`/`wss://` |
+| Health check fails | Confirm `health.host`/`health.port`; inspect journal for startup errors |
+| Den Channels reconnect loop | Check `den.channelsUrl`, token, and endpoint reachability from den-k8 |
