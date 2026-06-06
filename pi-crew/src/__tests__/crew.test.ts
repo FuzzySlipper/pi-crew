@@ -25,9 +25,12 @@ import {
 
 // ── Test helpers ──────────────────────────────────────────────
 
+let nextHealthPort = 19_236;
+
 function makeTestCrewConfig(overrides?: Partial<CrewConfig>): CrewConfig {
   const parsed = CrewConfigSchema.safeParse({
     database: { path: makeTempDbPath(), wal: true },
+    health: { host: "127.0.0.1", port: nextHealthPort++ },
     den: {
       coreUrl: "http://localhost:3030",
       requiredAtStartup: false,

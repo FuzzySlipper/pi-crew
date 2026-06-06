@@ -11,10 +11,11 @@ den:
   # Set PI_DEN_CORE_URL env var to override.
   coreUrl: "http://den-k8plus:3030"
 
-  # Den Channels Gateway WebSocket URL.
-  # Use ws:// or wss:// for WebSocket, http:// or https:// for HTTP cursor/polling.
-  # Set to empty string to use a simulated connection (tests/dev only).
-  channelsUrl: "ws://den-k8plus:4201"
+  # Den Channels HTTP base URL for live direct-agent-events cursor polling.
+  # Use http:// or https:// for HTTP cursor/polling; ws:// or wss:// remains
+  # supported only for legacy WebSocket deployments. Set to empty string to use
+  # a simulated connection (tests/dev only).
+  channelsUrl: "http://192.168.1.10:18081"
 
   # Auth token for the Den Channels Gateway.
   # Override via PI_DEN_CHANNELS_TOKEN env var. Do NOT commit real tokens.

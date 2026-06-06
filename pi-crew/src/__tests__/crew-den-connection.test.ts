@@ -210,7 +210,7 @@ describe("Den Channels production connection config", () => {
   it("loads default.yaml with live Channels settings", () => {
     const config = loadCrewConfig("pi-crew/config/default.yaml");
 
-    expect(config.den.channelsUrl).toBe("ws://den-k8plus:4201");
+    expect(config.den.channelsUrl).toBe("http://192.168.1.10:18081");
     expect(config.den.channelsRetryMaxAttempts).toBe(5);
     expect(config.den.channelsPingIntervalMs).toBe(30_000);
     expect(config.den.channelsConnectionTimeoutMs).toBe(10_000);

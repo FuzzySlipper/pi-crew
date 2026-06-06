@@ -40,13 +40,10 @@ export type { DenChannelsAdapterConfig } from "./den-channels/den-channels-adapt
 export {
   DenWebSocketConnection,
   SimulatedDenConnection,
-  DenHttpDirectAgentConnection,
 } from "./den-channels/connection.js";
 export type {
   DenConnection,
   DenConnectionConfig,
-  DenHttpConnectionConfig,
-  CursorStore,
   DenConnectionEvents,
   DenInboundMessage,
   DenOutboundPayload,

@@ -6,7 +6,12 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./den-channels/den-channels-adapter": "./src/den-channels/den-channels-adapter.ts",
+    "./den-channels/connection-types": "./src/den-channels/connection-types.ts",
+    "./den-channels/connection-websocket": "./src/den-channels/connection-websocket.ts",
+    "./den-channels/connection-simulated": "./src/den-channels/connection-simulated.ts",
+    "./den-channels/connection-http": "./src/den-channels/connection-http.ts"
   },
   "dependencies": {
     "@pi-crew/core": "*"

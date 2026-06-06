@@ -21,17 +21,8 @@ import type {
 } from "@pi-crew/core";
 import { ConfigurationError, FakeLogger, FakeEventBus } from "@pi-crew/core";
 
-import {
-  DenChannelsAdapter,
-  DenWebSocketConnection,
-  DenHttpDirectAgentConnection,
-  SimulatedDenConnection,
-  type DenChannelsAdapterConfig,
-  type DenConnectionConfig,
-  type DenHttpConnectionConfig,
-  type CursorStore,
-  type DenConnection,
-} from "@pi-crew/channels";
+import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
+import type { DenChannelsAdapterConfig } from "@pi-crew/channels/den-channels/den-channels-adapter";
 
 import {
   loadConfig,
@@ -46,7 +37,6 @@ import {
   SqliteAuditRepository,
   SqliteSessionRepository,
   type GatewayConfig,
-  type DenConfig,
   type ServiceRegistry,
 } from "@pi-crew/service";
 
@@ -58,6 +48,11 @@ import type { AuditEntry } from "@pi-crew/governance";
 
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
 import { loadProfile } from "@pi-crew/profiles";
+
+import {
+  buildDenConnection,
+  createSqliteCursorStore,
+} from "./den-connection-factory.js";
 
 // ── Crew-level config schema ───────────────────────────────────
 
@@ -426,126 +421,6 @@ function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
     event: entry.event,
     payload: entry.payload,
     correlation: entry.correlation,
-  };
-}
-
-// ── Den connection factory ───────────────────────────────────────
-
-/**
- * Build a Den connection from configuration.
- *
- * Protocol detection:
- * - `channelsUrl` starts with `ws://` or `wss://` → {@link DenWebSocketConnection}
- * - `channelsUrl` starts with `http://` or `https://` → {@link DenHttpDirectAgentConnection}
- * - `channelsUrl` is empty → {@link SimulatedDenConnection} (tests/dev)
- *
- * **HTTP mode fails closed** when `channelsProjectId` or
- * `channelsMemberIdentity` are empty — no silent fallback to simulated.
- *
- * @param den — Validated Den connectivity config.
- * @param logger — Logger for the connection.
- * @param cursorStore — Cursor persistence (required for HTTP mode).
- * @returns A DenConnection ready to be wrapped by DenChannelsAdapter.
- */
-function buildDenConnection(
-  den: DenConfig,
-  logger: Logger,
-  cursorStore: CursorStore,
-): DenConnection {
-  if (den.channelsUrl.length === 0) {
-    logger.info("No channelsUrl configured — using simulated connection");
-    return new SimulatedDenConnection(logger);
-  }
-
-  const url = new URL(den.channelsUrl);
-
-  if (url.protocol === "ws:" || url.protocol === "wss:") {
-    logger.info("Creating live Den WebSocket connection", {
-      url: den.channelsUrl,
-      hasToken: den.channelsToken.length > 0,
-    });
-    const connConfig: DenConnectionConfig = {
-      url: den.channelsUrl,
-      token: den.channelsToken,
-      retryPolicy: {
-        maxAttempts: den.channelsRetryMaxAttempts,
-        baseDelayMs: den.channelsRetryBaseDelayMs,
-        maxDelayMs: den.channelsRetryMaxDelayMs,
-      },
-      pingIntervalMs: den.channelsPingIntervalMs,
-      connectionTimeoutMs: den.channelsConnectionTimeoutMs,
-    };
-    return new DenWebSocketConnection(connConfig, logger);
-  }
-
-  if (url.protocol === "http:" || url.protocol === "https:") {
-    // Validate required HTTP fields.
-    if (den.channelsProjectId.length === 0) {
-      throw new ConfigurationError(
-        "den.channelsProjectId is required when channelsUrl uses http:// or https://",
-      );
-    }
-    if (den.channelsMemberIdentity.length === 0) {
-      throw new ConfigurationError(
-        "den.channelsMemberIdentity is required when channelsUrl uses http:// or https://",
-      );
-    }
-
-    logger.info("Creating live Den HTTP direct-agent connection", {
-      baseUrl: den.channelsUrl,
-      projectId: den.channelsProjectId,
-      memberIdentity: den.channelsMemberIdentity,
-      pollIntervalMs: den.channelsPollIntervalMs,
-      pollLimit: den.channelsPollLimit,
-    });
-
-    const httpConfig: DenHttpConnectionConfig = {
-      baseUrl: den.channelsUrl,
-      projectId: den.channelsProjectId,
-      memberIdentity: den.channelsMemberIdentity,
-      token: den.channelsToken,
-      pollIntervalMs: den.channelsPollIntervalMs,
-      pollLimit: den.channelsPollLimit,
-    };
-
-    return new DenHttpDirectAgentConnection(
-      httpConfig,
-      logger,
-      cursorStore,
-    );
-  }
-
-  throw new ConfigurationError(
-    `Unsupported channelsUrl protocol: ${url.protocol}`,
-  );
-}
-
-// ── SQLite-backed CursorStore ────────────────────────────────────
-
-/**
- * Create a {@link CursorStore} that persists direct-agent event
- * cursors in the `runtime_kv` table.
- *
- * Uses `INSERT OR REPLACE` semantics so every write is durable.
- */
-function createSqliteCursorStore(runtimeDb: RuntimeDb): CursorStore {
-  const db = runtimeDb.handle;
-  const readStmt = db.prepare(
-    "SELECT value FROM runtime_kv WHERE key = ?",
-  );
-  const writeStmt = db.prepare(
-    "INSERT OR REPLACE INTO runtime_kv (key, value, updated_at) VALUES (?, ?, ?)",
-  );
-
-  return {
-    read(key: string): Promise<string | null> {
-      const row = readStmt.get(key) as { value: string } | undefined;
-      return Promise.resolve(row?.value ?? null);
-    },
-    write(key: string, value: string): Promise<void> {
-      writeStmt.run(key, value, new Date().toISOString());
-      return Promise.resolve();
-    },
   };
 }
 
