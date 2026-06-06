@@ -174,6 +174,10 @@ export class HttpDirectAgentClient {
           status: response.status,
         });
         if (response.status >= 500) {
+          // DESIGN: Keep telemetry visible while deployed Den Channels databases
+          // may lag the code-level agent_work_lifecycle event-type migration.
+          // Rationale: the compatibility route accepts lifecycle_status rows in
+          // older schemas and preserves the canonical lifecycle type in metadata.
           await this.#postLegacyLifecycleActivityEvent(payload, signal);
         }
       }
