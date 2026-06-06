@@ -240,15 +240,27 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       item,
       this.#pollState.controller.signal,
     );
-
-    this.#emit("message", this.#mapEventToMessage(item));
-
     await this.#client.postLifecycleEvent(
       "request_claimed",
       eventId,
       item,
       this.#pollState.controller.signal,
     );
+    await this.#client.postLifecycleEvent(
+      "agent_turn_started",
+      eventId,
+      item,
+      this.#pollState.controller.signal,
+    );
+    await this.#client.postLifecycleEvent(
+      "heartbeat",
+      eventId,
+      item,
+      this.#pollState.controller.signal,
+    );
+
+    this.#emit("message", this.#mapEventToMessage(item));
+
     await this.#postGatewayDeliveryResponse(item);
     await this.#client.postLifecycleEvent(
       "completed",

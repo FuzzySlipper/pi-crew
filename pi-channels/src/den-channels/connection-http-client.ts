@@ -7,7 +7,7 @@
  * @module pi-channels/den-channels/connection-http-client
  */
 
-import type { Logger } from "@pi-crew/core";
+import { ConnectionError, type Logger } from "@pi-crew/core";
 
 import type { DenHttpConnectionConfig } from "./connection-types.js";
 
@@ -23,6 +23,10 @@ export interface DirectAgentEventItem {
   readonly assignmentId?: string | null;
   readonly workerRunId?: string | null;
   readonly workerRole?: string | null;
+  readonly profileIdentity?: string | null;
+  readonly agentInstanceId?: string | null;
+  readonly poolMemberId?: string | null;
+  readonly sessionId?: string | null;
   readonly body?: string | null;
   readonly status?: string | null;
   readonly createdAt?: string | null;
@@ -43,9 +47,14 @@ interface LifecycleEventPayload {
   readonly assignmentId?: string | null;
   readonly workerRunId?: string | null;
   readonly workerRole?: string | null;
+  readonly profileIdentity?: string | null;
+  readonly agentInstanceId?: string | null;
+  readonly poolMemberId?: string | null;
+  readonly sessionId?: string | null;
   readonly sourceMessageId: string;
   readonly directAgentEventId: string;
   readonly lastActivityAt: string;
+  readonly stalenessDeadline?: string;
   readonly summary: string;
 }
 
@@ -84,6 +93,7 @@ export interface HttpDirectAgentClientOptions {
 }
 
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
+const DEFAULT_LIFECYCLE_STALENESS_MS = 60_000;
 
 export class HttpDirectAgentClient {
   readonly #config: DenHttpConnectionConfig;
@@ -142,6 +152,7 @@ export class HttpDirectAgentClient {
     item: DirectAgentEventItem,
     signal: AbortSignal,
   ): Promise<void> {
+    const lastActivityAt = new Date();
     const payload: LifecycleEventPayload = {
       channelId: item.channelId,
       agentIdentity: this.#config.memberIdentity,
@@ -151,9 +162,16 @@ export class HttpDirectAgentClient {
       assignmentId: item.assignmentId,
       workerRunId: item.workerRunId,
       workerRole: item.workerRole,
+      profileIdentity: item.profileIdentity,
+      agentInstanceId: item.agentInstanceId,
+      poolMemberId: item.poolMemberId,
+      sessionId: item.sessionId,
       sourceMessageId: String(sourceRequestId),
       directAgentEventId: String(sourceRequestId),
-      lastActivityAt: new Date().toISOString(),
+      lastActivityAt: lastActivityAt.toISOString(),
+      stalenessDeadline: isTerminalLifecycleEvent(eventType)
+        ? undefined
+        : new Date(lastActivityAt.getTime() + DEFAULT_LIFECYCLE_STALENESS_MS).toISOString(),
       summary: `pi-crew ${eventType} direct-agent event ${String(sourceRequestId)}`,
     };
 
@@ -179,7 +197,9 @@ export class HttpDirectAgentClient {
           // Rationale: the compatibility route accepts lifecycle_status rows in
           // older schemas and preserves the canonical lifecycle type in metadata.
           await this.#postLegacyLifecycleActivityEvent(payload, signal);
+          return;
         }
+        throw lifecycleTelemetryError(eventType, response.status);
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
@@ -187,6 +207,10 @@ export class HttpDirectAgentClient {
         eventType,
         error: errorMessage(err),
       });
+      if (err instanceof ConnectionError) throw err;
+      throw new ConnectionError(
+        `Lifecycle telemetry ${eventType} failed: ${errorMessage(err)}`,
+      );
     }
   }
 
@@ -213,6 +237,11 @@ export class HttpDirectAgentClient {
         directAgentEventId: payload.directAgentEventId,
         sourceMessageId: payload.sourceMessageId,
         lastActivityAt: payload.lastActivityAt,
+        stalenessDeadline: payload.stalenessDeadline,
+        profileIdentity: payload.profileIdentity,
+        agentInstanceId: payload.agentInstanceId,
+        poolMemberId: payload.poolMemberId,
+        sessionId: payload.sessionId,
       }),
       dedupeKey: `pi-crew-http:lifecycle:${payload.eventType}:${payload.directAgentEventId}`,
     };
@@ -232,6 +261,7 @@ export class HttpDirectAgentClient {
           eventType: payload.eventType,
           status: response.status,
         });
+        throw lifecycleTelemetryError(payload.eventType, response.status);
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
@@ -239,6 +269,10 @@ export class HttpDirectAgentClient {
         eventType: payload.eventType,
         error: errorMessage(err),
       });
+      if (err instanceof ConnectionError) throw err;
+      throw new ConnectionError(
+        `Lifecycle telemetry ${payload.eventType} failed: ${errorMessage(err)}`,
+      );
     }
   }
 
@@ -392,6 +426,12 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
     );
   }
   return controller.signal;
+}
+
+function lifecycleTelemetryError(eventType: string, status: number): ConnectionError {
+  return new ConnectionError(
+    `Lifecycle telemetry ${eventType} failed with HTTP ${String(status)}`,
+  );
 }
 
 function legacyLifecycleStatus(eventType: string): string {

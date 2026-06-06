@@ -336,7 +336,7 @@ describe("DenHttpDirectAgentConnection", () => {
     const lifecycleUrls = postedUrls.filter((u) =>
       u.includes("/api/agent-work/lifecycle-events"),
     );
-    expect(lifecycleUrls.length).toBe(3);
+    expect(lifecycleUrls.length).toBe(5);
 
     const gatewayUrls = postedUrls.filter((u) =>
       u.includes("/api/gateway/system-messages"),
@@ -390,9 +390,11 @@ describe("DenHttpDirectAgentConnection", () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
     await conn.close();
 
-    expect(legacyBodies).toHaveLength(3);
+    expect(legacyBodies).toHaveLength(5);
     const payloads = legacyBodies.map((body) => JSON.parse(body) as Record<string, unknown>);
     expect(payloads.map((payload) => payload.eventType)).toEqual([
+      "lifecycle_status",
+      "lifecycle_status",
       "lifecycle_status",
       "lifecycle_status",
       "lifecycle_status",
@@ -400,9 +402,13 @@ describe("DenHttpDirectAgentConnection", () => {
     expect(payloads.map((payload) => payload.status)).toEqual([
       "started",
       "started",
+      "started",
+      "interim",
       "completed",
     ]);
     expect(payloads.map((payload) => payload.deliveryStage)).toEqual([
+      "observability",
+      "observability",
       "observability",
       "observability",
       "observability",
