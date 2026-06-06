@@ -1,0 +1,48 @@
+# pi-crew systemd user service unit
+#
+# Installed under ~/.config/systemd/user/
+# Managed by systemctl --user commands only; no root required.
+#
+# Prerequisites:
+#   - Node.js (>=20) and npm installed on den-k8
+#   - pi-crew repository checked out at ~/pi-crew
+#   - npm dependencies installed (cd ~/pi-crew && npm ci)
+#   - PI_CREW_CONFIG environment variable set in
+#     ~/.config/pi-crew/config.yaml (or passed via Environment= below)
+#
+# Dependencies / start order:
+#   After=network-online.target (pi-crew needs Den Channels WebSocket)
+#
+# Non-root, user-scoped only:
+#   All paths under ~/.config, ~/.local, and the pi-crew checkout.
+#   No /etc/systemd/system, sudoers, system accounts, or firewall rules.
+
+[Unit]
+Description=pi-crew agent crew runtime
+Documentation=https://github.com/nous/pi-crew
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/pi-crew
+Environment=PI_CREW_CONFIG=%h/.config/pi-crew/config.yaml
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm start -w @pi-crew/crew
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pi-crew
+
+# Health / readiness
+# pi-crew logs "connected to Den Channels" on successful WebSocket connect.
+# Check with: journalctl --user -u pi-crew.service -n 20 -f
+
+# Runtime state lives here:
+#   SQLite DB:  %h/.local/state/pi-crew/runtime.db
+#   Config:     %h/.config/pi-crew/config.yaml
+
+[Install]
+WantedBy=default.target
