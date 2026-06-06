@@ -58,6 +58,10 @@ sessions:
   # Idle timeout in milliseconds before an instance is eligible for eviction.
   idleTimeoutMs: 28800000  # 8 hours
 
+  # Default profile ID for new conversational sessions created as
+  # a visible fallback when no existing session matches the channel.
+  fallbackProfileId: "system-architect"
+
 # ── Logging ───────────────────────────────────────────────────────
 logging:
   # Minimum log level: "debug", "info", "warn", or "error".

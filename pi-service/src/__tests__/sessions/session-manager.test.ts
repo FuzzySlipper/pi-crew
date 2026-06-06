@@ -38,27 +38,10 @@ describe("SessionManagerImpl", () => {
     logger = new FakeLogger();
     eventBus = new FakeEventBus();
     store = new InMemorySessionStore();
-
     const instanceFactory = new InstanceFactoryImpl(logger);
-    const pool = new InstancePoolImpl(
-      instanceFactory,
-      DEFAULT_POOL_CONFIG,
-      logger,
-    );
-    const agentFactory = new AgentFactoryImpl(
-      pool,
-      store,
-      eventBus,
-      logger,
-    );
-
-    manager = new SessionManagerImpl(
-      store,
-      agentFactory,
-      pool,
-      eventBus,
-      logger,
-    );
+    const pool = new InstancePoolImpl(instanceFactory, DEFAULT_POOL_CONFIG, logger);
+    const agentFactory = new AgentFactoryImpl(pool, store, eventBus, logger);
+    manager = new SessionManagerImpl(store, agentFactory, pool, eventBus, logger, "fallback-test");
   });
 
   describe("create", () => {
@@ -313,18 +296,9 @@ describe("SessionManagerImpl", () => {
         { ...DEFAULT_POOL_CONFIG, idleTimeoutMs: 0 },
         logger,
       );
-      const shortIdleAgentFactory = new AgentFactoryImpl(
-        shortIdlePool,
-        shortIdleStore,
-        eventBus,
-        logger,
-      );
+      const shortIdleAgentFactory = new AgentFactoryImpl(shortIdlePool, shortIdleStore, eventBus, logger);
       const shortIdleManager = new SessionManagerImpl(
-        shortIdleStore,
-        shortIdleAgentFactory,
-        shortIdlePool,
-        eventBus,
-        logger,
+        shortIdleStore, shortIdleAgentFactory, shortIdlePool, eventBus, logger, "fallback-test",
       );
       const record = await shortIdleManager.create(makeSessionConfig());
 
@@ -346,13 +320,9 @@ describe("SessionManagerImpl", () => {
       const eb = new FakeEventBus();
       const s = new InMemorySessionStore();
       const l = new FakeLogger();
-      const p = new InstancePoolImpl(
-        new InstanceFactoryImpl(l),
-        { ...DEFAULT_POOL_CONFIG, idleTimeoutMs: 0 },
-        l,
-      );
+      const p = new InstancePoolImpl(new InstanceFactoryImpl(l), { ...DEFAULT_POOL_CONFIG, idleTimeoutMs: 0 }, l);
       const af = new AgentFactoryImpl(p, s, eb, l);
-      const m = new SessionManagerImpl(s, af, p, eb, l);
+      const m = new SessionManagerImpl(s, af, p, eb, l, "fallback-test");
       return { eventBus: eb, store: s, pool: p, manager: m };
     }
 
@@ -488,6 +458,28 @@ describe("SessionManagerImpl", () => {
       expect(rehydratedEvents.at(0)?.payload).toMatchObject({
         sessionId: convRecord.id,
       });
+    });
+  });
+
+  describe("fallback profile routing", () => {
+    it("uses injected fallbackProfileId for new conversational sessions", async () => {
+      const provider = new FakeChannelProvider();
+      eventBus.clear();
+
+      await manager.routeMessage(provider, {
+        id: "msg-fb",
+        channelId: "ch-fallback",
+        sender: { id: "u1", displayName: "T", kind: "human", platform: "test" },
+        content: { kind: "text", text: "hi" },
+        timestamp: new Date(),
+      });
+
+      const created = eventBus.emitted.filter((e) => e.event === "session.created");
+      expect(created).toHaveLength(1);
+      // The fallback session should use the injected profile, not hardcoded "default"
+      const sessionId = (created[0]?.payload as { sessionId: string } | undefined)?.sessionId;
+      const record = sessionId !== undefined ? await manager.get(sessionId) : null;
+      expect(record?.profileId).toBe("fallback-test");
     });
   });
 });

@@ -50,6 +50,7 @@ import { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
 import type { AuditEntry } from "@pi-crew/governance";
 
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
+import { loadProfile } from "@pi-crew/profiles";
 
 // ── Crew-level config schema ───────────────────────────────────
 
@@ -65,6 +66,7 @@ const SessionsConfigSchema = z.object({
   maxTotal: z.number().int().positive().default(16),
   maxPerProfile: z.number().int().positive().default(4),
   idleTimeoutMs: z.number().int().positive().default(28_800_000),
+  fallbackProfileId: z.string().min(1).default("system-architect"),
 });
 
 const ToolPolicyDefaultsSchema = z.object({
@@ -158,6 +160,11 @@ export class Crew {
   ) {
     this.#config = config;
 
+    // DESIGN: The composition root validates configured profile IDs before
+    // runtime routing. Rationale: SessionManager should receive policy, not
+    // own global profile loading or magic fallback identifiers.
+    loadProfile(config.sessions.fallbackProfileId);
+
     // 1. Infrastructure
     this.#logger = logger ?? new FakeLogger();
     this.#eventBus = eventBus ?? new FakeEventBus();
@@ -229,6 +236,7 @@ export class Crew {
       this.#instancePool,
       this.#eventBus,
       this.#logger,
+      config.sessions.fallbackProfileId,
     );
 
     // 6. Wire channel provider → session manager routing

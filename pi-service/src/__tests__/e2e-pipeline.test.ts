@@ -153,6 +153,7 @@ describe("E2E Pipeline Spike", () => {
         pool,
         eventBus,
         logger,
+        "default",
       );
       const provider = new FakeChannelProvider();
       await provider.connect();
@@ -215,6 +216,7 @@ describe("E2E Pipeline Spike", () => {
         pool,
         eventBus,
         logger,
+        "default",
       );
       const provider = new FakeChannelProvider();
       await provider.connect();
@@ -294,6 +296,7 @@ describe("E2E Pipeline Spike", () => {
         pool,
         eventBus,
         logger,
+        "default",
       );
       const provider = new FakeChannelProvider();
       await provider.connect();

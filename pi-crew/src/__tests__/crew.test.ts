@@ -370,12 +370,13 @@ describe("Crew composition root", () => {
     expect(cfg.sessions.maxTotal).toBe(16);
     expect(cfg.sessions.maxPerProfile).toBe(4);
     expect(cfg.sessions.idleTimeoutMs).toBe(28_800_000);
+    expect(cfg.sessions.fallbackProfileId).toBe("system-architect");
   });
 
   it("loads config with custom values overridden", () => {
     const customCrew = new Crew(
       makeTestCrewConfig({
-        sessions: { maxTotal: 8, maxPerProfile: 2, idleTimeoutMs: 1_000 },
+        sessions: { maxTotal: 8, maxPerProfile: 2, idleTimeoutMs: 1_000, fallbackProfileId: "pi-crew-planner" },
         logging: { level: "debug", json: true },
       }),
     );
@@ -383,6 +384,7 @@ describe("Crew composition root", () => {
     expect(customCrew.config.sessions.maxTotal).toBe(8);
     expect(customCrew.config.sessions.maxPerProfile).toBe(2);
     expect(customCrew.config.sessions.idleTimeoutMs).toBe(1_000);
+    expect(customCrew.config.sessions.fallbackProfileId).toBe("pi-crew-planner");
   });
 
   // ── Channel provider wiring ─────────────────────────────────
@@ -429,9 +431,37 @@ describe("loadCrewConfig", () => {
     if (result.success) {
       expect(result.data.logging.level).toBe("info");
       expect(result.data.sessions.maxTotal).toBe(16);
+      expect(result.data.sessions.fallbackProfileId).toBe("system-architect");
       expect(result.data.database.path).toBe("/var/lib/pi-crew/runtime.db");
       expect(result.data.health.port).toBe(9236);
     }
+  });
+
+  it("enforces non-empty fallbackProfileId", () => {
+    const result = CrewConfigSchema.safeParse({
+      den: { coreUrl: "http://localhost:3030" },
+      sessions: { fallbackProfileId: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("allows custom fallbackProfileId override", () => {
+    const result = CrewConfigSchema.safeParse({
+      den: { coreUrl: "http://localhost:3030" },
+      sessions: { fallbackProfileId: "pi-crew-planner" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.sessions.fallbackProfileId).toBe("pi-crew-planner");
+    }
+  });
+
+  it("rejects unknown configured fallback profile at startup", () => {
+    expect(() =>
+      new Crew(makeTestCrewConfig({
+        sessions: { fallbackProfileId: "missing-profile" },
+      })),
+    ).toThrow(/Profile "missing-profile" not found/);
   });
 });
 

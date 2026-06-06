@@ -122,6 +122,7 @@ export class SessionManagerImpl implements SessionManager {
     private readonly pool: InstancePool,
     private readonly eventBus: EventBus,
     private readonly logger: Logger,
+    private readonly fallbackProfileId: string,
   ) {}
 
   // ── SessionManager contract ───────────────────────────────────
@@ -328,7 +329,7 @@ export class SessionManagerImpl implements SessionManager {
     // 2. No suitable session — create a new conversational session as
     //    a visible fallback.
     const newSession = await this.create({
-      profileId: "default",
+      profileId: this.fallbackProfileId,
       kind: "conversational",
       channelBindings: [channelId],
     });
