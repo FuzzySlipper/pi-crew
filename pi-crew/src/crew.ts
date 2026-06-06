@@ -53,12 +53,13 @@ import {
   buildDenConnection,
   createSqliteCursorStore,
 } from "./den-connection-factory.js";
+import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 
 // ── Crew-level config schema ───────────────────────────────────
 
 const McpConfigSchema = z.object({
   transport: z.enum(["stdio", "streamable-http"]).default("streamable-http"),
-  endpoint: z.string().default("http://den-k8plus:3100/mcp"),
+  endpoint: z.string().default("http://192.168.1.10:5199/mcp"),
   requestTimeout: z.number().int().positive().default(30_000),
   maxReconnectAttempts: z.number().int().positive().default(3),
   reconnectBaseDelay: z.number().int().positive().default(1_000),
@@ -83,6 +84,7 @@ export const CrewConfigSchema = z.object({
   database: GatewayConfigSchema.shape.database.default({}),
   health: GatewayConfigSchema.shape.health.default({}),
   logging: GatewayConfigSchema.shape.logging.default({}),
+  runtime: GatewayConfigSchema.shape.runtime,
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
@@ -167,6 +169,7 @@ export class Crew {
       den: config.den,
       health: config.health,
       logging: config.logging,
+      runtime: config.runtime,
     });
 
     this.#registry = createServiceRegistry({
@@ -219,7 +222,14 @@ export class Crew {
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
 
     // 4. Instance pool + factory
-    const instanceFactory = new InstanceFactoryImpl(this.#logger);
+    const responderFactory = buildRuntimeResponderFactory(
+      config.runtime,
+      this.#eventBus,
+    );
+    const instanceFactory = new InstanceFactoryImpl(
+      this.#logger,
+      responderFactory,
+    );
     this.#instancePool = new InstancePoolImpl(
       instanceFactory,
       {

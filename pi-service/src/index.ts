@@ -10,6 +10,7 @@ export {
   type DenConfig,
   type HealthConfig,
   type LoggingConfig,
+  type RuntimeConfig,
 } from "./config.js";
 export {
   createServiceRegistry,

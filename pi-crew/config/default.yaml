@@ -9,7 +9,7 @@
 den:
   # REST API base URL for Den Core (required at startup by default).
   # Set PI_DEN_CORE_URL env var to override.
-  coreUrl: "http://den-k8plus:3030"
+  coreUrl: "http://192.168.1.10:18080/den-core-api"
 
   # Den Channels HTTP base URL for live direct-agent-events cursor polling.
   # Use http:// or https:// for HTTP cursor/polling; ws:// or wss:// remains
@@ -50,7 +50,7 @@ mcp:
   transport: "streamable-http"
 
   # MCP server endpoint (when transport is streamable-http).
-  endpoint: "http://den-k8plus:3100/mcp"
+  endpoint: "http://192.168.1.10:5199/mcp"
 
   # Request timeout in milliseconds.
   requestTimeout: 30000
@@ -69,6 +69,15 @@ database:
 
   # Enable WAL mode for read concurrency.
   wal: true
+
+# ── Runtime response mode ─────────────────────────────────────────
+# Default remains echo-compatible for safe deployment. Set responseMode to
+# "deterministicTool" and enable the arithmetic tool only for the narrow
+# #2020/#2031 non-echo smoke path.
+runtime:
+  responseMode: "echo"
+  deterministicTool:
+    arithmeticToolEnabled: false
 
 # ── Session / instance limits ─────────────────────────────────────
 sessions:

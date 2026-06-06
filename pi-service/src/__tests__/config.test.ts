@@ -24,6 +24,21 @@ describe("loadConfig", () => {
       expect(cfg.health.host).toBe("127.0.0.1");
       expect(cfg.logging.level).toBe("info");
       expect(cfg.logging.json).toBe(false);
+      expect(cfg.runtime.responseMode).toBe("echo");
+      expect(cfg.runtime.deterministicTool.arithmeticToolEnabled).toBe(false);
+    });
+
+    it("accepts deterministic tool runtime mode when the arithmetic tool is enabled", () => {
+      const cfg = loadConfig({
+        den: { coreUrl: "http://den-srv:3030" },
+        runtime: {
+          responseMode: "deterministicTool",
+          deterministicTool: { arithmeticToolEnabled: true },
+        },
+      });
+
+      expect(cfg.runtime.responseMode).toBe("deterministicTool");
+      expect(cfg.runtime.deterministicTool.arithmeticToolEnabled).toBe(true);
     });
 
     it("accepts full custom config", () => {
@@ -72,6 +87,24 @@ describe("loadConfig", () => {
         loadConfig({
           den: { coreUrl: "http://den-srv:3030" },
           logging: { level: "verbose" },
+        }),
+      ).toThrow(ConfigurationError);
+    });
+
+    it("throws ConfigurationError for invalid runtime response mode", () => {
+      expect(() =>
+        loadConfig({
+          den: { coreUrl: "http://den-srv:3030" },
+          runtime: { responseMode: "llmProvider" },
+        }),
+      ).toThrow(ConfigurationError);
+    });
+
+    it("throws ConfigurationError when deterministic mode lacks its enabled tool config", () => {
+      expect(() =>
+        loadConfig({
+          den: { coreUrl: "http://den-srv:3030" },
+          runtime: { responseMode: "deterministicTool" },
         }),
       ).toThrow(ConfigurationError);
     });

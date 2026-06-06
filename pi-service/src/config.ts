@@ -2,8 +2,8 @@
  * Gateway configuration loading and validation using zod.
  *
  * The gateway MUST crash on invalid config — there is no degraded-start
- * path.  Every field is validated at startup; any failure produces a
- * descriptive ConfigurationError.
+ * path.  Every field is validated at startup; each failure produces a
+ * descriptive ConfigurationError for each failure.
  *
  * @module pi-service/config
  */
@@ -110,11 +110,45 @@ const LoggingConfigSchema = z.object({
   json: z.boolean().default(false),
 });
 
+const RuntimeResponseModeSchema = z.enum(["echo", "deterministicTool"]);
+
+const DeterministicToolConfigSchema = z.object({
+  /**
+   * Enables the built-in deterministic arithmetic tool for the narrow
+   * #2020 live smoke path. This is intentionally explicit so selecting
+   * deterministic mode cannot silently fall back to echo at startup.
+   */
+  arithmeticToolEnabled: z.boolean().default(false),
+});
+
+const RuntimeConfigSchema = z
+  .object({
+    /** Runtime response strategy for AgentInstance responders. */
+    responseMode: RuntimeResponseModeSchema.default("echo"),
+    /** Required settings for deterministic tool-backed smoke mode. */
+    deterministicTool: DeterministicToolConfigSchema.default({}),
+  })
+  .default({})
+  .superRefine((value, context) => {
+    if (
+      value.responseMode === "deterministicTool" &&
+      !value.deterministicTool.arithmeticToolEnabled
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["deterministicTool", "arithmeticToolEnabled"],
+        message:
+          "runtime.deterministicTool.arithmeticToolEnabled must be true when runtime.responseMode is deterministicTool",
+      });
+    }
+  });
+
 export const GatewayConfigSchema = z.object({
   database: DatabaseConfigSchema.default({}),
   den: DenConfigSchema,
   health: HealthConfigSchema.default({}),
   logging: LoggingConfigSchema.default({}),
+  runtime: RuntimeConfigSchema,
 });
 
 // ── Inferred types ──────────────────────────────────────────────
@@ -133,6 +167,9 @@ export type HealthConfig = z.infer<typeof HealthConfigSchema>;
 
 /** Logging sub-config. */
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
+
+/** Runtime responder/provider sub-config. */
+export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;
 
 // ── Loader ──────────────────────────────────────────────────────
 
