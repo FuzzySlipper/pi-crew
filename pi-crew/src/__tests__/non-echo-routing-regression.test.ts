@@ -136,4 +136,28 @@ describe("non-echo routing regression without live network", () => {
       responseText: "NON_ECHO_RUNTIME_OK:42",
     });
   });
+
+  it("falls back to echo routing without deterministic tool events for non-matching prompts", async () => {
+    const harness = buildHarness();
+    const fallbackText = "Please acknowledge this ordinary runtime message.";
+
+    await harness.provider.connect();
+    harness.connection.simulateInboundMessage(makeInboundMessage(fallbackText));
+    await waitForAsyncRoute();
+    await harness.provider.disconnect();
+
+    expect(harness.connection.sentMessages).toHaveLength(1);
+    const sent = harness.connection.sentMessages[0];
+    expect(sent?.channelId).toBe("604");
+    expect(sent?.payload.content).toEqual({
+      kind: "text",
+      text: `received: ${fallbackText}`,
+    });
+    expect(
+      harness.eventBus.emitted.some((event) => event.event === "tool.called"),
+    ).toBe(false);
+    expect(
+      harness.eventBus.emitted.some((event) => event.event === "tool.completed"),
+    ).toBe(false);
+  });
 });
