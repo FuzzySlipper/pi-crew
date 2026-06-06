@@ -14,6 +14,8 @@
 import type { Logger } from "@pi-crew/core";
 import type { AgentInstance } from "./agent-instance.js";
 import { AgentInstanceImpl } from "./agent-instance.js";
+import type { AgentResponderFactory } from "./agent-responder.js";
+import { EchoAgentResponderFactory } from "./agent-responder.js";
 
 // ── InstanceFactory interface ───────────────────────────────────
 
@@ -36,13 +38,17 @@ export interface InstanceFactory {
 /**
  * Default {@link InstanceFactory} implementation.
  *
- * Creates an instance carrying only the profile id. It does NOT load
- * the profile from a filesystem, database, or network source — source
- * lookup belongs to the composition root once a concrete profile source
- * is injected there.
+ * Creates an instance carrying the profile id and an injected response
+ * boundary. It does NOT load the profile from a filesystem, database,
+ * or network source — source lookup belongs to the composition root once
+ * a concrete profile source is injected there.
  */
 export class InstanceFactoryImpl implements InstanceFactory {
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly responderFactory: AgentResponderFactory =
+      new EchoAgentResponderFactory(),
+  ) {}
 
   create(profileId: string, role?: string): Promise<AgentInstance> {
     // DESIGN: Keep pi-service instance construction profile-id based until the
@@ -54,6 +60,11 @@ export class InstanceFactoryImpl implements InstanceFactory {
       role,
     });
 
-    return Promise.resolve(new AgentInstanceImpl(profileId));
+    const responder = this.responderFactory.createResponder({
+      profileId,
+      role,
+    });
+
+    return Promise.resolve(new AgentInstanceImpl(profileId, responder));
   }
 }

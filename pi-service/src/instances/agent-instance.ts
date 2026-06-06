@@ -8,6 +8,8 @@
  */
 
 import type { ChannelMessage, ChannelContent } from "@pi-crew/core";
+import type { AgentResponder } from "./agent-responder.js";
+import { EchoAgentResponder } from "./agent-responder.js";
 
 // ── AgentInstance interface ─────────────────────────────────────
 
@@ -33,8 +35,9 @@ export interface AgentInstance {
   /**
    * Process an inbound message and produce a response.
    *
-   * In the spike implementation this echoes back the message text.
-   * Full provider/model invocation will be wired in follow-up tasks.
+   * Runtime response generation is delegated to the injected
+   * AgentResponder. The default responder preserves the current echo
+   * behavior until provider/model invocation is wired in follow-up tasks.
    *
    * @param message — The inbound channel message.
    * @returns The agent's response content.
@@ -57,16 +60,20 @@ let instanceCounter = 0;
 /**
  * Default {@link AgentInstance} implementation.
  *
- * In the initial v1 implementation the instance holds only identity
- * fields and a disposal flag.  Full provider-client and tool-registry
- * wiring happens in follow-up tasks.
+ * In the initial v1 implementation the instance holds identity,
+ * disposal state, and an injected response boundary. Full provider-client
+ * and tool-registry wiring happens in follow-up tasks.
  */
 export class AgentInstanceImpl implements AgentInstance {
   public readonly id: string;
   public readonly createdAt: Date;
   private _disposed = false;
 
-  constructor(public readonly profileId: string, id?: string) {
+  constructor(
+    public readonly profileId: string,
+    private readonly responder: AgentResponder = new EchoAgentResponder(),
+    id?: string,
+  ) {
     instanceCounter += 1;
     this.id = id ?? `inst-${String(instanceCounter)}-${String(Date.now())}`;
     this.createdAt = new Date();
@@ -79,12 +86,11 @@ export class AgentInstanceImpl implements AgentInstance {
   processMessage(
     message: ChannelMessage,
   ): Promise<ChannelContent> {
-    // Spike echo: return "received: [text]"
-    const text =
-      message.content.kind === "text"
-        ? message.content.text
-        : "[non-text content]";
-    return Promise.resolve({ kind: "text", text: `received: ${text}` });
+    return this.responder.respond({
+      profileId: this.profileId,
+      instanceId: this.id,
+      message,
+    });
   }
 
   dispose(): Promise<void> {

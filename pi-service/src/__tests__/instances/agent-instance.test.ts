@@ -4,10 +4,55 @@
  * @module pi-service/__tests__/instances/agent-instance.test
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import type { ChannelContent, ChannelMessage } from "@pi-crew/core";
 import { FakeLogger } from "@pi-crew/core";
+import { describe, it, expect, beforeEach } from "vitest";
 import { AgentInstanceImpl } from "../../instances/agent-instance.js";
+import type {
+  AgentResponseRequest,
+  AgentResponder,
+  AgentResponderFactory,
+  AgentResponderFactoryContext,
+} from "../../instances/agent-responder.js";
+import { EchoAgentResponder } from "../../instances/agent-responder.js";
 import { InstanceFactoryImpl } from "../../instances/instance-factory.js";
+
+class CapturingAgentResponder implements AgentResponder {
+  public readonly requests: AgentResponseRequest[] = [];
+
+  constructor(private readonly response: ChannelContent) {}
+
+  respond(request: AgentResponseRequest): Promise<ChannelContent> {
+    this.requests.push(request);
+    return Promise.resolve(this.response);
+  }
+}
+
+class CapturingResponderFactory implements AgentResponderFactory {
+  public readonly contexts: AgentResponderFactoryContext[] = [];
+
+  constructor(private readonly responder: AgentResponder) {}
+
+  createResponder(context: AgentResponderFactoryContext): AgentResponder {
+    this.contexts.push(context);
+    return this.responder;
+  }
+}
+
+function createTextMessage(text: string): ChannelMessage {
+  return {
+    id: "message-1",
+    channelId: "channel-1",
+    sender: {
+      id: "human-1",
+      displayName: "Human One",
+      kind: "human",
+      platform: "test",
+    },
+    content: { kind: "text", text },
+    timestamp: new Date("2026-06-06T09:32:00.000Z"),
+  };
+}
 
 describe("AgentInstanceImpl", () => {
   it("creates with a unique id", () => {
@@ -51,8 +96,31 @@ describe("AgentInstanceImpl", () => {
   });
 
   it("accepts a custom id", () => {
-    const instance = new AgentInstanceImpl("test", "custom-42");
+    const instance = new AgentInstanceImpl(
+      "test",
+      new EchoAgentResponder(),
+      "custom-42",
+    );
     expect(instance.id).toBe("custom-42");
+  });
+
+  it("delegates message processing to the injected responder", async () => {
+    const responder = new CapturingAgentResponder({
+      kind: "text",
+      text: "custom-response",
+    });
+    const instance = new AgentInstanceImpl("profile-a", responder);
+    const message = createTextMessage("hello");
+
+    const response = await instance.processMessage(message);
+
+    expect(response).toEqual({ kind: "text", text: "custom-response" });
+    expect(responder.requests).toHaveLength(1);
+    expect(responder.requests[0]).toEqual({
+      profileId: "profile-a",
+      instanceId: instance.id,
+      message,
+    });
   });
 });
 
@@ -86,5 +154,31 @@ describe("InstanceFactoryImpl", () => {
     const b = await factory.create("default");
 
     expect(a.id).not.toBe(b.id);
+  });
+
+  it("defaults to echo-compatible responder behavior", async () => {
+    const factory = new InstanceFactoryImpl(logger);
+    const instance = await factory.create("default");
+
+    const response = await instance.processMessage(createTextMessage("hello"));
+
+    expect(response).toEqual({ kind: "text", text: "received: hello" });
+  });
+
+  it("uses an injected responder factory", async () => {
+    const responder = new CapturingAgentResponder({
+      kind: "text",
+      text: "factory-response",
+    });
+    const responderFactory = new CapturingResponderFactory(responder);
+    const factory = new InstanceFactoryImpl(logger, responderFactory);
+
+    const instance = await factory.create("profile-b", "coder");
+    const response = await instance.processMessage(createTextMessage("hello"));
+
+    expect(response).toEqual({ kind: "text", text: "factory-response" });
+    expect(responderFactory.contexts).toEqual([
+      { profileId: "profile-b", role: "coder" },
+    ]);
   });
 });

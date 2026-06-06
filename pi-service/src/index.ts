@@ -40,6 +40,14 @@ export {
   AgentInstanceImpl,
 } from "./instances/agent-instance.js";
 export {
+  type AgentResponseRequest,
+  type AgentResponder,
+  type AgentResponderFactory,
+  type AgentResponderFactoryContext,
+  EchoAgentResponder,
+  EchoAgentResponderFactory,
+} from "./instances/agent-responder.js";
+export {
   type InstanceFactory,
   InstanceFactoryImpl,
 } from "./instances/instance-factory.js";
