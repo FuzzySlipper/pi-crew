@@ -15,7 +15,9 @@
 
 import { resolve } from "node:path";
 import { env, argv, exit, stdout } from "node:process";
-import { bootstrap } from "./crew.js";
+import { FakeEventBus } from "@pi-crew/core";
+import { Crew, loadCrewConfig } from "./crew.js";
+import { ServiceConsoleLogger, subscribeServiceEventLogs } from "./service-logger.js";
 
 // ── Config path resolution ──────────────────────────────────────
 
@@ -125,9 +127,17 @@ async function main(): Promise<void> {
   const configPath = resolveConfigPath();
   console.log(`pi-crew starting with config: ${configPath}`);
 
-  const crew = bootstrap(configPath);
+  const config = loadCrewConfig(configPath);
+  const logger = new ServiceConsoleLogger(config.logging);
+  const eventBus = new FakeEventBus();
+  const unsubscribeServiceEventLogs = subscribeServiceEventLogs(
+    eventBus,
+    logger,
+  );
+  const crew = new Crew(config, logger, eventBus);
 
   installSignalHandlers(async () => {
+    unsubscribeServiceEventLogs();
     await crew.stop("signal");
   });
 
