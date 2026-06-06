@@ -193,6 +193,13 @@ export class SimulatedDenConnection implements DenConnection {
   }
 
   /**
+   * Simulate a transport/protocol error. Triggers `error` event.
+   */
+  simulateError(error: Error): void {
+    this.#emit("error", error);
+  }
+
+  /**
    * Cause the next send to fail with a disconnect, useful for
    * testing reconnection flows.
    */
@@ -221,8 +228,7 @@ export class SimulatedDenConnection implements DenConnection {
     if (!set) return;
     for (const listener of set) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-        (listener as any)(...args);
+        Reflect.apply(listener as (...a: unknown[]) => void, undefined, args);
       } catch {
         // listener errors must not crash the connection
       }

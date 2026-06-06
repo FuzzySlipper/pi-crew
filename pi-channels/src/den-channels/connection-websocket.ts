@@ -18,6 +18,8 @@ import type {
   DenBreadcrumbPayload,
   DenSendResult,
   DenConnectionConfig,
+  WebSocketMessageEventLike,
+  WebSocketCloseEventLike,
 } from "./connection-types.js";
 
 /**
@@ -155,8 +157,7 @@ export class DenWebSocketConnection implements DenConnection {
     if (!set) return;
     for (const listener of set) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-        (listener as any)(...args);
+        Reflect.apply(listener as (...a: unknown[]) => void, undefined, args);
       } catch {
         // listener errors must not crash the connection
       }
@@ -229,10 +230,9 @@ export class DenWebSocketConnection implements DenConnection {
         );
       }, 10_000);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const handler = (event: any): void => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const data = event.data as string;
+      const handler = (event: WebSocketMessageEventLike): void => {
+        if (typeof event.data !== "string") return; // skip non-string payloads during auth
+        const data = event.data;
         try {
           const msg = JSON.parse(data) as Record<string, unknown>;
           if (msg.type === "auth_ok") {
@@ -266,11 +266,13 @@ export class DenWebSocketConnection implements DenConnection {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  #handleMessage(event: any): void {
+  #handleMessage(event: WebSocketMessageEventLike): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const data = event.data as string;
+      if (typeof event.data !== "string") {
+        this.#logger.debug("Den WebSocket non-string message data ignored");
+        return;
+      }
+      const data = event.data;
       const raw = JSON.parse(data) as Record<string, unknown>;
 
       switch (raw.type) {
@@ -303,17 +305,12 @@ export class DenWebSocketConnection implements DenConnection {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  #handleClose(event: any): void {
+  #handleClose(event: WebSocketCloseEventLike): void {
     this.#opened = false;
     this.#stopHeartbeat();
     this.#ws = null;
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const code = event.code as number | undefined;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const reasonStr = event.reason as string | undefined;
-    const reason = `code=${String(code ?? "?")} reason=${reasonStr ?? ""}`;
+    const reason = `code=${String(event.code)} reason=${event.reason}`;
     this.#logger.warn("Den WebSocket closed", { reason });
 
     this.#emit("disconnected", reason);
@@ -387,11 +384,10 @@ export class DenWebSocketConnection implements DenConnection {
     return new Promise<DenSendResult>((resolve, reject) => {
       const requestId = crypto.randomUUID();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const handler = (evt: any): void => {
+      const handler = (evt: WebSocketMessageEventLike): void => {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          const rawData = evt.data as string;
+          if (typeof evt.data !== "string") return; // not our ack
+          const rawData = evt.data;
           const raw = JSON.parse(rawData) as Record<string, unknown>;
           if (raw.type === "ack" && raw.requestId === requestId) {
             this.#ws?.removeEventListener("message", handler);

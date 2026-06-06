@@ -245,14 +245,58 @@ describe("SimulatedDenConnection", () => {
   });
 
   it("error events are emitted for error listeners", async () => {
-    // Simulated connection doesn't emit error on its own,
-    // but the DenWebSocketConnection does via #emit.
-    // Just verify the listener registration works.
     const onErr = vi.fn();
     conn.on("error", onErr);
-    // connect + verify handler was registered
     await conn.open();
-    // no error emitted, but handler is registered
+
+    const error = new Error("test transport error");
+    conn.simulateError(error);
+
+    expect(onErr).toHaveBeenCalledTimes(1);
+    expect(onErr).toHaveBeenCalledWith(error);
+  });
+
+  it("error event delivered to all registered error listeners", async () => {
+    const onErr1 = vi.fn();
+    const onErr2 = vi.fn();
+    conn.on("error", onErr1);
+    conn.on("error", onErr2);
+    await conn.open();
+
+    const error = new Error("protocol mismatch");
+    conn.simulateError(error);
+
+    expect(onErr1).toHaveBeenCalledWith(error);
+    expect(onErr2).toHaveBeenCalledWith(error);
+  });
+
+  it("listener errors do not prevent other listeners from firing", () => {
+    const good = vi.fn();
+    const bad = vi.fn().mockImplementation(() => {
+      throw new Error("listener crash");
+    });
+    conn.on("connected", bad);
+    conn.on("connected", good);
+
+    void conn.open();
+
+    // good listener should still have been called despite bad listener crash
+    expect(good).toHaveBeenCalled();
+  });
+
+  it("all event types fire correctly in lifecycle sequence", async () => {
+    const events: string[] = [];
+    conn.on("connected", () => events.push("connected"));
+    conn.on("message", () => events.push("message"));
+    conn.on("disconnected", () => events.push("disconnected"));
+    conn.on("error", () => events.push("error"));
+
+    await conn.open();
+    conn.simulateInboundMessage(makeInboundMessage({ id: "m1" }));
+    conn.simulateError(new Error("e1"));
+    conn.simulateDisconnect("bye");
+
+    expect(events).toEqual(["connected", "message", "error", "disconnected"]);
   });
 
   // ── clear ──────────────────────────────────────────────────

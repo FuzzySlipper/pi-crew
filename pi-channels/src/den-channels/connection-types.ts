@@ -184,6 +184,32 @@ export interface DenConnection {
   ): () => void;
 }
 
+// ── WebSocket boundary types ────────────────────────────────────
+
+/**
+ * Minimal typed shape for a WebSocket message event.
+ *
+ * Bridges the gap between the runtime WebSocket API's untyped
+ * {@link MessageEvent} and our strict TypeScript domain.
+ */
+export interface WebSocketMessageEventLike {
+  /** The raw message data (unknown at the boundary). */
+  readonly data: unknown;
+}
+
+/**
+ * Minimal typed shape for a WebSocket close event.
+ *
+ * Bridges the gap between the runtime WebSocket API's untyped
+ * {@link CloseEvent} and our strict TypeScript domain.
+ */
+export interface WebSocketCloseEventLike {
+  /** The WebSocket close code (1000 = normal, 1006 = abnormal, etc.). */
+  readonly code: number;
+  /** A human-readable reason string (may be empty). */
+  readonly reason: string;
+}
+
 // ── Configuration ───────────────────────────────────────────────
 
 /**
