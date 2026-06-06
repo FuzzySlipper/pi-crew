@@ -20,6 +20,8 @@
     "js-yaml": "^4.2.0"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "tsx src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
