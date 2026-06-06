@@ -194,7 +194,54 @@ export class SessionManagerImpl implements SessionManager {
     channel: ChannelProvider,
     message: ChannelMessage,
   ): Promise<void> {
-    const record = await this.resolveSession(message.channelId);
+    let record = await this.resolveSession(message.channelId);
+
+    // ── Rehydration path for conversational sessions ──────────────
+    // When a conversational session is idle (instance evicted),
+    // acquire a fresh instance and re-bind it so the next message
+    // is processed instead of silently dropped.
+    if (record.kind === "conversational") {
+      const instanceId = record.instanceId;
+      const hasLiveInstance = instanceId !== null &&
+        this.pool.has(instanceId);
+
+      if (!hasLiveInstance) {
+        const reason = instanceId === null
+          ? "idle_session"
+          : "instance_missing";
+        const instance = await this.pool.acquire(record.profileId);
+
+        const now = new Date().toISOString();
+        const rehydrated: typeof record = {
+          ...record,
+          instanceId: instance.id,
+          state: "active",
+          lastActiveAt: now,
+        };
+
+        await this.store.save(rehydrated);
+
+        this.eventBus.emit({
+          event: "session.rehydrated",
+          payload: {
+            sessionId: record.id,
+            profileId: record.profileId,
+            channelId: message.channelId,
+            oldInstanceId: instanceId,
+            newInstanceId: instance.id,
+            reason,
+          },
+        });
+
+        this.logger.info("Conversational session rehydrated", {
+          sessionId: record.id,
+          profileId: record.profileId,
+          newInstanceId: instance.id,
+        });
+
+        record = rehydrated;
+      }
+    }
 
     // Retrieve the session's agent instance and process the message.
     const instanceId = record.instanceId;

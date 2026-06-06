@@ -73,6 +73,7 @@ export {
   type DrainDeactivatedPayload,
   type PolicyEnforcedPayload,
   type CompletionPostedPayload,
+  type SessionRehydratedPayload,
 } from "./events.js";
 
 // ── Repository ────────────────────────────────────────────────

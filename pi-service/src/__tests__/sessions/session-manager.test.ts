@@ -340,4 +340,154 @@ describe("SessionManagerImpl", () => {
       expect(shortIdlePool.has(record.instanceId ?? "")).toBe(false);
     });
   });
+
+  describe("routeMessage rehydration", () => {
+    function makeRehydrationManager() {
+      const eb = new FakeEventBus();
+      const s = new InMemorySessionStore();
+      const l = new FakeLogger();
+      const p = new InstancePoolImpl(
+        new InstanceFactoryImpl(l),
+        { ...DEFAULT_POOL_CONFIG, idleTimeoutMs: 0 },
+        l,
+      );
+      const af = new AgentFactoryImpl(p, s, eb, l);
+      const m = new SessionManagerImpl(s, af, p, eb, l);
+      return { eventBus: eb, store: s, pool: p, manager: m };
+    }
+
+    it("rehydrates idle conversational session and processes message", async () => {
+      const { eventBus, store, pool, manager } = makeRehydrationManager();
+
+      const record = await manager.create(
+        makeSessionConfig({ channelBindings: ["ch-alpha"] }),
+      );
+      const originalInstanceId = record.instanceId;
+
+      await manager.evictIdleSessions();
+
+      const idleRecord = await store.get(record.id);
+      expect(idleRecord?.state).toBe("idle");
+      expect(idleRecord?.instanceId).toBeNull();
+      expect(pool.has(originalInstanceId ?? "")).toBe(false);
+
+      eventBus.clear();
+
+      const provider = new FakeChannelProvider();
+      await manager.routeMessage(provider, {
+        id: "msg-1",
+        channelId: "ch-alpha",
+        sender: {
+          id: "user-1",
+          displayName: "Tester",
+          kind: "human",
+          platform: "test",
+        },
+        content: { kind: "text", text: "hello again" },
+        timestamp: new Date(),
+      });
+
+      const rehydratedEvents = eventBus.emitted.filter(
+        (e) => e.event === "session.rehydrated",
+      );
+      expect(rehydratedEvents).toHaveLength(1);
+      expect(rehydratedEvents.at(0)?.payload).toMatchObject({
+        sessionId: record.id,
+        profileId: record.profileId,
+        channelId: "ch-alpha",
+        oldInstanceId: null,
+        reason: "idle_session",
+      });
+
+      const updatedRecord = await store.get(record.id);
+      expect(updatedRecord?.state).toBe("active");
+      expect(updatedRecord?.instanceId).toBeTruthy();
+      expect(updatedRecord?.instanceId).not.toBe(originalInstanceId);
+      expect(provider.sentMessages.length).toBeGreaterThan(0);
+
+      const firstRehydratedInstanceId = updatedRecord?.instanceId ?? "";
+      await pool.release(firstRehydratedInstanceId);
+      eventBus.clear();
+
+      await manager.routeMessage(provider, {
+        id: "msg-2",
+        channelId: "ch-alpha",
+        sender: {
+          id: "user-1",
+          displayName: "Tester",
+          kind: "human",
+          platform: "test",
+        },
+        content: { kind: "text", text: "after missing instance" },
+        timestamp: new Date(),
+      });
+
+      const missingInstanceEvents = eventBus.emitted.filter(
+        (e) => e.event === "session.rehydrated",
+      );
+      expect(missingInstanceEvents).toHaveLength(1);
+      expect(missingInstanceEvents.at(0)?.payload).toMatchObject({
+        oldInstanceId: firstRehydratedInstanceId,
+        reason: "instance_missing",
+      });
+    });
+
+    it("does not rehydrate worker sessions — keeps them single-assignment", async () => {
+      const { eventBus, store, manager } = makeRehydrationManager();
+
+      const workerRecord = await manager.create(
+        makeSessionConfig({
+          kind: "worker",
+          workerBinding: {
+            assignmentId: "201",
+            runId: "piw_test",
+            taskId: "1856",
+            projectId: "pi-crew",
+            role: "coder",
+          },
+        }),
+      );
+
+      const convRecord = await manager.create(
+        makeSessionConfig({ channelBindings: ["ch-alpha"] }),
+      );
+
+      await manager.evictIdleSessions();
+
+      expect((await store.get(workerRecord.id))?.state).toBe("idle");
+      expect((await store.get(convRecord.id))?.state).toBe("idle");
+
+      eventBus.clear();
+
+      const provider = new FakeChannelProvider();
+      await manager.routeMessage(provider, {
+        id: "msg-1",
+        channelId: "ch-alpha",
+        sender: {
+          id: "user-1",
+          displayName: "Tester",
+          kind: "human",
+          platform: "test",
+        },
+        content: { kind: "text", text: "hello" },
+        timestamp: new Date(),
+      });
+
+      const convUpdated = await store.get(convRecord.id);
+      expect(convUpdated?.state).toBe("active");
+      expect(convUpdated?.instanceId).toBeTruthy();
+
+      const workerUpdated = await store.get(workerRecord.id);
+      expect(workerUpdated?.state).toBe("idle");
+      expect(workerUpdated?.instanceId).toBeNull();
+
+      const rehydratedEvents = eventBus.emitted.filter(
+        (e) => e.event === "session.rehydrated",
+      );
+      expect(rehydratedEvents).toHaveLength(1);
+      expect(rehydratedEvents.at(0)?.payload).toMatchObject({
+        sessionId: convRecord.id,
+      });
+    });
+  });
 });

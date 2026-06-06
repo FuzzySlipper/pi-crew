@@ -170,6 +170,16 @@ export interface CompletionPostedPayload {
   readonly accepted: boolean;
 }
 
+/** Fired when a conversational session is rehydrated after instance eviction. */
+export interface SessionRehydratedPayload {
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly channelId: string;
+  readonly oldInstanceId: string | null;
+  readonly newInstanceId: string;
+  readonly reason: "idle_session" | "instance_missing";
+}
+
 // ── GatewayEvent union ──────────────────────────────────────────
 
 /**
@@ -199,7 +209,8 @@ export type GatewayEvent =
   | { event: "drain.activated"; payload: DrainActivatedPayload }
   | { event: "drain.deactivated"; payload: DrainDeactivatedPayload }
   | { event: "policy.enforced"; payload: PolicyEnforcedPayload }
-  | { event: "completion.posted"; payload: CompletionPostedPayload };
+  | { event: "completion.posted"; payload: CompletionPostedPayload }
+  | { event: "session.rehydrated"; payload: SessionRehydratedPayload };
 
 /**
  * Helper to extract the payload type for a specific event name.
