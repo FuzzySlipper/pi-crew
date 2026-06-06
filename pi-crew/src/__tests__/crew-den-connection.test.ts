@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { FakeEventBus, FakeLogger } from "@pi-crew/core";
+import { ConfigurationError, FakeEventBus, FakeLogger } from "@pi-crew/core";
 
 import {
   Crew,
@@ -55,41 +55,57 @@ describe("Den Channels production connection config", () => {
       expect(result.data.den.channelsRetryMaxDelayMs).toBe(30_000);
       expect(result.data.den.channelsPingIntervalMs).toBe(30_000);
       expect(result.data.den.channelsConnectionTimeoutMs).toBe(10_000);
+      // HTTP cursor fields have safe defaults.
+      expect(result.data.den.channelsProjectId).toBe("");
+      expect(result.data.den.channelsMemberIdentity).toBe("");
+      expect(result.data.den.channelsPollIntervalMs).toBe(5_000);
+      expect(result.data.den.channelsPollLimit).toBe(10);
     }
   });
 
-  it("rejects non-WebSocket channelsUrl values", () => {
+  it("accepts http:// and https:// channelsUrl values", () => {
+    for (const url of ["http://192.168.1.10:18081", "https://den-channels.example.com"]) {
+      const result = CrewConfigSchema.safeParse({
+        den: {
+          coreUrl: "http://localhost:3030",
+          channelsUrl: url,
+        },
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects unsupported channelsUrl protocols", () => {
     const result = CrewConfigSchema.safeParse({
       den: {
         coreUrl: "http://localhost:3030",
-        channelsUrl: "http://den-k8plus:4201",
+        channelsUrl: "ftp://den-k8plus:4201",
       },
     });
 
     expect(result.success).toBe(false);
   });
 
-  it("accepts live Channels URL, token, retry, heartbeat, and timeout overrides", () => {
+  it("accepts live Channels URL with HTTP cursor overrides", () => {
     const result = CrewConfigSchema.safeParse({
       den: {
         coreUrl: "http://localhost:3030",
-        channelsUrl: "wss://den-k8plus:4201",
+        channelsUrl: "http://192.168.1.10:18081",
         channelsToken: "[REDACTED]",
-        channelsRetryMaxAttempts: 7,
-        channelsRetryBaseDelayMs: 300,
-        channelsRetryMaxDelayMs: 20_000,
-        channelsPingIntervalMs: 15_000,
-        channelsConnectionTimeoutMs: 5_000,
+        channelsProjectId: "pi-crew",
+        channelsMemberIdentity: "pi-crew-gateway",
+        channelsPollIntervalMs: 10_000,
+        channelsPollLimit: 20,
       },
     });
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.den.channelsUrl).toBe("wss://den-k8plus:4201");
-      expect(result.data.den.channelsToken).toBe("[REDACTED]");
-      expect(result.data.den.channelsRetryMaxAttempts).toBe(7);
-      expect(result.data.den.channelsPingIntervalMs).toBe(15_000);
-      expect(result.data.den.channelsConnectionTimeoutMs).toBe(5_000);
+      expect(result.data.den.channelsUrl).toBe("http://192.168.1.10:18081");
+      expect(result.data.den.channelsProjectId).toBe("pi-crew");
+      expect(result.data.den.channelsMemberIdentity).toBe("pi-crew-gateway");
+      expect(result.data.den.channelsPollIntervalMs).toBe(10_000);
+      expect(result.data.den.channelsPollLimit).toBe(20);
     }
   });
 
@@ -110,7 +126,7 @@ describe("Den Channels production connection config", () => {
     ).toBeDefined();
   });
 
-  it("creates live WebSocket connection when channelsUrl is set", () => {
+  it("creates live WebSocket connection when channelsUrl is ws://", () => {
     const testLogger = new FakeLogger();
     const liveCrew = new Crew(
       makeTestCrewConfig({
@@ -133,6 +149,64 @@ describe("Den Channels production connection config", () => {
     ).toBeDefined();
   });
 
+  it("creates live HTTP direct-agent connection when channelsUrl is http://", () => {
+    const testLogger = new FakeLogger();
+    const liveCrew = new Crew(
+      makeTestCrewConfig({
+        den: {
+          coreUrl: "http://localhost:3030",
+          requiredAtStartup: false,
+          channelsUrl: "http://192.168.1.10:18081",
+          channelsToken: "test-token",
+          channelsProjectId: "pi-crew",
+          channelsMemberIdentity: "pi-crew-gateway",
+        },
+      }),
+      testLogger,
+      new FakeEventBus(),
+    );
+
+    expect(liveCrew.channelProvider).toBeDefined();
+    expect(
+      testLogger.entries.find(
+        (e) =>
+          e.message === "Creating live Den HTTP direct-agent connection",
+      ),
+    ).toBeDefined();
+  });
+
+  it("fails closed on HTTP channelsUrl with missing projectId", () => {
+    expect(() => {
+      new Crew(
+        makeTestCrewConfig({
+          den: {
+            coreUrl: "http://localhost:3030",
+            requiredAtStartup: false,
+            channelsUrl: "http://192.168.1.10:18081",
+            channelsMemberIdentity: "pi-crew-gateway",
+            // channelsProjectId intentionally omitted
+          },
+        }),
+      );
+    }).toThrow(ConfigurationError);
+  });
+
+  it("fails closed on HTTP channelsUrl with missing memberIdentity", () => {
+    expect(() => {
+      new Crew(
+        makeTestCrewConfig({
+          den: {
+            coreUrl: "http://localhost:3030",
+            requiredAtStartup: false,
+            channelsUrl: "http://192.168.1.10:18081",
+            channelsProjectId: "pi-crew",
+            // channelsMemberIdentity intentionally omitted
+          },
+        }),
+      );
+    }).toThrow(ConfigurationError);
+  });
+
   it("loads default.yaml with live Channels settings", () => {
     const config = loadCrewConfig("pi-crew/config/default.yaml");
 
@@ -140,5 +214,9 @@ describe("Den Channels production connection config", () => {
     expect(config.den.channelsRetryMaxAttempts).toBe(5);
     expect(config.den.channelsPingIntervalMs).toBe(30_000);
     expect(config.den.channelsConnectionTimeoutMs).toBe(10_000);
+    expect(config.den.channelsProjectId).toBe("pi-crew");
+    expect(config.den.channelsMemberIdentity).toBe("pi-crew-gateway");
+    expect(config.den.channelsPollIntervalMs).toBe(5_000);
+    expect(config.den.channelsPollLimit).toBe(10);
   });
 });

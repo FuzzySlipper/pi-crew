@@ -19,7 +19,10 @@ export type {
   DenConnectionEvents,
   DenConnection,
   DenConnectionConfig,
+  DenHttpConnectionConfig,
+  CursorStore,
 } from "./connection-types.js";
 
 export { DenWebSocketConnection } from "./connection-websocket.js";
 export { SimulatedDenConnection } from "./connection-simulated.js";
+export { DenHttpDirectAgentConnection } from "./connection-http.js";

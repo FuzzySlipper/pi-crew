@@ -231,3 +231,57 @@ export interface DenConnectionConfig {
   /** Connection timeout in milliseconds.  Default 10_000. */
   readonly connectionTimeoutMs?: number;
 }
+
+/**
+ * Configuration for the HTTP cursor/polling Den Channels connection.
+ *
+ * Used when `channelsUrl` starts with `http://` or `https://`.
+ * Unlike the WebSocket connection, this adapter polls
+ * `GET /api/direct-agent-events` on an interval and persists
+ * a cursor so restarts do not replay handled events.
+ */
+export interface DenHttpConnectionConfig {
+  /** Den Channels HTTP base URL (e.g. `http://192.168.1.10:18081`). */
+  readonly baseUrl: string;
+
+  /** Project ID to scope direct-agent-events polling against. */
+  readonly projectId: string;
+
+  /** Member identity for direct-agent event delivery/wake. */
+  readonly memberIdentity: string;
+
+  /** Authentication token for the Den Channels Gateway. */
+  readonly token: string;
+
+  /** Polling interval in milliseconds.  Default 5_000. */
+  readonly pollIntervalMs?: number;
+
+  /** Maximum events to fetch per poll.  Default 10. */
+  readonly pollLimit?: number;
+
+  /** Key used to persist the cursor in the cursor store. */
+  readonly cursorPersistenceKey?: string;
+}
+
+// ── Cursor persistence ──────────────────────────────────────────
+
+/**
+ * Contract for persisting the last-handled direct-agent event cursor.
+ *
+ * The HTTP cursor adapter reads the cursor on startup and writes it
+ * after every handled event so restarts do not accidentally replay
+ * already-processed direct-agent events.
+ */
+export interface CursorStore {
+  /**
+   * Read the persisted cursor value for the given key.
+   *
+   * @returns The cursor string (event ID), or `null` if unset.
+   */
+  read(key: string): Promise<string | null>;
+
+  /**
+   * Persist a cursor value for the given key.
+   */
+  write(key: string, value: string): Promise<void>;
+}

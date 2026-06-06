@@ -12,11 +12,26 @@ den:
   coreUrl: "http://den-k8plus:3030"
 
   # Den Channels Gateway WebSocket URL.
+  # Use ws:// or wss:// for WebSocket, http:// or https:// for HTTP cursor/polling.
+  # Set to empty string to use a simulated connection (tests/dev only).
   channelsUrl: "ws://den-k8plus:4201"
 
   # Auth token for the Den Channels Gateway.
   # Override via PI_DEN_CHANNELS_TOKEN env var. Do NOT commit real tokens.
   channelsToken: ""
+
+  # ── HTTP cursor/polling mode (used when channelsUrl is http:// or https://) ──
+  # Den Channels project ID for direct-agent-events polling scope.
+  channelsProjectId: "pi-crew"
+
+  # Member identity registered in Den Channels for event delivery.
+  channelsMemberIdentity: "pi-crew-gateway"
+
+  # Polling interval in milliseconds for direct-agent-events consumption.
+  channelsPollIntervalMs: 5000
+
+  # Maximum events to fetch per poll.
+  channelsPollLimit: 10
 
   # Live Channels reconnect / heartbeat settings.
   channelsRetryMaxAttempts: 5

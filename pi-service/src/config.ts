@@ -31,12 +31,17 @@ const ChannelsUrlSchema = z
       if (value.length === 0) return true;
       try {
         const url = new URL(value);
-        return url.protocol === "ws:" || url.protocol === "wss:";
+        return (
+          url.protocol === "ws:" ||
+          url.protocol === "wss:" ||
+          url.protocol === "http:" ||
+          url.protocol === "https:"
+        );
       } catch {
         return false;
       }
     },
-    "den.channelsUrl must be empty or a valid ws:// or wss:// URL",
+    "den.channelsUrl must be empty or a valid ws://, wss://, http://, or https:// URL",
   )
   .default("");
 
@@ -65,6 +70,28 @@ const DenConfigSchema = z.object({
   channelsPingIntervalMs: z.number().int().positive().default(30_000),
   /** Live Channels connection timeout in milliseconds. */
   channelsConnectionTimeoutMs: z.number().int().positive().default(10_000),
+  /**
+   * Den Channels project ID for HTTP direct-agent-events polling.
+   * Required when channelsUrl uses http:// or https:// protocol.
+   * Used to scope GET /api/direct-agent-events?projectId=<id>.
+   */
+  channelsProjectId: z.string().default(""),
+  /**
+   * Den Channels member identity for HTTP direct-agent-events polling.
+   * Required when channelsUrl uses http:// or https:// protocol.
+   * Must match an active Channels member identity for event delivery.
+   */
+  channelsMemberIdentity: z.string().default(""),
+  /**
+   * Polling interval in milliseconds for HTTP cursor-based
+   * direct-agent-events consumption. Default 5000 (5 seconds).
+   */
+  channelsPollIntervalMs: z.number().int().positive().default(5_000),
+  /**
+   * Maximum events to fetch per poll when consuming
+   * GET /api/direct-agent-events. Default 10.
+   */
+  channelsPollLimit: z.number().int().positive().default(10),
   /** Whether to refuse startup if Den is unreachable. */
   requiredAtStartup: z.boolean().default(true),
 });
