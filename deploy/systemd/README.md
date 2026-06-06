@@ -82,6 +82,18 @@ If the live Channels endpoint requires a token, inject it in the installed confi
 
 ## Install commands
 
+Preferred scripted install (default mode is a dry run):
+
+```bash
+cd ~/pi-crew
+# Optional when the checkout is not ~/pi-crew:
+# export PI_CREW_REPO_DIR=/absolute/path/to/pi-crew
+deploy/systemd/install-pi-crew-user-service.sh --dry-run
+deploy/systemd/install-pi-crew-user-service.sh --apply
+```
+
+Manual equivalent:
+
 ```bash
 mkdir -p ~/.config/systemd/user ~/.config/pi-crew ~/.local/state/pi-crew
 cp ~/pi-crew/deploy/systemd/pi-crew.service ~/.config/systemd/user/pi-crew.service
