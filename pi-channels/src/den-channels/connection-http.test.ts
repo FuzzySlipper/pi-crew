@@ -227,6 +227,76 @@ describe("DenHttpDirectAgentConnection", () => {
     expect(cursor).toBe("3001");
   });
 
+  it("skips gateway_delivery rows while preserving wake-event ingress and cursor safety", async () => {
+    const postedGatewayBodies: string[] = [];
+    const mockFetch = vi.fn((input: string | URL, init?: RequestInit) => {
+      const urlStr = urlFromInput(input);
+      if (urlStr.includes("/api/direct-agent-events")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: 3001,
+                  channelId: 604,
+                  sourceKind: "wake_event",
+                  sourceId: "direct-agent-message:604:pi-crew-gateway:abc",
+                  sourceProjectId: "pi-crew",
+                  targetProjectId: "pi-crew",
+                  targetTaskId: 2035,
+                  body: "Please use NON_ECHO_RUNTIME_OK for 19+23.",
+                  createdAt: "2026-06-06T10:35:00Z",
+                },
+                {
+                  id: 3002,
+                  channelId: 604,
+                  sourceKind: "gateway_delivery",
+                  sourceId: "3001",
+                  senderIdentity: "pi-crew-gateway",
+                  body: "NON_ECHO_RUNTIME_OK:42",
+                  createdAt: "2026-06-06T10:35:01Z",
+                },
+              ],
+              nextAfterId: null,
+              hasMore: false,
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (urlStr.includes("/api/gateway/system-messages")) {
+        const bodyText = typeof init?.body === "string" ? init.body : "";
+        postedGatewayBodies.push(bodyText);
+      }
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+
+    const received: DenInboundMessage[] = [];
+    const conn = new DenHttpDirectAgentConnection(
+      makeConfig({ pollLimit: 2 }),
+      logger,
+      cursorStore,
+      { fetchFn: mockFetch as unknown as typeof fetch },
+    );
+    conn.on("message", (msg) => {
+      received.push(msg);
+    });
+
+    await conn.open();
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    await conn.close();
+
+    expect(received.map((msg) => msg.id)).toEqual(["3001"]);
+    expect(received[0]?.content).toEqual({
+      kind: "text",
+      text: "Please use NON_ECHO_RUNTIME_OK for 19+23.",
+    });
+    expect(postedGatewayBodies).toHaveLength(1);
+    expect(postedGatewayBodies[0]).toContain("gateway_delivery");
+    const cursor = await cursorStore.read("den_channels_cursor");
+    expect(cursor).toBe("3002");
+  });
+
   it("posts lifecycle telemetry events for each handled event", async () => {
     const postedUrls: string[] = [];
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
