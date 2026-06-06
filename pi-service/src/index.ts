@@ -80,3 +80,24 @@ export {
   rowToRecord,
   recordToRow,
 } from "./persistence/index.js";
+
+// ── Workers ──────────────────────────────────────────────────────
+export {
+  DenSimulator,
+  DenSimulatorError,
+  type DenAssignment,
+  type DenAssignmentState,
+  DEN_WORKER_API_PREREQUISITES,
+} from "./workers/den-simulator.js";
+export {
+  WorkerRuntime,
+  type WorkerRuntimeConfig,
+  type WorkerExecutor,
+  type WorkerExecutionContext,
+  type WorkerExecutionResult,
+} from "./workers/worker-runtime.js";
+export {
+  PacketAuditor,
+  type AuditFinding,
+  type AuditResult,
+} from "./workers/packet-auditor.js";
