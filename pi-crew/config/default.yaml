@@ -18,6 +18,13 @@ den:
   # Override via PI_DEN_CHANNELS_TOKEN env var. Do NOT commit real tokens.
   channelsToken: ""
 
+  # Live Channels reconnect / heartbeat settings.
+  channelsRetryMaxAttempts: 5
+  channelsRetryBaseDelayMs: 200
+  channelsRetryMaxDelayMs: 30000
+  channelsPingIntervalMs: 30000
+  channelsConnectionTimeoutMs: 10000
+
   # Refuse startup if Den Core is unreachable (default: true).
   requiredAtStartup: true
 

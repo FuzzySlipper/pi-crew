@@ -413,6 +413,7 @@ describe("Crew composition root", () => {
 
     await testCrew.stop("wire-test");
   });
+
 });
 
 // ── bootstrap/config loading tests ─────────────────────────────
@@ -463,16 +464,20 @@ describe("loadCrewConfig", () => {
       })),
     ).toThrow(/Profile "missing-profile" not found/);
   });
+
 });
 
 // ── Bootstrap via YAML file ────────────────────────────────────
 
 describe("bootstrap from YAML", () => {
-  it("loads config from default.yaml", () => {
+  it("loads config from default.yaml with channels settings", () => {
     const config = loadCrewConfig("pi-crew/config/default.yaml");
     expect(config).toBeDefined();
     expect(config.den.coreUrl).toBeDefined();
     expect(typeof config.den.coreUrl).toBe("string");
+    // channelsUrl/channelsToken are now part of DenConfig
+    expect(typeof config.den.channelsUrl).toBe("string");
+    expect(typeof config.den.channelsToken).toBe("string");
   });
 
   it("bootstrap creates a Crew instance from config file", () => {

@@ -22,6 +22,15 @@ import type {
 import { ConfigurationError, FakeLogger, FakeEventBus } from "@pi-crew/core";
 
 import {
+  DenChannelsAdapter,
+  DenWebSocketConnection,
+  SimulatedDenConnection,
+  type DenChannelsAdapterConfig,
+  type DenConnectionConfig,
+  type DenConnection,
+} from "@pi-crew/channels";
+
+import {
   loadConfig,
   GatewayConfigSchema,
   Gateway,
@@ -34,14 +43,9 @@ import {
   SqliteAuditRepository,
   SqliteSessionRepository,
   type GatewayConfig,
+  type DenConfig,
   type ServiceRegistry,
 } from "@pi-crew/service";
-
-import {
-  DenChannelsAdapter,
-  SimulatedDenConnection,
-  type DenChannelsAdapterConfig,
-} from "@pi-crew/channels";
 
 import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
@@ -84,16 +88,6 @@ export const CrewConfigSchema = z.object({
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
-  channels: z
-    .object({
-      denChannels: z
-        .object({
-          url: z.string().optional(),
-          token: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
 });
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;
@@ -199,9 +193,14 @@ export class Crew {
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
 
     // 2. Channel provider (Den Channels adapter)
-    const simConnection = new SimulatedDenConnection(this.#logger);
+    //
+    // Production path: when den.channelsUrl is set to a non-empty
+    // WebSocket URL, create a real DenWebSocketConnection.
+    // Test/offline path: when channelsUrl is empty, fall back to
+    // SimulatedDenConnection for tests and development.
+    const denConnection = buildDenConnection(config.den, this.#logger);
     this.#channelProvider = new DenChannelsAdapter(
-      simConnection,
+      denConnection,
       this.#logger,
       { name: "Den Channels Gateway" } satisfies DenChannelsAdapterConfig,
     );
@@ -414,6 +413,47 @@ function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
     payload: entry.payload,
     correlation: entry.correlation,
   };
+}
+
+// ── Den connection factory ───────────────────────────────────────
+
+/**
+ * Build a Den connection from configuration.
+ *
+ * When `den.channelsUrl` is a non-empty string starting with `ws://`
+ * or `wss://`, creates a live {@link DenWebSocketConnection} for
+ * production use. Otherwise falls back to {@link SimulatedDenConnection}
+ * for tests and offline development.
+ *
+ * @param den — Validated Den connectivity config.
+ * @param logger — Logger for the connection.
+ * @returns A DenConnection ready to be wrapped by DenChannelsAdapter.
+ */
+function buildDenConnection(
+  den: DenConfig,
+  logger: Logger,
+): DenConnection {
+  if (den.channelsUrl.length > 0) {
+    logger.info("Creating live Den WebSocket connection", {
+      url: den.channelsUrl,
+      hasToken: den.channelsToken.length > 0,
+    });
+    const connConfig: DenConnectionConfig = {
+      url: den.channelsUrl,
+      token: den.channelsToken,
+      retryPolicy: {
+        maxAttempts: den.channelsRetryMaxAttempts,
+        baseDelayMs: den.channelsRetryBaseDelayMs,
+        maxDelayMs: den.channelsRetryMaxDelayMs,
+      },
+      pingIntervalMs: den.channelsPingIntervalMs,
+      connectionTimeoutMs: den.channelsConnectionTimeoutMs,
+    };
+    return new DenWebSocketConnection(connConfig, logger);
+  }
+
+  logger.info("No channelsUrl configured — using simulated connection");
+  return new SimulatedDenConnection(logger);
 }
 
 // ── Convenience: bootstrap from YAML path ───────────────────────

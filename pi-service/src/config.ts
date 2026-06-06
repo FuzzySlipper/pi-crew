@@ -23,9 +23,48 @@ const DatabaseConfigSchema = z.object({
   wal: z.boolean().default(true),
 });
 
+const ChannelsUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => {
+      if (value.length === 0) return true;
+      try {
+        const url = new URL(value);
+        return url.protocol === "ws:" || url.protocol === "wss:";
+      } catch {
+        return false;
+      }
+    },
+    "den.channelsUrl must be empty or a valid ws:// or wss:// URL",
+  )
+  .default("");
+
 const DenConfigSchema = z.object({
   /** REST API base URL for Den Core (e.g. "http://den-srv:3030"). */
   coreUrl: z.string().url("den.coreUrl must be a valid URL"),
+  /**
+   * Den Channels Gateway WebSocket URL for live channel participation
+   * (e.g. "ws://den-k8plus:4201"). An empty or missing value disables
+   * the live WebSocket connection; the gateway falls back to a simulated
+   * connection suitable for tests and offline development.
+   */
+  channelsUrl: ChannelsUrlSchema,
+  /**
+   * Auth token for the Den Channels Gateway. Do NOT commit real tokens —
+   * provide them from the service environment or user-scoped config.
+   */
+  channelsToken: z.string().default(""),
+  /** Maximum live Channels reconnect attempts. */
+  channelsRetryMaxAttempts: z.number().int().positive().default(5),
+  /** Initial live Channels reconnect backoff delay in milliseconds. */
+  channelsRetryBaseDelayMs: z.number().int().positive().default(200),
+  /** Maximum live Channels reconnect backoff delay in milliseconds. */
+  channelsRetryMaxDelayMs: z.number().int().positive().default(30_000),
+  /** Live Channels heartbeat/ping interval in milliseconds. */
+  channelsPingIntervalMs: z.number().int().positive().default(30_000),
+  /** Live Channels connection timeout in milliseconds. */
+  channelsConnectionTimeoutMs: z.number().int().positive().default(10_000),
   /** Whether to refuse startup if Den is unreachable. */
   requiredAtStartup: z.boolean().default(true),
 });
