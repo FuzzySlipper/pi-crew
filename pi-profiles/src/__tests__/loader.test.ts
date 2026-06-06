@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { join } from "node:path";
 import {
   FilesystemProfileSource,
+  loadProfile,
   loadProfiles,
   type ProfileSource,
 } from "../loader.js";
@@ -132,6 +133,43 @@ describe("FilesystemProfileSource", () => {
       expect(ce.code).toBe("CONFIGURATION_ERROR");
       expect(ce.statusCode).toBe(500);
       expect(ce.retryable).toBe(false);
+    }
+  });
+});
+
+describe("loadProfile", () => {
+  it("loads a profile by id from a fixtures directory", () => {
+    const profile = loadProfile(
+      "test-agent",
+      join(FIXTURES, "valid"),
+    );
+    expect(profile.id).toBe("test-agent");
+    expect(profile.name).toBe("Test Agent");
+    expect(profile.systemPrompt).toContain("You are a test agent");
+  });
+
+  it("loads from the default production profiles directory", () => {
+    // loadProfile uses DEFAULT_PROFILES_DIR when no path is given.
+    // That directory is pi-profiles/profiles/ — the real production set.
+    const profile = loadProfile("pi-crew-runner");
+    expect(profile.id).toBe("pi-crew-runner");
+    expect(profile.name.length).toBeGreaterThan(0);
+    expect(profile.systemPrompt.length).toBeGreaterThan(50);
+  });
+
+  it("throws ConfigurationError when profile id is not found", () => {
+    expect(() =>
+      loadProfile("nonexistent-profile", join(FIXTURES, "valid")),
+    ).toThrow(ConfigurationError);
+
+    try {
+      loadProfile("nonexistent-profile", join(FIXTURES, "valid"));
+      expect.unreachable("expected ConfigurationError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ConfigurationError);
+      const ce = e as ConfigurationError;
+      expect(ce.message).toContain("not found");
+      expect(ce.code).toBe("CONFIGURATION_ERROR");
     }
   });
 });

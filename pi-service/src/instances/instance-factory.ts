@@ -1,12 +1,12 @@
 /**
- * InstanceFactory — creates {@link AgentInstance} from a profile.
+ * InstanceFactory — creates {@link AgentInstance} from a profile id.
  *
- * Loads the profile from pi-profiles, creates a provider client,
- * builds the tool registry, and assembles the system prompt template.
- *
- * In the initial v1 implementation (this task), the factory creates
- * minimal instances with identity only.  Full provider/tool/prompt
- * assembly is wired in follow-up tasks.
+ * Construction is profile-id based: the factory receives a profile id and
+ * creates an instance carrying that identity. Full profile loading,
+ * provider client creation, tool registry assembly, and system prompt
+ * construction are wired later by the pi-crew composition root. pi-service
+ * intentionally has no direct dependency on pi-profiles while that source
+ * boundary is still injected outside the package.
  *
  * @module pi-service/instances/instance-factory
  */
@@ -18,13 +18,13 @@ import { AgentInstanceImpl } from "./agent-instance.js";
 // ── InstanceFactory interface ───────────────────────────────────
 
 /**
- * Creates {@link AgentInstance} from a profile definition.
+ * Creates {@link AgentInstance} from a profile id.
  */
 export interface InstanceFactory {
   /**
-   * Create a new instance from the named profile.
+   * Create a new instance carrying the named profile id.
    *
-   * @param profileId — Profile name to load from pi-profiles.
+   * @param profileId — Profile id to attach to the new instance.
    * @param role — Optional worker role hint.
    * @returns A fresh, undisposed instance.
    */
@@ -36,9 +36,10 @@ export interface InstanceFactory {
 /**
  * Default {@link InstanceFactory} implementation.
  *
- * Loads profiles from `@pi-crew/profiles` and creates instances.
- * In v1 the instance is a container for identity + profile metadata;
- * full provider/tool/prompt wiring follows in later tasks.
+ * Creates an instance carrying only the profile id. It does NOT load
+ * the profile from a filesystem, database, or network source — source
+ * lookup belongs to the composition root once a concrete profile source
+ * is injected there.
  */
 export class InstanceFactoryImpl implements InstanceFactory {
   constructor(private readonly logger: Logger) {}
