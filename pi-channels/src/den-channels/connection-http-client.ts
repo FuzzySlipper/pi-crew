@@ -14,7 +14,9 @@ import type { DenHttpConnectionConfig } from "./connection-types.js";
 export interface DirectAgentEventItem {
   readonly id: number;
   readonly channelId: number;
-  readonly memberIdentity: string;
+  readonly memberIdentity?: string | null;
+  readonly sourceKind?: string | null;
+  readonly sourceId?: string | null;
   readonly sourceProjectId?: string | null;
   readonly targetProjectId?: string | null;
   readonly targetTaskId?: unknown;
@@ -26,24 +28,36 @@ export interface DirectAgentEventItem {
   readonly createdAt?: string | null;
 }
 
+interface DirectAgentEventListResponse {
+  readonly items: readonly DirectAgentEventItem[];
+  readonly nextAfterId?: number | null;
+  readonly hasMore?: boolean;
+}
+
 interface LifecycleEventPayload {
+  readonly channelId: number;
+  readonly agentIdentity: string;
   readonly eventType: string;
-  readonly sourceRequestId: number;
-  readonly memberIdentity: string;
-  readonly targetProjectId?: string | null;
-  readonly targetTaskId?: unknown;
+  readonly projectId?: string | null;
+  readonly taskId?: number | null;
   readonly assignmentId?: string | null;
   readonly workerRunId?: string | null;
   readonly workerRole?: string | null;
-  readonly timestamp: string;
+  readonly sourceMessageId: string;
+  readonly directAgentEventId: string;
+  readonly lastActivityAt: string;
+  readonly summary: string;
 }
 
 interface GatewaySystemMessagePayload {
   readonly channelId: number;
+  readonly senderIdentity: string;
+  readonly messageKind: string;
   readonly sourceKind: string;
   readonly sourceId: string;
   readonly body: string;
-  readonly memberIdentity: string;
+  readonly deliveryRequestId: string;
+  readonly dedupeKey: string;
 }
 
 export interface HttpDirectAgentClientOptions {
@@ -93,12 +107,15 @@ export class HttpDirectAgentClient {
     }
 
     const payload: unknown = await response.json();
-    if (!isDirectAgentEventItemArray(payload)) {
-      this.#logger.warn("Unexpected direct-agent-events response shape");
-      return [];
+    if (isDirectAgentEventItemArray(payload)) {
+      return payload;
+    }
+    if (isDirectAgentEventListResponse(payload)) {
+      return [...payload.items];
     }
 
-    return payload;
+    this.#logger.warn("Unexpected direct-agent-events response shape");
+    return [];
   }
 
   async postLifecycleEvent(
@@ -108,15 +125,18 @@ export class HttpDirectAgentClient {
     signal: AbortSignal,
   ): Promise<void> {
     const payload: LifecycleEventPayload = {
+      channelId: item.channelId,
+      agentIdentity: this.#config.memberIdentity,
       eventType,
-      sourceRequestId,
-      memberIdentity: this.#config.memberIdentity,
-      targetProjectId: item.targetProjectId,
-      targetTaskId: item.targetTaskId,
+      projectId: item.targetProjectId ?? item.sourceProjectId,
+      taskId: parseOptionalLong(item.targetTaskId),
       assignmentId: item.assignmentId,
       workerRunId: item.workerRunId,
       workerRole: item.workerRole,
-      timestamp: new Date().toISOString(),
+      sourceMessageId: String(sourceRequestId),
+      directAgentEventId: String(sourceRequestId),
+      lastActivityAt: new Date().toISOString(),
+      summary: `pi-crew ${eventType} direct-agent event ${String(sourceRequestId)}`,
     };
 
     try {
@@ -154,10 +174,13 @@ export class HttpDirectAgentClient {
   ): Promise<void> {
     const payload: GatewaySystemMessagePayload = {
       channelId,
+      senderIdentity: this.#config.memberIdentity,
+      messageKind: "agent_text",
       sourceKind,
       sourceId,
       body,
-      memberIdentity: this.#config.memberIdentity,
+      deliveryRequestId: sourceId,
+      dedupeKey: `pi-crew-http:${sourceKind}:${sourceId}`,
     };
 
     try {
@@ -246,14 +269,27 @@ function isDirectAgentEventItemArray(
   return Array.isArray(payload) && payload.every(isDirectAgentEventItem);
 }
 
+function isDirectAgentEventListResponse(
+  payload: unknown,
+): payload is DirectAgentEventListResponse {
+  if (typeof payload !== "object" || payload === null) return false;
+  const record = payload as Record<string, unknown>;
+  return isDirectAgentEventItemArray(record.items);
+}
+
 function isDirectAgentEventItem(value: unknown): value is DirectAgentEventItem {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
-  return (
-    typeof record.id === "number" &&
-    typeof record.channelId === "number" &&
-    typeof record.memberIdentity === "string"
-  );
+  return typeof record.id === "number" && typeof record.channelId === "number";
+}
+
+function parseOptionalLong(value: unknown): number | null {
+  if (typeof value === "number" && Number.isSafeInteger(value)) return value;
+  if (typeof value === "string" && value.length > 0) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed)) return parsed;
+  }
+  return null;
 }
 
 function anySignal(signals: AbortSignal[]): AbortSignal {

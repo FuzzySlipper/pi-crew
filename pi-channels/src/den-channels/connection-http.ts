@@ -210,7 +210,11 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       this.#logger.debug("Poll returned events", { count: items.length });
 
       for (const item of items) {
-        await this.#handleEvent(item);
+        if (this.#shouldProcessEvent(item)) {
+          await this.#handleEvent(item);
+        }
+        this.#lastCursor = item.id;
+        await this.#persistCursor();
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
@@ -224,6 +228,12 @@ export class DenHttpDirectAgentConnection implements DenConnection {
 
   async #handleEvent(item: DirectAgentEventItem): Promise<void> {
     const eventId = item.id;
+    this.#logger.info("Handling Den HTTP direct-agent event", {
+      eventId,
+      channelId: item.channelId,
+      targetProjectId: item.targetProjectId,
+      targetTaskId: item.targetTaskId,
+    });
     await this.#client.postLifecycleEvent(
       "runtime_received",
       eventId,
@@ -241,13 +251,18 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     );
     await this.#postGatewayDeliveryResponse(item);
     await this.#client.postLifecycleEvent(
-      "turn_completed",
+      "completed",
       eventId,
       item,
       this.#pollState.controller.signal,
     );
 
-    this.#lastCursor = eventId;
+  }
+
+  #shouldProcessEvent(item: DirectAgentEventItem): boolean {
+    const sourceKind = item.sourceKind ?? "wake_event";
+    if (sourceKind !== "wake_event") return false;
+    return targetMemberIdentity(item) === this.#config.memberIdentity;
   }
 
   #mapEventToMessage(item: DirectAgentEventItem): DenInboundMessage {
@@ -333,6 +348,23 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         // Listener errors must not crash the connection.
       }
     }
+  }
+}
+
+function targetMemberIdentity(item: DirectAgentEventItem): string | null {
+  if (typeof item.memberIdentity === "string" && item.memberIdentity.length > 0) {
+    return item.memberIdentity;
+  }
+  const sourceId = item.sourceId;
+  if (typeof sourceId !== "string") return null;
+  const parts = sourceId.split(":");
+  if (parts.length < 4 || parts[0] !== "direct-agent-message") return null;
+  const encoded = parts[2];
+  if (encoded === undefined || encoded.length === 0) return null;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return encoded;
   }
 }
 

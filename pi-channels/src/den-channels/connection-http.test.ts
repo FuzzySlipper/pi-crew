@@ -146,22 +146,27 @@ describe("DenHttpDirectAgentConnection", () => {
   });
 
   it("maps direct-agent event items to DenInboundMessage", async () => {
-    const mockFetch = mockFetchFromJson([
-      {
-        id: 3001,
-        channelId: 604,
-        memberIdentity: "spawned-coder",
-        sourceProjectId: "pi-crew",
-        targetProjectId: "pi-crew",
-        targetTaskId: 2026,
-        assignmentId: "380",
-        workerRunId: "piw_test",
-        workerRole: "coder",
-        body: "Implement HTTP ingress",
-        status: "recorded_pending_claim",
-        createdAt: "2026-06-06T08:20:00Z",
-      },
-    ]);
+    const mockFetch = mockFetchFromJson({
+      items: [
+        {
+          id: 3001,
+          channelId: 604,
+          sourceKind: "wake_event",
+          sourceId: "direct-agent-message:604:pi-crew-gateway:abc",
+          sourceProjectId: "pi-crew",
+          targetProjectId: "pi-crew",
+          targetTaskId: 2026,
+          assignmentId: "380",
+          workerRunId: "piw_test",
+          workerRole: "coder",
+          body: "Implement HTTP ingress",
+          status: "recorded_pending_claim",
+          createdAt: "2026-06-06T08:20:00Z",
+        },
+      ],
+      nextAfterId: null,
+      hasMore: false,
+    });
 
     const received: DenInboundMessage[] = [];
     const conn = new DenHttpDirectAgentConnection(
@@ -201,7 +206,7 @@ describe("DenHttpDirectAgentConnection", () => {
       {
         id: 3001,
         channelId: 604,
-        memberIdentity: "test",
+        memberIdentity: "pi-crew-gateway",
         body: "msg1",
         createdAt: "2026-06-06T08:20:00Z",
       },
@@ -235,7 +240,7 @@ describe("DenHttpDirectAgentConnection", () => {
               {
                 id: 3001,
                 channelId: 604,
-                memberIdentity: "test",
+                memberIdentity: "pi-crew-gateway",
                 body: "msg1",
                 createdAt: "2026-06-06T08:20:00Z",
               },
