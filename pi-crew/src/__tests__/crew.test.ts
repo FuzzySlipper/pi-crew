@@ -8,13 +8,18 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { ChannelMessage, ChannelParticipant } from "@pi-crew/core";
 import { FakeLogger, FakeEventBus } from "@pi-crew/core";
 
 import {
   Crew,
+  bootstrap,
   CrewConfigSchema,
+  loadCrewConfig,
   type CrewConfig,
 } from "../crew.js";
 
@@ -22,6 +27,7 @@ import {
 
 function makeTestCrewConfig(overrides?: Partial<CrewConfig>): CrewConfig {
   const parsed = CrewConfigSchema.safeParse({
+    database: { path: makeTempDbPath(), wal: true },
     den: {
       coreUrl: "http://localhost:3030",
       requiredAtStartup: false,
@@ -34,6 +40,22 @@ function makeTestCrewConfig(overrides?: Partial<CrewConfig>): CrewConfig {
     );
   }
   return parsed.data;
+}
+
+function makeTempDbPath(): string {
+  return join(mkdtempSync(join(tmpdir(), "pi-crew-test-")), "runtime.db");
+}
+
+function writeTempConfigYaml(): string {
+  const dir = mkdtempSync(join(tmpdir(), "pi-crew-config-"));
+  const dbPath = join(dir, "runtime.db");
+  const configPath = join(dir, "default.yaml");
+  writeFileSync(
+    configPath,
+    `den:\n  coreUrl: "http://localhost:3030"\n  requiredAtStartup: false\ndatabase:\n  path: "${dbPath}"\n  wal: true\n`,
+    "utf-8",
+  );
+  return configPath;
 }
 
 function makeTestMessage(
@@ -233,6 +255,41 @@ describe("Crew composition root", () => {
         e.event === "session.routing",
     );
     expect(sessionEvents.length).toBeGreaterThanOrEqual(1);
+
+    const row = crew.runtimeDb.handle
+      .prepare("SELECT COUNT(*) AS count FROM audit_log")
+      .get() as { count: number };
+    expect(row.count).toBeGreaterThan(0);
+  });
+
+  it("persists conversational sessions through the local runtime database", async () => {
+    const dbPath = makeTempDbPath();
+    const config = makeTestCrewConfig({ database: { path: dbPath, wal: true } });
+    const firstCrew = new Crew(config, new FakeLogger(), new FakeEventBus());
+
+    await firstCrew.start();
+    await firstCrew.sessionManager.routeMessage(
+      firstCrew.channelProvider,
+      makeTestMessage("persisted-channel", "First turn"),
+    );
+    await firstCrew.stop("restart");
+
+    const secondBus = new FakeEventBus();
+    const secondCrew = new Crew(config, new FakeLogger(), secondBus);
+    await secondCrew.start();
+    await secondCrew.sessionManager.routeMessage(
+      secondCrew.channelProvider,
+      makeTestMessage("persisted-channel", "Second turn"),
+    );
+
+    const existingRoutes = secondBus.emitted.filter(
+      (e) =>
+        e.event === "session.routing" &&
+        e.payload.reason === "existing_session",
+    );
+    expect(existingRoutes.length).toBeGreaterThan(0);
+
+    await secondCrew.stop("cleanup");
   });
 
   // ── Instance pool ───────────────────────────────────────────
@@ -380,8 +437,6 @@ describe("loadCrewConfig", () => {
 
 // ── Bootstrap via YAML file ────────────────────────────────────
 
-import { bootstrap, loadCrewConfig } from "../crew.js";
-
 describe("bootstrap from YAML", () => {
   it("loads config from default.yaml", () => {
     const config = loadCrewConfig("pi-crew/config/default.yaml");
@@ -391,10 +446,11 @@ describe("bootstrap from YAML", () => {
   });
 
   it("bootstrap creates a Crew instance from config file", () => {
-    const c = bootstrap("pi-crew/config/default.yaml");
+    const c = bootstrap(writeTempConfigYaml());
     expect(c).toBeDefined();
     expect(c.gateway).toBeDefined();
     expect(c.channelProvider).toBeDefined();
     expect(c.sessionManager).toBeDefined();
+    void c.stop("bootstrap-test-cleanup");
   });
 });

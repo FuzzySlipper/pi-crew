@@ -30,7 +30,9 @@ import {
   AgentFactoryImpl,
   InstancePoolImpl,
   InstanceFactoryImpl,
-  InMemorySessionStore,
+  RuntimeDb,
+  SqliteAuditRepository,
+  SqliteSessionRepository,
   type GatewayConfig,
   type ServiceRegistry,
 } from "@pi-crew/service";
@@ -45,6 +47,7 @@ import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
 
 import { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
+import type { AuditEntry } from "@pi-crew/governance";
 
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
 
@@ -133,6 +136,8 @@ export class Crew {
   readonly #eventBus: EventBus;
   readonly #registry: ServiceRegistry;
   readonly #gateway: Gateway;
+  readonly #runtimeDb: RuntimeDb;
+  readonly #auditRepository: SqliteAuditRepository;
 
   readonly #channelProvider: ChannelProvider;
   readonly #mcpClient: MCPClient;
@@ -177,6 +182,15 @@ export class Crew {
       this.#registry.eventBus,
     );
 
+    // 1b. Local runtime persistence (#1866). Den remains workflow
+    // source-of-truth; this DB stores hot sessions/audit/cache locally.
+    this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
+    const sessionStore = new SqliteSessionRepository(
+      this.#runtimeDb.handle,
+      this.#logger,
+    );
+    this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
+
     // 2. Channel provider (Den Channels adapter)
     const simConnection = new SimulatedDenConnection(this.#logger);
     this.#channelProvider = new DenChannelsAdapter(
@@ -201,8 +215,7 @@ export class Crew {
       this.#logger,
     );
 
-    // 5. Session store + agent factory + session manager
-    const sessionStore = new InMemorySessionStore();
+    // 5. SQLite session store + agent factory + session manager
     const agentFactory = new AgentFactoryImpl(
       this.#instancePool,
       sessionStore,
@@ -230,13 +243,17 @@ export class Crew {
       this.#logger,
     );
 
-    const auditEntries: Array<Record<string, unknown>> = [];
     this.#auditLogger = new AuditLogger(
       this.#eventBus,
       this.#logger,
       {
         writer: (entry) => {
-          auditEntries.push(entry as unknown as Record<string, unknown>);
+          void this.#auditRepository.write({
+            sessionId: entry.correlation.sessionId,
+            assignmentId: entry.correlation.assignmentId?.toString(),
+            eventType: entry.event,
+            eventData: auditEntryToRecord(entry),
+          });
         },
       },
     );
@@ -296,7 +313,10 @@ export class Crew {
 
   /** Graceful shutdown. */
   async stop(reason: string): Promise<void> {
-    if (!this.#started) return;
+    if (!this.#started) {
+      this.#runtimeDb.close();
+      return;
+    }
 
     this.#logger.info("Crew stopping", { reason });
 
@@ -312,6 +332,9 @@ export class Crew {
 
     // Stop gateway
     await this.#gateway.stop(reason);
+
+    // Close local runtime DB/cache after subscribers have flushed.
+    this.#runtimeDb.close();
 
     this.#started = false;
     this.#logger.info("Crew stopped");
@@ -337,6 +360,10 @@ export class Crew {
 
   get gateway(): Gateway {
     return this.#gateway;
+  }
+
+  get runtimeDb(): RuntimeDb {
+    return this.#runtimeDb;
   }
 
   get channelProvider(): ChannelProvider {
@@ -370,6 +397,15 @@ export class Crew {
   get toolPolicyEnforcer(): ToolPolicyEnforcer {
     return this.#toolPolicyEnforcer;
   }
+}
+
+function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
+  return {
+    timestamp: entry.timestamp,
+    event: entry.event,
+    payload: entry.payload,
+    correlation: entry.correlation,
+  };
 }
 
 // ── Convenience: bootstrap from YAML path ───────────────────────
