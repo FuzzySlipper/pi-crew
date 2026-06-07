@@ -23,6 +23,7 @@ import type {
   TextContent,
 } from "./guarded-tool-types.js";
 import { checkFilesystemPathPolicy } from "./guarded-path-policy.js";
+import { checkNetworkHostPolicy } from "./guarded-host-policy.js";
 
 // ── ToolExecutor ─────────────────────────────────────────────────
 
@@ -205,6 +206,20 @@ export function createBeforeToolCallHook(
       }
     }
 
+    // ── Host policy check ───────────────────────────────────
+    if (policy.allowedHosts.length > 0 || policy.deniedHosts.length > 0) {
+      const hostCheck = checkNetworkHostPolicy(policy, callCtx.args);
+      if (!hostCheck.allowed) {
+        config.logger.warn("GuardedToolAssembly: beforeToolCall denied (host policy)", {
+          toolName,
+          reason: hostCheck.reason,
+          ...ctx,
+        });
+        emitPolicyDenial(config, ctx, toolName, hostCheck.reason, "host");
+        return Promise.resolve({ block: true, reason: hostCheck.reason });
+      }
+    }
+
     // Tool is allowed — return undefined (no blocking)
     return Promise.resolve(undefined);
   };
@@ -356,6 +371,21 @@ function wrapExecute(
         });
         emitPolicyDenial(config, corrCtx, toolName, pathCheck.reason, "path");
         return buildDenialResult(toolName, pathCheck.reason);
+      }
+    }
+
+    // ── Host re-check at dispatch time ─────────────────────
+    if (policy.allowedHosts.length > 0 || policy.deniedHosts.length > 0) {
+      const hostCheck = checkNetworkHostPolicy(policy, params);
+      if (!hostCheck.allowed) {
+        config.logger.warn("GuardedToolAssembly: execute denied (wrapper-level host policy)", {
+          toolName,
+          toolCallId,
+          reason: hostCheck.reason,
+          ...corrCtx,
+        });
+        emitPolicyDenial(config, corrCtx, toolName, hostCheck.reason, "host");
+        return buildDenialResult(toolName, hostCheck.reason);
       }
     }
 

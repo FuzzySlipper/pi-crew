@@ -183,6 +183,26 @@ describe("isHostAllowed", () => {
     expect(isHostAllowed(denyOnly, "evil.com")).toBe(false);
     expect(isHostAllowed(denyOnly, "safe.com")).toBe(true);
   });
+
+  it("normalizes URL hosts across casing, ports, and credentials", () => {
+    expect(isHostAllowed(policy, "https://user:pass@API.EXAMPLE.com:8443/v1")).toBe(true);
+  });
+
+  it("denies hosts outside allowlist after URL parsing", () => {
+    expect(isHostAllowed(policy, "https://example.net:443/path")).toBe(false);
+  });
+
+  it("denies IPv4 and IPv6 localhost aliases when localhost is denied", () => {
+    const denyLocal = createWorkerPolicy({
+      assignmentId: "4",
+      runId: "r4",
+      taskId: "4",
+      role: "coder",
+      deniedHosts: ["localhost"],
+    });
+    expect(isHostAllowed(denyLocal, "http://127.0.0.1:8080/status")).toBe(false);
+    expect(isHostAllowed(denyLocal, "http://[::1]:8080/status")).toBe(false);
+  });
 });
 
 describe("isIterationBudgetExhausted", () => {

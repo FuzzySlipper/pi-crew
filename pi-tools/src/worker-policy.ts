@@ -143,22 +143,65 @@ function trimTrailingSeparator(inputPath: string): string {
  * @returns `true` if the host is allowed, `false` if denied.
  */
 export function isHostAllowed(policy: WorkerPolicy, host: string): boolean {
-  // Deny list takes precedence
+  const normalized = normalizeHost(host);
+  if (normalized === null) {
+    return policy.allowedHosts.length === 0;
+  }
+
   for (const denied of policy.deniedHosts) {
-    if (host === denied || host.endsWith(`.${denied}`)) {
+    if (hostMatches(normalized, denied)) {
       return false;
     }
   }
 
-  // If there's an allowlist, the host must match
   if (policy.allowedHosts.length > 0) {
-    return policy.allowedHosts.some(
-      (allowed: string) => host === allowed || host.endsWith(`.${allowed}`),
+    return policy.allowedHosts.some((allowed: string) =>
+      hostMatches(normalized, allowed),
     );
   }
 
-  // No explicit allowlist — all hosts allowed
   return true;
+}
+
+function hostMatches(host: string, pattern: string): boolean {
+  const normalized = normalizeHost(pattern);
+  if (normalized === null) return false;
+  if (normalized.startsWith("*.")) {
+    const suffix = normalized.slice(2);
+    return host.endsWith(`.${suffix}`);
+  }
+  return host === normalized || host.endsWith(`.${normalized}`);
+}
+
+function normalizeHost(hostOrUrl: string): string | null {
+  const raw = hostOrUrl.trim();
+  if (raw.length === 0) return null;
+
+  try {
+    const url = isUrlLike(raw) ? new URL(raw) : new URL(`http://${raw}`);
+    return cleanHostname(url.hostname);
+  } catch {
+    return cleanHostname(raw);
+  }
+}
+
+function isUrlLike(value: string): boolean {
+  return value.startsWith("http://") || value.startsWith("https://") || value.startsWith("ws://") || value.startsWith("wss://");
+}
+
+function cleanHostname(hostname: string): string | null {
+  const unbracketed = hostname.replace(/^\[(.*)]$/, "$1").toLowerCase().replace(/\.$/, "");
+  const colonCount = (unbracketed.match(/:/g) ?? []).length;
+  const withoutPort = colonCount === 1 ? unbracketed.split(":")[0] ?? "" : unbracketed;
+  const cleaned = isLoopbackHost(withoutPort) ? "localhost" : withoutPort;
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost"
+    || hostname === "::1"
+    || hostname === "0:0:0:0:0:0:0:1"
+    || /^127(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
 // ── Iteration check ───────────────────────────────────────────
