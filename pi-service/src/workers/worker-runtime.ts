@@ -22,6 +22,7 @@ import type {
   CompletionPacket,
   CompletionStatus,
   GatewayEvent,
+  type EventPayload,
 } from "@pi-crew/core";
 import type { CompletionPoster } from "@pi-crew/tools";
 import { postStructuredCompletion } from "@pi-crew/tools";
@@ -44,6 +45,7 @@ import {
   type IdleTimeoutWatchdog,
 } from "./worker-idle-timeout.js";
 import { executeWithAssignmentTimeout } from "./worker-timeout.js";
+import { AgentSupervisor, type AgentLike } from "./agent-supervisor.js";
 
 // ── Worker executor contract ──────────────────────────────────
 
@@ -72,6 +74,8 @@ export interface WorkerExecutionContext {
   log(level: "debug" | "info" | "warn" | "error", message: string): void;
   /** Write an audit event with auto-filled correlation IDs. */
   writeAudit(eventType: string, data: Record<string, unknown>): Promise<void>;
+  /** Create a supervisor that bridges pi-agent-core Agent events for this assignment. */
+  createAgentSupervisor(agent: AgentLike): AgentSupervisor;
 }
 
 /** Result of worker execution. */
@@ -90,6 +94,8 @@ export interface WorkerExecutionResult {
   readonly toolsUsed: string[];
   /** Estimated tokens consumed. */
   readonly tokensConsumed: number;
+  /** Agent turn count observed by a supervised Agent execution. */
+  readonly turnCount?: number;
   /** Execution summary for the completion packet. */
   readonly summary: string;
   /** Optional release reason override for specialized failure paths. */
@@ -193,12 +199,11 @@ export class WorkerRuntime {
 
     // ── Phase 3: Execute worker logic with timeout ──────────
     idleWatchdog?.start("executing");
-    this.#emitTurnStarted(session.id, 1);
-
     const context = this.#buildContext(
       binding,
       session,
       roleConfig,
+      profileId,
       idleWatchdog,
     );
 
@@ -282,8 +287,10 @@ export class WorkerRuntime {
     binding: WorkerBinding,
     session: SessionRecord,
     roleConfig: WorkerRoleConfig | undefined,
+    profileId: string,
     idleWatchdog?: IdleTimeoutWatchdog,
   ): WorkerExecutionContext {
+    const supervisorEventBus = this.#buildSupervisorEventBus(idleWatchdog);
     return {
       binding,
       session,
@@ -314,6 +321,36 @@ export class WorkerRuntime {
           eventData: data,
         });
       },
+      createAgentSupervisor: (agent: AgentLike): AgentSupervisor =>
+        new AgentSupervisor(
+          {
+            binding,
+            sessionId: session.id,
+            profileId,
+            eventBus: supervisorEventBus,
+            logger: this.#logger,
+          },
+          agent,
+        ),
+    };
+  }
+
+  #buildSupervisorEventBus(idleWatchdog?: IdleTimeoutWatchdog): EventBus {
+    return {
+      emit: (event: GatewayEvent): void => {
+        idleWatchdog?.touchForEvent(event);
+        this.#eventBus.emit(event);
+      },
+      on: <E extends GatewayEvent["event"]>(
+        event: E,
+        handler: (payload: EventPayload<E>) => void,
+      ): (() => void) => this.#eventBus.on(event, handler),
+      off: <E extends GatewayEvent["event"]>(
+        event: E,
+        handler: (payload: EventPayload<E>) => void,
+      ): void => {
+        this.#eventBus.off(event, handler);
+      },
     };
   }
 
@@ -334,7 +371,7 @@ export class WorkerRuntime {
       toolsUsed: result.toolsUsed,
       tokensConsumed: result.tokensConsumed,
       durationMs: Date.now() - startedAt,
-      turnCount: 1,
+      turnCount: result.turnCount ?? 0,
       blocker: result.blocker,
       role: binding.role,
       completedAt: new Date().toISOString(),
@@ -411,14 +448,6 @@ export class WorkerRuntime {
     });
   }
 
-  // ── Internal: lifecycle events (turn) ────────────────────────
-
-  #emitTurnStarted(sessionId: string, turnNumber: number): void {
-    this.#eventBus.emit({
-      event: "turn.started",
-      payload: { sessionId, turnNumber },
-    });
-  }
 
   // ── Internal: lifecycle logging ───────────────────────────────
 

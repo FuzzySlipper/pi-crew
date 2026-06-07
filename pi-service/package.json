@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.78.1",
     "@pi-crew/core": "*",
     "@pi-crew/mcp": "*",
     "@types/better-sqlite3": "^7.6.13",

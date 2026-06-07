@@ -10,6 +10,14 @@
 
 // ── Event payloads ──────────────────────────────────────────────
 
+/** Optional Den worker correlation carried by runtime-originated events. */
+export interface DenWorkerCorrelationPayload {
+  readonly assignmentId?: string;
+  readonly runId?: string;
+  readonly taskId?: string;
+  readonly profileId?: string;
+}
+
 /** Fired when a new conversational or worker session is created. */
 export interface SessionCreatedPayload {
   readonly sessionId: string;
@@ -30,7 +38,7 @@ export interface SessionExpiredPayload {
 }
 
 /** Fired when an agent tool invocation begins. */
-export interface ToolCalledPayload {
+export interface ToolCalledPayload extends DenWorkerCorrelationPayload {
   readonly toolName: string;
   readonly sessionId: string;
   /** Optional raw parameters for audit logging. */
@@ -38,7 +46,7 @@ export interface ToolCalledPayload {
 }
 
 /** Fired when an agent tool invocation completes (success or failure). */
-export interface ToolCompletedPayload {
+export interface ToolCompletedPayload extends DenWorkerCorrelationPayload {
   readonly toolName: string;
   readonly sessionId: string;
   readonly success: boolean;
@@ -81,13 +89,13 @@ export interface AssignmentTimedOutPayload {
 }
 
 /** Fired when a turn (agent reasoning step) begins. */
-export interface TurnStartedPayload {
+export interface TurnStartedPayload extends DenWorkerCorrelationPayload {
   readonly sessionId: string;
   readonly turnNumber: number;
 }
 
 /** Fired when a turn completes successfully. */
-export interface TurnCompletedPayload {
+export interface TurnCompletedPayload extends DenWorkerCorrelationPayload {
   readonly sessionId: string;
   readonly turnNumber: number;
   readonly durationMs: number;

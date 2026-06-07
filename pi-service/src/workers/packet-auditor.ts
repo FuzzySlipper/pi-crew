@@ -106,6 +106,19 @@ export class PacketAuditor implements WorkerExecutor {
   async execute(
     context: WorkerExecutionContext,
   ): Promise<WorkerExecutionResult> {
+    const turnStartedAt = Date.now();
+    context.emitEvent({
+      event: "turn.started",
+      payload: {
+        assignmentId: context.binding.assignmentId,
+        runId: context.binding.runId,
+        taskId: context.binding.taskId,
+        profileId: context.session.profileId,
+        sessionId: context.session.id,
+        turnNumber: 1,
+      },
+    });
+
     context.log("info", "PacketAuditor starting validation");
 
     // In a real system, the auditor would fetch completion packets
@@ -131,6 +144,18 @@ export class PacketAuditor implements WorkerExecutor {
     const invalidCount = results.filter((r) => !r.valid).length;
 
     context.log("info", `Audit complete: ${String(validCount)} valid, ${String(invalidCount)} invalid`);
+    context.emitEvent({
+      event: "turn.completed",
+      payload: {
+        assignmentId: context.binding.assignmentId,
+        runId: context.binding.runId,
+        taskId: context.binding.taskId,
+        profileId: context.session.profileId,
+        sessionId: context.session.id,
+        turnNumber: 1,
+        durationMs: Date.now() - turnStartedAt,
+      },
+    });
 
     return {
       status: invalidCount === 0 ? "completed" : "completed",
@@ -144,6 +169,7 @@ export class PacketAuditor implements WorkerExecutor {
       filesTouched: [],
       toolsUsed: ["packet-auditor"],
       tokensConsumed: 150,
+      turnCount: 1,
       summary: results.map((r) => r.summary).join("\n"),
     };
   }
