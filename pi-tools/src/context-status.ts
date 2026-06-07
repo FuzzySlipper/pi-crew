@@ -19,9 +19,9 @@ import type { DrainModeManager } from "./drain-mode.js";
 /**
  * Tracks live context window usage across turns.
  *
- * In production this integrates with the provider's token-counting
- * API and message history estimator. For v1 it accepts externally-
- * reported snapshots and maintains the current state.
+ * In production this integrates with pi-agent-core token-usage data
+ * fed from AgentSupervisor's `message_end` events.  For v1 it accepts
+ * externally-reported snapshots and incremental deltas.
  */
 export interface ContextUsageTracker {
   /** Current estimated usage (0-100 percent). */
@@ -39,19 +39,29 @@ export interface ContextUsageTracker {
    * Apply an externally-reported snapshot.
    *
    * Used when the provider reports actual token counts.
+   * Replaces the entire state.
    */
   update(usage: {
     tokensUsed: number;
     tokensTotal: number;
     turnsRemainingEstimate: number;
   }): void;
+
+  /**
+   * Accumulate incremental token usage from a single turn or tool call.
+   *
+   * Used by AgentSupervisor to feed pi-agent-core token data as it
+   * arrives from `message_end` events.  Unlike `update`, this adds
+   * rather than replaces.
+   */
+  accumulate(delta: { tokensUsed: number }): void;
 }
 
 /**
  * Default in-memory {@link ContextUsageTracker} implementation.
  *
- * Starts with zero usage. Updated via {@link update} or directly
- * by the agent loop middleware.
+ * Starts with zero usage. Updated via {@link update}, {@link accumulate},
+ * or directly by the agent loop middleware.
  */
 export class ContextUsageTrackerImpl implements ContextUsageTracker {
   private _tokensUsed = 0;
@@ -99,6 +109,83 @@ export class ContextUsageTrackerImpl implements ContextUsageTracker {
     this._tokensTotal = usage.tokensTotal;
     this._turnsRemainingEstimate = usage.turnsRemainingEstimate;
   }
+
+  accumulate(delta: { tokensUsed: number }): void {
+    this._tokensUsed += delta.tokensUsed;
+  }
+}
+
+// ── Token pressure emitter ───────────────────────────────────
+
+/**
+ * Threshold percentages at which `context.pressure` events fire.
+ *
+ * Each threshold fires exactly once per session — once crossed,
+ * subsequent crossings above the same level do not re-emit.
+ */
+const PRESSURE_THRESHOLDS = [70, 85, 95] as const;
+
+/**
+ * Emits `context.pressure` events when token-usage thresholds are
+ * crossed for the first time in a session.
+ *
+ * Usage: create one per worker session.  Call {@link checkAndEmit}
+ * after every turn (or whenever the token tracker is updated) to
+ * fire pressure events at 70%, 85%, and 95% usage.
+ */
+export class TokenPressureEmitter {
+  /** Thresholds that have already been crossed and emitted. */
+  readonly #emitted = new Set<number>();
+
+  /**
+   * Check current token usage against pressure thresholds and emit
+   * `context.pressure` events for any newly-crossed thresholds.
+   *
+   * @param tracker — The context usage tracker for this session.
+   * @param sessionId — Session ID for event correlation.
+   * @param eventBus — Gateway event bus for emitting events.
+   * @param logger — Optional logger for diagnostic output.
+   */
+  checkAndEmit(
+    tracker: ContextUsageTracker,
+    sessionId: string,
+    eventBus: EventBus,
+    logger?: Logger,
+  ): void {
+    const pct = tracker.usagePercent;
+
+    for (const threshold of PRESSURE_THRESHOLDS) {
+      if (this.#emitted.has(threshold)) continue;
+      if (pct >= threshold) {
+        this.#emitted.add(threshold);
+
+        eventBus.emit({
+          event: "context.pressure",
+          payload: {
+            sessionId,
+            usedTokens: tracker.tokensUsed,
+            maxTokens: tracker.tokensTotal,
+          },
+        });
+
+        logger?.warn(
+          `TokenPressureEmitter: context pressure ${String(threshold)}%`,
+          {
+            sessionId,
+            usagePercent: pct,
+            threshold,
+            tokensUsed: tracker.tokensUsed,
+            tokensTotal: tracker.tokensTotal,
+          },
+        );
+      }
+    }
+  }
+
+  /** Reset all emitted thresholds (e.g., session restart). */
+  reset(): void {
+    this.#emitted.clear();
+  }
 }
 
 // ── context_status tool ──────────────────────────────────────
@@ -144,7 +231,10 @@ export function contextStatusTool(
   const drainActive = drainManager?.isActive ?? false;
 
   let recommendation: string;
-  if (critical) {
+  if (pct > 95) {
+    recommendation =
+      "EMERGENCY: Context nearly full. Stop all non-essential work immediately.";
+  } else if (critical) {
     recommendation =
       "CRITICAL: Avoid launching new workers or large research tasks. Consider handoff or compaction.";
   } else if (compressionImminent) {
@@ -166,7 +256,7 @@ export function contextStatusTool(
     drainActive,
   };
 
-  // Emit pressure event if crossing a threshold
+  // Emit pressure event if crossing a threshold (best-effort inline)
   if (eventBus && sessionId && (compressionImminent || critical)) {
     eventBus.emit({
       event: "context.pressure",

@@ -15,6 +15,7 @@ import type {
   Logger,
 } from "@pi-crew/core";
 import { DRAIN_MODE_ESSENTIAL_TOOLS } from "@pi-crew/core";
+import type { ContextUsageTracker } from "./context-status.js";
 
 // ── DrainModeManager ──────────────────────────────────────────
 
@@ -206,6 +207,34 @@ export class DrainModeManager {
     }
     if (this.shouldDrainForIterations(currentIteration)) {
       this.activate("iteration_budget");
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check whether token budget suggests drain mode should activate.
+   *
+   * @param tracker — The context usage tracker for this session.
+   * @returns `true` if drain should be active (token budget low).
+   */
+  shouldDrainForTokens(tracker: ContextUsageTracker): boolean {
+    return tracker.usagePercent >= 80;
+  }
+
+  /**
+   * Auto-activate drain mode based on token-usage check.
+   *
+   * Idempotent — if drain is already active, this is a no-op.
+   *
+   * @returns `true` if drain was activated (or was already active).
+   */
+  autoActivateForTokens(tracker: ContextUsageTracker): boolean {
+    if (this.isActive) {
+      return true;
+    }
+    if (this.shouldDrainForTokens(tracker)) {
+      this.activate("context_limit");
       return true;
     }
     return false;

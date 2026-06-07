@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { createWorkerPolicy } from "../worker-policy.js";
 import { DrainModeManager } from "../drain-mode.js";
+import { ContextUsageTrackerImpl } from "../context-status.js";
 
 describe("DrainModeManager", () => {
   let eventBus: FakeEventBus;
@@ -196,6 +197,184 @@ describe("DrainModeManager", () => {
     it("returns true at or above 80% threshold", () => {
       expect(manager.shouldDrainForIterations(40)).toBe(true);
       expect(manager.shouldDrainForIterations(45)).toBe(true);
+    });
+  });
+
+  describe("autoActivateForTokens", () => {
+    it("does not activate when token usage is below 80%", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 50_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 10,
+      });
+
+      const activated = manager.autoActivateForTokens(tracker);
+      expect(activated).toBe(false);
+      expect(manager.isActive).toBe(false);
+    });
+
+    it("activates when token usage reaches 80%", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 80_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 5,
+      });
+
+      const activated = manager.autoActivateForTokens(tracker);
+      expect(activated).toBe(true);
+      expect(manager.isActive).toBe(true);
+      expect(manager.currentState?.reason).toBe("context_limit");
+    });
+
+    it("activates when token usage exceeds 80%", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 95_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 1,
+      });
+
+      const activated = manager.autoActivateForTokens(tracker);
+      expect(activated).toBe(true);
+      expect(manager.isActive).toBe(true);
+    });
+
+    it("returns true when drain already active (idempotent)", () => {
+      manager.activate("context_limit");
+
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 90_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 1,
+      });
+
+      const activated = manager.autoActivateForTokens(tracker);
+      expect(activated).toBe(true);
+    });
+
+    it("emits drain.activated with context_limit reason", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 85_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 3,
+      });
+
+      manager.autoActivateForTokens(tracker);
+
+      const events = eventBus.emitted.filter(
+        (e) => e.event === "drain.activated",
+      );
+      expect(events.length).toBe(1);
+      expect(events[0]?.payload).toMatchObject({
+        reason: "context_limit",
+        sessionId: "sess-1",
+        assignmentId: "1",
+      });
+    });
+
+    it("works with incremental token accumulation", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 40_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 10,
+      });
+
+      // 40% — no drain
+      expect(manager.autoActivateForTokens(tracker)).toBe(false);
+
+      // Accumulate to 80% — drain activates
+      tracker.accumulate({ tokensUsed: 40_000 });
+      expect(manager.autoActivateForTokens(tracker)).toBe(true);
+      expect(manager.isActive).toBe(true);
+    });
+
+    it("default 200k total requires 160k tokens for activation", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 0,
+        tokensTotal: 200_000,
+        turnsRemainingEstimate: 20,
+      });
+
+      // Below threshold
+      tracker.accumulate({ tokensUsed: 150_000 });
+      expect(manager.autoActivateForTokens(tracker)).toBe(false);
+
+      // At threshold
+      tracker.accumulate({ tokensUsed: 10_000 });
+      expect(manager.autoActivateForTokens(tracker)).toBe(true);
+    });
+  });
+
+  describe("shouldDrainForTokens", () => {
+    it("returns false below 80%", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 79_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 10,
+      });
+      expect(manager.shouldDrainForTokens(tracker)).toBe(false);
+    });
+
+    it("returns true at 80% or above", () => {
+      const t80 = new ContextUsageTrackerImpl({
+        tokensUsed: 80_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 5,
+      });
+      expect(manager.shouldDrainForTokens(t80)).toBe(true);
+
+      const t90 = new ContextUsageTrackerImpl({
+        tokensUsed: 90_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 1,
+      });
+      expect(manager.shouldDrainForTokens(t90)).toBe(true);
+    });
+  });
+
+  describe("drain tool filtering with real token state", () => {
+    it("filters tools when token drain is active", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 85_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 3,
+      });
+
+      manager.autoActivateForTokens(tracker);
+      expect(manager.isActive).toBe(true);
+
+      const tools = ["context_status", "terminal", "web_search"];
+      const filtered = manager.filterForDrain(tools);
+      expect(filtered).toEqual(["context_status"]);
+    });
+
+    it("passes all tools when token drain is not active", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 30_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 10,
+      });
+
+      // Not activated — below 80%
+      manager.autoActivateForTokens(tracker);
+      expect(manager.isActive).toBe(false);
+
+      const tools = ["context_status", "terminal", "web_search"];
+      const filtered = manager.filterForDrain(tools);
+      expect(filtered).toEqual(tools);
+    });
+
+    it("preserves post_structured_completion during token drain", () => {
+      const tracker = new ContextUsageTrackerImpl({
+        tokensUsed: 90_000,
+        tokensTotal: 100_000,
+        turnsRemainingEstimate: 1,
+      });
+
+      manager.autoActivateForTokens(tracker);
+
+      const tools = ["write_file", "post_structured_completion", "terminal"];
+      const filtered = manager.filterForDrain(tools);
+      expect(filtered).toEqual(["post_structured_completion"]);
     });
   });
 });

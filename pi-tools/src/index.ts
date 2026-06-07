@@ -67,6 +67,7 @@ export {
   type ContextUsageTracker,
   type ContextStatusConfig,
   ContextUsageTrackerImpl,
+  TokenPressureEmitter,
   contextStatusTool,
 } from "./context-status.js";
 

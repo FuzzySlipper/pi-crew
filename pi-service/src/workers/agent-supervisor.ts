@@ -12,11 +12,21 @@
  * drain/checkpoint state.  Those concerns belong to separate
  * components (WorkerPolicy, guarded tool wrappers, drain manager).
  *
+ * ## Token tracking
+ *
+ * When a {@link ContextUsageTracker} is provided via config, the
+ * supervisor accumulates real token-usage data from pi-agent-core
+ * `message_end` events (assistant messages carry `usage.totalTokens`).
+ * After each turn, it emits `context.pressure` events at 70%/85%/95%
+ * threshold crossings via a {@link TokenPressureEmitter}.
+ *
  * @module pi-service/workers/agent-supervisor
  */
 
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger } from "@pi-crew/core";
+import type { ContextUsageTracker } from "@pi-crew/tools";
+import { TokenPressureEmitter } from "@pi-crew/tools";
 import type { WorkerBinding } from "../sessions/types.js";
 
 // ── AgentLike: testable subset of Agent's public API ─────────────
@@ -58,6 +68,14 @@ export interface AgentSupervisorConfig {
   readonly eventBus: EventBus;
   /** Logger for lifecycle telemetry (info/debug only). */
   readonly logger: Logger;
+  /**
+   * Optional token-usage tracker.
+   *
+   * When provided, the supervisor accumulates real pi-agent-core
+   * token data from `message_end` events and checks pressure
+   * thresholds after each turn.
+   */
+  readonly tokenTracker?: ContextUsageTracker;
 }
 
 // ── AgentSupervisor ──────────────────────────────────────────────
@@ -74,7 +92,8 @@ export interface AgentSupervisorConfig {
  * | `turn_start`              | `turn.started`    | Increments turn counter      |
  * | `tool_execution_start`    | `tool.called`     | With tool name + sessionId   |
  * | `tool_execution_end`      | `tool.completed`  | With success + duration      |
- * | `turn_end`                | `turn.completed`  | With turn number + duration  |
+ * | `message_end` (assistant) | —                 | Accumulates token usage        |
+ * | `turn_end`                | `turn.completed`  | With turn number + duration; checks pressure |
  * | `agent_end`               | —                 | Logged; completion is WorkerRuntime's job |
  *
  * Every lifecycle log entry includes:
@@ -96,6 +115,8 @@ export class AgentSupervisor {
   readonly #eventBus: EventBus;
   readonly #logger: Logger;
   readonly #agent: AgentLike;
+  readonly #tokenTracker: ContextUsageTracker | undefined;
+  readonly #pressureEmitter: TokenPressureEmitter | undefined;
 
   #turnCount = 0;
   #turnStartTime = 0;
@@ -109,6 +130,10 @@ export class AgentSupervisor {
     this.#eventBus = config.eventBus;
     this.#logger = config.logger;
     this.#agent = agent;
+    this.#tokenTracker = config.tokenTracker;
+    this.#pressureEmitter = config.tokenTracker
+      ? new TokenPressureEmitter()
+      : undefined;
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -133,6 +158,23 @@ export class AgentSupervisor {
     return this.#turnCount;
   }
 
+  /**
+   * Estimated tokens used across all turns.
+   *
+   * Returns 0 when no token tracker is configured.
+   */
+  get tokensUsed(): number {
+    return this.#tokenTracker?.tokensUsed ?? 0;
+  }
+
+  /**
+   * The token-usage tracker for this session, or undefined when
+   * token tracking is not configured.
+   */
+  get tokenTracker(): ContextUsageTracker | undefined {
+    return this.#tokenTracker;
+  }
+
   // ── Event handler ────────────────────────────────────────────
 
   #handleEvent(event: AgentEvent): void {
@@ -149,11 +191,18 @@ export class AgentSupervisor {
       case "tool_execution_end":
         this.#onToolEnd(event);
         break;
+      case "message_end":
+        this.#onMessageEnd(event);
+        break;
       case "turn_end":
         this.#onTurnEnd();
         break;
       case "agent_end":
         this.#onAgentEnd(event);
+        break;
+      default:
+        // message_start, message_update, tool_execution_update
+        // are streaming noise — no action needed.
         break;
     }
   }
@@ -162,6 +211,7 @@ export class AgentSupervisor {
 
   #onAgentStart(): void {
     this.#turnCount = 0;
+    this.#pressureEmitter?.reset();
     this.#logger.info("AgentSupervisor: agent.start", this.#correlationCtx());
   }
 
@@ -220,6 +270,30 @@ export class AgentSupervisor {
     });
   }
 
+  /**
+   * Accumulate token usage from assistant message_end events.
+   *
+   * pi-agent-core's Agent emits `message_end` with `message: AgentMessage`.
+   * For assistant messages, `message.usage.totalTokens` carries the
+   * cost of the model response.  We accumulate this into the token
+   * tracker for context_status and drain-mode decisions.
+   */
+  #onMessageEnd(
+    event: AgentEvent & { type: "message_end" },
+  ): void {
+    if (
+      this.#tokenTracker &&
+      "role" in event.message &&
+      event.message.role === "assistant" &&
+      "usage" in event.message
+    ) {
+      const usage = (
+        event.message as { usage: { totalTokens: number } }
+      ).usage;
+      this.#tokenTracker.accumulate({ tokensUsed: usage.totalTokens });
+    }
+  }
+
   #onTurnEnd(): void {
     const durationMs =
       this.#turnStartTime > 0 ? Date.now() - this.#turnStartTime : 0;
@@ -227,6 +301,7 @@ export class AgentSupervisor {
       ...this.#correlationCtx(),
       turnNumber: this.#turnCount,
       durationMs,
+      tokensUsed: this.#tokenTracker?.tokensUsed,
     });
     this.#eventBus.emit({
       event: "turn.completed",
@@ -237,6 +312,16 @@ export class AgentSupervisor {
         durationMs,
       },
     });
+
+    // Check pressure thresholds after every turn
+    if (this.#tokenTracker && this.#pressureEmitter) {
+      this.#pressureEmitter.checkAndEmit(
+        this.#tokenTracker,
+        this.#sessionId,
+        this.#eventBus,
+        this.#logger,
+      );
+    }
   }
 
   #onAgentEnd(event: AgentEvent & { type: "agent_end" }): void {
@@ -244,6 +329,7 @@ export class AgentSupervisor {
       ...this.#correlationCtx(),
       turnCount: this.#turnCount,
       messageCount: event.messages.length,
+      tokensUsed: this.#tokenTracker?.tokensUsed,
     });
   }
 
