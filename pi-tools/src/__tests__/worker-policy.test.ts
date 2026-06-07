@@ -123,6 +123,18 @@ describe("isPathAllowed", () => {
     it("denies paths in explicit denyPaths", () => {
       expect(isPathAllowed(policy, "/opt/task/src/secrets/key.pem")).toBe(false);
     });
+
+    it("allows relative paths resolved under an explicit allowlist root", () => {
+      expect(isPathAllowed(policy, "src/main.ts")).toBe(true);
+    });
+
+    it("denies traversal that escapes an explicit allowlist root", () => {
+      expect(isPathAllowed(policy, "../task-private/key.pem")).toBe(false);
+    });
+
+    it("denies sibling prefixes that only start with an allowed path string", () => {
+      expect(isPathAllowed(policy, "/opt/task/src-not-allowed/file.ts")).toBe(false);
+    });
   });
 });
 

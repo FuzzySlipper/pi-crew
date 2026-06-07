@@ -22,6 +22,7 @@ import type {
   AfterToolCallContext,
   TextContent,
 } from "./guarded-tool-types.js";
+import { checkFilesystemPathPolicy } from "./guarded-path-policy.js";
 
 // ── ToolExecutor ─────────────────────────────────────────────────
 
@@ -95,59 +96,6 @@ function isToolAllowed(policy: WorkerPolicy, toolName: string): { allowed: boole
   }
 
   return { allowed: true, reason: "" };
-}
-
-/**
- * Check whether a filesystem path in tool args is allowed.
- *
- * Scans string args for path-like values and validates against
- * the policy's allowedPaths / denyPaths.
- */
-function checkPathPolicy(
-  policy: WorkerPolicy,
-  args: unknown,
-): { allowed: boolean; reason: string } {
-  if (typeof args !== "object" || args === null) {
-    return { allowed: true, reason: "" };
-  }
-
-  const argRecord = args as Record<string, unknown>;
-  for (const value of Object.values(argRecord)) {
-    if (typeof value === "string" && isPathLike(value)) {
-      // Check deny list first
-      for (const deny of policy.denyPaths) {
-        if (normalizePath(value).startsWith(normalizePath(deny))) {
-          return {
-            allowed: false,
-            reason: `Path "${value}" is in the deny path list`,
-          };
-        }
-      }
-
-      // Check allowlist if non-empty
-      if (policy.allowedPaths.length > 0) {
-        const matched = policy.allowedPaths.some(
-          (allowed: string) => normalizePath(value).startsWith(normalizePath(allowed)),
-        );
-        if (!matched) {
-          return {
-            allowed: false,
-            reason: `Path "${value}" is not in the allowed path list`,
-          };
-        }
-      }
-    }
-  }
-
-  return { allowed: true, reason: "" };
-}
-
-function isPathLike(value: string): boolean {
-  return value.startsWith("/") || value.startsWith("./") || value.startsWith("../");
-}
-
-function normalizePath(p: string): string {
-  return p.replace(/\/+$/, "");
 }
 
 // ── Denial evidence emission ────────────────────────────────────
@@ -245,7 +193,7 @@ export function createBeforeToolCallHook(
 
     // ── Path policy check ───────────────────────────────────
     if (policy.allowedPaths.length > 0 || policy.denyPaths.length > 0) {
-      const pathCheck = checkPathPolicy(policy, callCtx.args);
+      const pathCheck = checkFilesystemPathPolicy(policy, callCtx.args);
       if (!pathCheck.allowed) {
         config.logger.warn("GuardedToolAssembly: beforeToolCall denied (path policy)", {
           toolName,
@@ -398,7 +346,7 @@ function wrapExecute(
 
     // ── Path re-check at dispatch time ─────────────────────
     if (policy.allowedPaths.length > 0 || policy.denyPaths.length > 0) {
-      const pathCheck = checkPathPolicy(policy, params);
+      const pathCheck = checkFilesystemPathPolicy(policy, params);
       if (!pathCheck.allowed) {
         config.logger.warn("GuardedToolAssembly: execute denied (wrapper-level path policy)", {
           toolName,

@@ -8,6 +8,7 @@
  * @module pi-tools/worker-policy
  */
 
+import path from "node:path";
 import type { WorkerPolicy } from "@pi-crew/core";
 
 // ── Defaults ──────────────────────────────────────────────────
@@ -101,26 +102,37 @@ export function isPathAllowed(
   policy: WorkerPolicy,
   targetPath: string,
 ): boolean {
-  // Normalize
-  const normalized = targetPath.replace(/\/+$/, "");
+  const resolved = resolvePolicyPath(policy.workdir, targetPath);
 
-  // Deny paths take precedence
   for (const deny of policy.denyPaths) {
-    if (normalized.startsWith(deny.replace(/\/+$/, ""))) {
+    if (isWithinOrEqual(resolved, resolvePolicyPath(policy.workdir, deny))) {
       return false;
     }
   }
 
-  // If there's an allowlist, the path must match
-  if (policy.allowedPaths.length > 0) {
-    return policy.allowedPaths.some((allowed: string) =>
-      normalized.startsWith(allowed.replace(/\/+$/, "")),
-    );
-  }
+  const allowedRoots = policy.allowedPaths.length > 0
+    ? policy.allowedPaths
+    : [policy.workdir];
+  return allowedRoots.some((allowed: string) =>
+    isWithinOrEqual(resolved, resolvePolicyPath(policy.workdir, allowed)),
+  );
+}
 
-  // No allowlist, but must be within workdir
-  const workdirNorm = policy.workdir.replace(/\/+$/, "");
-  return normalized.startsWith(workdirNorm);
+function resolvePolicyPath(workdir: string, inputPath: string): string {
+  const base = path.resolve(workdir);
+  const resolved = path.isAbsolute(inputPath)
+    ? path.resolve(inputPath)
+    : path.resolve(base, inputPath);
+  return trimTrailingSeparator(resolved);
+}
+
+function isWithinOrEqual(target: string, root: string): boolean {
+  return target === root || target.startsWith(`${root}/`);
+}
+
+function trimTrailingSeparator(inputPath: string): string {
+  const normalized = path.normalize(inputPath);
+  return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
 }
 
 // ── Host check ────────────────────────────────────────────────
