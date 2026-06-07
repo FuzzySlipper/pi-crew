@@ -54,39 +54,25 @@ export interface WorkerExecutor {
 
 /** Context passed to a worker executor. */
 export interface WorkerExecutionContext {
-  /** The worker binding for this assignment. */
   readonly binding: WorkerBinding;
-  /** The session record for this worker. */
   readonly session: SessionRecord;
-  /** Role-specific runtime config resolved from injected mapping. */
   readonly roleConfig?: WorkerRoleConfig;
-  /** AbortSignal for cooperative cancellation (timeout, drain, etc.). */
   readonly signal?: AbortSignal;
-  /** Emit an event on the gateway bus. */
   emitEvent(event: GatewayEvent): void;
-  /** Log a message with the worker's correlation context. */
   log(level: "debug" | "info" | "warn" | "error", message: string): void;
-  /** Write an audit event with auto-filled correlation IDs. */
   writeAudit(eventType: string, data: Record<string, unknown>): Promise<void>;
-  /** Create a supervisor that bridges pi-agent-core Agent events for this assignment. */
   createAgentSupervisor(agent: AgentLike): AgentSupervisor;
   readonly contextUsageTracker: ContextUsageTracker;
   readonly drainModeManager: DrainModeManager;
   contextStatus(): ContextPressureSnapshot;
-  /** Build role-assembly input for a supervised Agent construction path. */
   buildWorkerRoleInput(targetPacketRef?: TargetPacketRef): WorkerRoleInput;
-  /** Resolve the service-local role assembly for this worker role. */
   getWorkerRoleAssembly(): WorkerRoleAssembly | undefined;
-  /** Den/Core reader for roles that audit target completion packets. */
   readonly packetCompletionReader?: PacketCompletionReader;
-  /** Structured completion poster exposed for specialized workflows. */
   readonly completionPoster?: CompletionPoster;
-  /** Create beforeToolCall/afterToolCall hooks from WorkerPolicy for AgentOptions. */
   createGuardedToolHooks(): {
     beforeToolCall(ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined>;
     afterToolCall(ctx: AfterToolCallContext): Promise<AfterToolCallResult | undefined>;
   };
-  /** Wrap AgentTools with WorkerPolicy enforcement wrappers. */
   assembleGuardedTools(tools: readonly AgentTool[], executor: ToolExecutor | null): AgentTool[];
 }
 
@@ -100,23 +86,14 @@ export interface WorkerExecutionResult {
     readonly ref: string;
     readonly summary: string;
   }>;
-  /** Files touched. */
   readonly filesTouched: string[];
-  /** Tools used. */
   readonly toolsUsed: string[];
-  /** Estimated tokens consumed. */
   readonly tokensConsumed: number;
-  /** Agent turn count observed by a supervised Agent execution. */
   readonly turnCount?: number;
-  /** Execution summary for the completion packet. */
   readonly summary: string;
-  /** Optional exact packet produced by a specialized worker workflow. */
   readonly completionPacketOverride?: CompletionPacket;
-  /** True when the specialized workflow already called the poster. */
   readonly completionAlreadyPosted?: boolean;
-  /** Optional release reason override for specialized failure paths. */
   readonly releaseReason?: "timeout" | "failed" | "completed";
-  /** Blocker details (only when status is "blocked" or "failed"). */
   readonly blocker?: {
     readonly reason: string;
     readonly requires: "human" | "dependency" | "review";
