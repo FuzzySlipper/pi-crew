@@ -16,6 +16,15 @@
  * - filesTouched (must be present as array)
  * - toolsUsed (must be present as array)
  *
+ * ## Architecture note
+ *
+ * The `PacketAuditorRoleAssembly` (packet-auditor-role-assembly.ts) is
+ * the primary path for supervised Agent execution per the #2047 ADR.
+ * The `PacketAuditor` class and its `execute()` method remain for
+ * backward compatibility with capstone tests, but test packets are no
+ * longer built internally.  Use `buildAuditorTestPackets()` (exported
+ * below) to construct test fixtures in tests.
+ *
  * @module pi-service/workers/packet-auditor
  */
 
@@ -86,6 +95,66 @@ const REQUIRED_NUMBER_FIELDS = [
   "turnCount",
 ] as const;
 
+// ── Test packet factory (exported for test use only) ──────────
+
+/**
+ * Build well-known valid and invalid test packets for capstone
+ * tests and integration smoke.
+ *
+ * This function replaces the former `PacketAuditor.#buildTestPackets()`
+ * private method.  It lives outside the class so tests can construct
+ * fixtures without depending on internal class state.
+ *
+ * @param binding — Den correlation IDs for the assignment.
+ */
+export function buildAuditorTestPackets(binding: {
+  readonly assignmentId: string;
+  readonly runId: string;
+  readonly taskId: string;
+}): CompletionPacket[] {
+  const now = new Date().toISOString();
+
+  // Valid packet — all required fields present
+  const validPacket: CompletionPacket = {
+    assignmentId: binding.assignmentId,
+    runId: binding.runId,
+    taskId: binding.taskId,
+    status: "completed",
+    artifacts: [
+      {
+        type: "implementation_packet",
+        ref: "commit/abc123",
+        summary: "Implemented feature X",
+      },
+    ],
+    filesTouched: ["src/foo.ts"],
+    toolsUsed: ["write_file", "terminal"],
+    tokensConsumed: 5000,
+    durationMs: 120_000,
+    turnCount: 3,
+    role: "coder",
+    completedAt: now,
+  };
+
+  // Invalid packet — missing artifacts, tokensConsumed, filesTouched
+  const invalidPacket: CompletionPacket = {
+    assignmentId: "",
+    runId: binding.runId,
+    taskId: "",
+    status: "unknown" as CompletionStatus,
+    artifacts: [],
+    filesTouched: [],
+    toolsUsed: [],
+    tokensConsumed: -1,
+    durationMs: 0,
+    turnCount: 0,
+    role: "",
+    completedAt: "",
+  };
+
+  return [validPacket, invalidPacket];
+}
+
 // ── PacketAuditor ─────────────────────────────────────────────
 
 /**
@@ -93,15 +162,19 @@ const REQUIRED_NUMBER_FIELDS = [
  *
  * Checks that all required fields are present and well-typed.
  * Produces structured findings that can be posted back to Den.
+ *
+ * For supervised Agent use, prefer {@link PacketAuditorRoleAssembly}
+ * (packet-auditor-role-assembly.ts).  This class implements
+ * `WorkerExecutor` for backward compatibility with capstone tests.
  */
 export class PacketAuditor implements WorkerExecutor {
   /**
    * Execute the packet-auditor role.
    *
-   * Expects the context to contain audit targets — in a real system
-   * these would be completion packets fetched from Den Core. For the
-   * capstone spike, the auditor validates a pre-supplied packet as
-   * proof of the validation contract.
+   * Uses `buildAuditorTestPackets()` for test/capstone compatibility.
+   * In a production system, the `PacketAuditorRoleAssembly` provides
+   * Den packet references to a supervised Agent that fetches and
+   * validates real packets.
    */
   async execute(
     context: WorkerExecutionContext,
@@ -110,10 +183,12 @@ export class PacketAuditor implements WorkerExecutor {
     context.emitEvent({
       event: "turn.started",
       payload: {
-        assignmentId: context.binding.assignmentId,
-        runId: context.binding.runId,
-        taskId: context.binding.taskId,
-        profileId: context.session.profileId,
+        ...{
+          assignmentId: context.binding.assignmentId,
+          runId: context.binding.runId,
+          taskId: context.binding.taskId,
+          profileId: context.session.profileId,
+        },
         sessionId: context.session.id,
         turnNumber: 1,
       },
@@ -121,11 +196,9 @@ export class PacketAuditor implements WorkerExecutor {
 
     context.log("info", "PacketAuditor starting validation");
 
-    // In a real system, the auditor would fetch completion packets
-    // from Den Core via the Den MCP API. For the capstone spike,
-    // we validate a well-known test packet and demonstrate the
-    // field-by-field validation contract.
-    const testPackets = this.#buildTestPackets(context.binding);
+    // Use the exported test-packet factory for backward compat.
+    // The PacketAuditorRoleAssembly path uses Den-fetched packets.
+    const testPackets = buildAuditorTestPackets(context.binding);
 
     const results: AuditResult[] = [];
     for (const packet of testPackets) {
@@ -147,10 +220,12 @@ export class PacketAuditor implements WorkerExecutor {
     context.emitEvent({
       event: "turn.completed",
       payload: {
-        assignmentId: context.binding.assignmentId,
-        runId: context.binding.runId,
-        taskId: context.binding.taskId,
-        profileId: context.session.profileId,
+        ...{
+          assignmentId: context.binding.assignmentId,
+          runId: context.binding.runId,
+          taskId: context.binding.taskId,
+          profileId: context.session.profileId,
+        },
         sessionId: context.session.id,
         turnNumber: 1,
         durationMs: Date.now() - turnStartedAt,
@@ -260,62 +335,5 @@ export class PacketAuditor implements WorkerExecutor {
         ? `Packet ${packet.runId}: VALID`
         : `Packet ${packet.runId}: INVALID — ${String(errors.length)} error(s): ${errors.map((e) => e.message).join("; ")}`,
     };
-  }
-
-  // ── Test packet factory (capstone spike only) ───────────────
-
-  /**
-   * Build test packets for the capstone spike.
-   *
-   * In production, the auditor would fetch packets from Den Core.
-   * This provides well-known valid and invalid packets for proof.
-   */
-  #buildTestPackets(binding: {
-    readonly assignmentId: string;
-    readonly runId: string;
-    readonly taskId: string;
-    readonly role: string;
-  }): CompletionPacket[] {
-    const now = new Date().toISOString();
-
-    // Valid packet — all required fields present
-    const validPacket: CompletionPacket = {
-      assignmentId: binding.assignmentId,
-      runId: binding.runId,
-      taskId: binding.taskId,
-      status: "completed",
-      artifacts: [
-        {
-          type: "implementation_packet",
-          ref: `commit/abc123`,
-          summary: "Implemented feature X",
-        },
-      ],
-      filesTouched: ["src/foo.ts"],
-      toolsUsed: ["write_file", "terminal"],
-      tokensConsumed: 5000,
-      durationMs: 120_000,
-      turnCount: 3,
-      role: "coder",
-      completedAt: now,
-    };
-
-    // Invalid packet — missing artifacts, tokensConsumed, filesTouched
-    const invalidPacket: CompletionPacket = {
-      assignmentId: "",
-      runId: binding.runId,
-      taskId: "",
-      status: "unknown" as CompletionStatus,
-      artifacts: [],
-      filesTouched: [],
-      toolsUsed: [],
-      tokensConsumed: -1,
-      durationMs: 0,
-      turnCount: 0,
-      role: "",
-      completedAt: "",
-    };
-
-    return [validPacket, invalidPacket];
   }
 }
