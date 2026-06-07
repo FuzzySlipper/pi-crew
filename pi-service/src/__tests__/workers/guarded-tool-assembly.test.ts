@@ -11,7 +11,7 @@
  * - Denied tool result is model-visible as an error result.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import type { GatewayEvent, WorkerPolicy } from "@pi-crew/core";
 import type { WorkerBinding } from "../../sessions/types.js";
@@ -87,8 +87,8 @@ function makePiAgentTool(
     name: "test_tool",
     label: "Test Tool",
     description: "A test tool",
-    parameters: { type: "object", properties: {} } as unknown as PiAgentTool["parameters"],
-    execute: vi.fn<() => Promise<AgentToolResult<unknown>>>().mockResolvedValue({
+    parameters: { type: "object", properties: {} },
+    execute: vi.fn<() => Promise<AgentToolResult>>().mockResolvedValue({
       content: [{ type: "text", text: "done" }],
       details: undefined,
     }),
@@ -119,10 +119,14 @@ class FakeToolExecutor implements ToolExecutor {
     return Promise.resolve({
       ok: true,
       content: result !== undefined
-        ? [{ type: "text", text: String(result) }]
+        ? [{ type: "text", text: stringifyToolResult(result) }]
         : [{ type: "text", text: `result from ${name}` }],
     });
   }
+}
+
+function stringifyToolResult(result: unknown): string {
+  return typeof result === "string" ? result : JSON.stringify(result);
 }
 
 // ── Fake BeforeToolCallContext / AfterToolCallContext ────────────
@@ -389,7 +393,7 @@ describe("assembleGuardedTools", () => {
       const hasErrorText =
         Array.isArray(result.content) &&
         result.content.length > 0 &&
-        typeof (result.content[0] as { text?: string })?.text === "string" &&
+        typeof (result.content[0] as { text?: string }).text === "string" &&
         (result.content[0] as { text: string }).text.toLowerCase().includes("denied");
       expect(hasErrorText).toBe(true);
     }
@@ -458,7 +462,7 @@ describe("assembleGuardedTools", () => {
       expect(result.content).toBeDefined();
       expect(result.content.length).toBeGreaterThan(0);
       const text =
-        typeof (result.content[0] as { text?: string })?.text === "string"
+        typeof (result.content[0] as { text?: string }).text === "string"
           ? (result.content[0] as { text: string }).text
           : "";
       expect(text).toContain("no_execute");
