@@ -32,6 +32,15 @@ import { AgentSupervisor, type AgentLike } from "./agent-supervisor.js";
 import { PacketAuditorRoleAssembly } from "./packet-auditor-role-assembly.js";
 import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
 import type { PacketCompletionReader } from "./packet-auditor-workflow.js";
+import { buildGuardedToolContext } from "./guarded-tool-context-factory.js";
+import type {
+  AgentTool,
+  BeforeToolCallContext,
+  BeforeToolCallResult,
+  AfterToolCallContext,
+  AfterToolCallResult,
+} from "./guarded-tool-types.js";
+import type { ToolExecutor } from "./guarded-tool-assembly.js";
 
 /**
  * A worker executor implements the role-specific logic for a worker
@@ -71,6 +80,13 @@ export interface WorkerExecutionContext {
   readonly packetCompletionReader?: PacketCompletionReader;
   /** Structured completion poster exposed for specialized workflows. */
   readonly completionPoster?: CompletionPoster;
+  /** Create beforeToolCall/afterToolCall hooks from WorkerPolicy for AgentOptions. */
+  createGuardedToolHooks(): {
+    beforeToolCall(ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined>;
+    afterToolCall(ctx: AfterToolCallContext): Promise<AfterToolCallResult | undefined>;
+  };
+  /** Wrap AgentTools with WorkerPolicy enforcement wrappers. */
+  assembleGuardedTools(tools: readonly AgentTool[], executor: ToolExecutor | null): AgentTool[];
 }
 
 /** Result of worker execution. */
@@ -356,6 +372,10 @@ export class WorkerRuntime {
         binding.role === "packet-auditor" || binding.role === "packet_auditor"
           ? PacketAuditorRoleAssembly
           : undefined,
+      ...buildGuardedToolContext(
+        binding, session, profileId, roleConfig,
+        supervisorEventBus, this.#logger,
+      ),
     };
   }
 
