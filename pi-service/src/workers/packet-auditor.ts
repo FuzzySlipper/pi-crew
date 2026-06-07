@@ -196,6 +196,18 @@ export class PacketAuditor implements WorkerExecutor {
 
     context.log("info", "PacketAuditor starting validation");
 
+    const assembly = context.getWorkerRoleAssembly();
+    if (assembly !== undefined) {
+      const assemblyInput = context.buildWorkerRoleInput();
+      await context.writeAudit("packet_auditor.role_assembly.selected", {
+        role: assembly.role,
+        sessionId: assemblyInput.sessionId,
+        profileId: assemblyInput.profileId,
+        mcpToolSets: assembly.selectMcpToolSets(assemblyInput),
+        drainEssentialTools: assembly.drainEssentialTools(assemblyInput),
+      });
+    }
+
     // Use the exported test-packet factory for backward compat.
     // The PacketAuditorRoleAssembly path uses Den-fetched packets.
     const testPackets = buildAuditorTestPackets(context.binding);

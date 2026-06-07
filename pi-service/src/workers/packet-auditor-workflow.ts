@@ -144,6 +144,11 @@ function buildAuditCompletionPacket(
           ? `Packet ${input.targetPacketRef.runId} passed audit`
           : `Packet ${input.targetPacketRef.runId} has ${String(errorCount)} error(s)`,
       },
+      {
+        type: "audit_context",
+        ref: `session/${input.auditorBinding.projectId}/${input.auditorBinding.runId}`,
+        summary: `session=${input.auditorBinding.assignmentId}; profile/session supplied by WorkerRoleInput`,
+      },
     ],
     filesTouched: [],
     toolsUsed: [

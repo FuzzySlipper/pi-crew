@@ -106,6 +106,44 @@ function toolEnd(id: string, name: string): AgentEvent {
 }
 
 describe("WorkerRuntime AgentSupervisor wiring", () => {
+  it("exposes PacketAuditorRoleAssembly on the runtime execution path", async () => {
+    const auditRepo = new FakeAuditRepo();
+    const runtime = new WorkerRuntime(
+      { workerIdentity: "test-worker" },
+      makeRoleMapping(),
+      new FakeSessionManager(),
+      makeFakePool(),
+      new FakeEventBus(),
+      new FakeLogger(),
+      auditRepo,
+      makeAcceptingPoster(),
+    );
+
+    await runtime.executeAssignment(makeBinding({ role: "packet-auditor" }), {
+      execute: (context) => {
+        const assembly = context.getWorkerRoleAssembly();
+        expect(assembly?.role).toBe("packet-auditor");
+        const input = context.buildWorkerRoleInput({
+          projectId: "pi-crew",
+          taskId: "1852",
+          runId: "piw_20260605055314_f4b9fc66",
+        });
+        expect(input.sessionId).toBe("session-1");
+        expect(input.profileId).toBe("packet-auditor");
+        expect(input.targetPacketRef?.runId).toBe("piw_20260605055314_f4b9fc66");
+        expect(assembly?.selectMcpToolSets(input)).toEqual(["den"]);
+        return Promise.resolve({
+          status: "completed",
+          artifacts: [{ type: "audit_report", ref: "r", summary: "ok" }],
+          filesTouched: [],
+          toolsUsed: ["packet-auditor-role-assembly"],
+          tokensConsumed: 0,
+          summary: "role assembly reachable",
+        });
+      },
+    });
+  });
+
   it("lets executors bridge Agent events with Den correlation and packet turn count", async () => {
     const bus = new FakeEventBus();
     const agent = new FakeAgent();

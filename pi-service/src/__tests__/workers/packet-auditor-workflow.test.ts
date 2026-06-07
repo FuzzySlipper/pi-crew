@@ -110,6 +110,7 @@ describe("runPacketAuditWorkflow", () => {
     expect(posted[0]?.artifacts[0]?.ref).toBe(
       "den-worker-run/piw_20260605055314_f4b9fc66",
     );
+    expect(posted[0]?.artifacts[1]?.type).toBe("audit_context");
     expect(posted[0]?.toolsUsed).toContain(
       "den_get_latest_worker_completion",
     );

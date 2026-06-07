@@ -29,6 +29,8 @@ import {
 import { createWorkerIdleWatchdog, type IdleTimeoutWatchdog } from "./worker-idle-timeout.js";
 import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 import { AgentSupervisor, type AgentLike } from "./agent-supervisor.js";
+import { PacketAuditorRoleAssembly } from "./packet-auditor-role-assembly.js";
+import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
 
 /**
  * A worker executor implements the role-specific logic for a worker
@@ -60,6 +62,10 @@ export interface WorkerExecutionContext {
   readonly contextUsageTracker: ContextUsageTracker;
   readonly drainModeManager: DrainModeManager;
   contextStatus(): ContextPressureSnapshot;
+  /** Build role-assembly input for a supervised Agent construction path. */
+  buildWorkerRoleInput(targetPacketRef?: TargetPacketRef): WorkerRoleInput;
+  /** Resolve the service-local role assembly for this worker role. */
+  getWorkerRoleAssembly(): WorkerRoleAssembly | undefined;
 }
 
 /** Result of worker execution. */
@@ -325,6 +331,17 @@ export class WorkerRuntime {
           },
           agent,
         ),
+      buildWorkerRoleInput: (targetPacketRef?: TargetPacketRef): WorkerRoleInput => ({
+        binding,
+        sessionId: session.id,
+        profileId,
+        roleConfig,
+        targetPacketRef,
+      }),
+      getWorkerRoleAssembly: (): WorkerRoleAssembly | undefined =>
+        binding.role === "packet-auditor" || binding.role === "packet_auditor"
+          ? PacketAuditorRoleAssembly
+          : undefined,
     };
   }
 
