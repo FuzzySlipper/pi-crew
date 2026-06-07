@@ -39,6 +39,10 @@ import {
   resolveProfileId,
   resolveRoleConfig,
 } from "./worker-role-config.js";
+import {
+  createWorkerIdleWatchdog,
+  type IdleTimeoutWatchdog,
+} from "./worker-idle-timeout.js";
 import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 
 // ── Worker executor contract ──────────────────────────────────
@@ -178,10 +182,25 @@ export class WorkerRuntime {
     const session = await this.#createWorkerSession(binding, profileId);
     this.#logLifecycle("session_created", binding, { sessionId: session.id });
 
+    const idleWatchdog = createWorkerIdleWatchdog({
+      eventBus: this.#eventBus,
+      workerIdentity: this.#config.workerIdentity,
+      binding,
+      session,
+      profileId,
+      roleConfig,
+    });
+
     // ── Phase 3: Execute worker logic with timeout ──────────
+    idleWatchdog?.start("executing");
     this.#emitTurnStarted(session.id, 1);
 
-    const context = this.#buildContext(binding, session, roleConfig);
+    const context = this.#buildContext(
+      binding,
+      session,
+      roleConfig,
+      idleWatchdog,
+    );
 
     const result = await executeWithAssignmentTimeout({
       executor,
@@ -203,12 +222,15 @@ export class WorkerRuntime {
 
     // ── Phase 4: Build and post completion packet ───────────
     const packet = this.#buildCompletionPacket(binding, result, startedAt);
+    idleWatchdog?.touch("completing");
     await this.#postCompletion(packet);
 
     // ── Phase 5: Release ────────────────────────────────────
     const releaseReason = result.releaseReason ??
       (packet.status === "completed" ? "completed" : "failed");
     this.#emitAssignmentReleased(binding, releaseReason);
+    idleWatchdog?.touch("released");
+    idleWatchdog?.stop();
 
     // ── Phase 6: Archive session, release instance ──────────
     await this.#cleanupSession(session);
@@ -260,12 +282,14 @@ export class WorkerRuntime {
     binding: WorkerBinding,
     session: SessionRecord,
     roleConfig: WorkerRoleConfig | undefined,
+    idleWatchdog?: IdleTimeoutWatchdog,
   ): WorkerExecutionContext {
     return {
       binding,
       session,
       roleConfig,
       emitEvent: (event: GatewayEvent): void => {
+        idleWatchdog?.touchForEvent(event);
         this.#eventBus.emit(event);
       },
       log: (

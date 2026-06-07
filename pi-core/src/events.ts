@@ -125,6 +125,20 @@ export interface ContextPressurePayload {
 export interface WorkerStuckPayload {
   readonly workerIdentity: string;
   readonly assignmentId: number;
+  /** Den correlation IDs for the assignment. */
+  readonly runId?: string;
+  readonly taskId?: string;
+  readonly sessionId?: string;
+  readonly profileId?: string;
+  readonly role?: string;
+  /** ISO timestamp of last worker activity. */
+  readonly lastActivityAt: string;
+  /** Last known lifecycle state (e.g. "executing", "checkpoint_waiting"). */
+  readonly lastLifecycleState: string;
+  /** The idle timeout that was exceeded (ms). */
+  readonly idleTimeoutMs: number;
+  /** True when diagnostics/remediation should surface this local worker/session. */
+  readonly remediationRequired: boolean;
   readonly reason: string;
 }
 

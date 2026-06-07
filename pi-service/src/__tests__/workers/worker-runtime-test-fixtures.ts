@@ -205,15 +205,27 @@ export function makeRoleMapping(): WorkerRoleMappingConfig {
 export function makeTimeoutRoleMapping(
   timeoutMs: number,
 ): WorkerRoleMappingConfig {
+  return makePolicyRoleMapping({ assignmentTimeoutMs: timeoutMs });
+}
+
+export function makeIdleRoleMapping(
+  idleTimeoutMs: number,
+  assignmentTimeoutMs = 30_000,
+): WorkerRoleMappingConfig {
+  return makePolicyRoleMapping({ assignmentTimeoutMs, idleTimeoutMs });
+}
+
+function makePolicyRoleMapping(policy: {
+  readonly assignmentTimeoutMs?: number;
+  readonly idleTimeoutMs?: number;
+}): WorkerRoleMappingConfig {
   return {
     bindings: DEFAULT_WORKER_BINDINGS.map((binding) =>
       binding.role === "coder"
         ? {
             ...binding,
             config: {
-              toolPolicyDefaults: {
-                assignmentTimeoutMs: timeoutMs,
-              },
+              toolPolicyDefaults: policy,
             },
           }
         : binding,
