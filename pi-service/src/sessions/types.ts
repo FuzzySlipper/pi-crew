@@ -26,6 +26,16 @@ export type SessionState = "active" | "idle" | "archived";
 
 // ── Worker binding ──────────────────────────────────────────────
 
+/** Target completion packet reference for validator/auditor worker roles. */
+export interface WorkerTargetPacketRef {
+  /** Den project ID the target packet belongs to. */
+  readonly projectId: string;
+  /** Den task ID the target packet belongs to. */
+  readonly taskId: string;
+  /** Target Den worker run ID; this is not the auditor run. */
+  readonly runId: string;
+}
+
 /**
  * Den-assignment binding carried by worker sessions.
  *
@@ -43,6 +53,8 @@ export interface WorkerBinding {
   readonly projectId: string;
   /** Worker role: "coder" | "reviewer" | "validator" | "packet-auditor". */
   readonly role: string;
+  /** Optional target completion packet for audit/validation roles. */
+  readonly targetPacketRef?: WorkerTargetPacketRef;
 }
 
 // ── Session record ──────────────────────────────────────────────

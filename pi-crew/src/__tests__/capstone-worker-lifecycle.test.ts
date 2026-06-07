@@ -25,7 +25,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { FakeLogger, FakeEventBus } from "@pi-crew/core";
+import {
+  FakeLogger,
+  FakeEventBus,
+  ok,
+  err,
+} from "@pi-crew/core";
 
 import {
   Crew,
@@ -42,6 +47,11 @@ import {
   type AuditEventInput,
   type AuditRow,
 } from "@pi-crew/service";
+import {
+  makePacketReader,
+  makeTargetCompletionPacket,
+  makeTargetPacketRef,
+} from "./capstone-packet-auditor-helpers.js";
 
 // ── Test helpers ──────────────────────────────────────────────
 
@@ -142,12 +152,14 @@ describe("Capstone: Den worker runtime lifecycle", () => {
     expect(assignment.state).toBe("pending");
 
     // ── Build worker binding ────────────────────────────────
+    const targetRunId = "piw_target_capstone";
     const binding: WorkerBinding = {
       assignmentId: assignment.assignmentId,
       runId: assignment.runId,
       taskId: assignment.taskId,
       projectId: "pi-crew",
       role: assignment.role,
+      targetPacketRef: makeTargetPacketRef(targetRunId),
     };
 
     // ── Phase A: Claim assignment (simulated Den API) ───────
@@ -160,7 +172,12 @@ describe("Capstone: Den worker runtime lifecycle", () => {
 
     // ── Phase B: Execute via WorkerRuntime ──────────────────
     const runtime = new WorkerRuntime(
-      { workerIdentity: "pi-worker-capstone" },
+      {
+        workerIdentity: "pi-worker-capstone",
+        packetCompletionReader: makePacketReader(
+          ok(makeTargetCompletionPacket(targetRunId)),
+        ),
+      },
       crew.workerRoleMapping,
       crew.sessionManager,
       crew.instancePool,
@@ -361,16 +378,27 @@ describe("Capstone: Den worker runtime lifecycle", () => {
     });
     denSim.claimAssignment("blocked-assign", "worker-blocked");
 
+    const targetRunId = "run-den-unavailable-target";
     const binding: WorkerBinding = {
       assignmentId: "blocked-assign",
       runId: "run-blocked",
       taskId: "999",
       projectId: "pi-crew",
       role: "packet-auditor",
+      targetPacketRef: makeTargetPacketRef(targetRunId),
     };
 
     const runtime = new WorkerRuntime(
-      { workerIdentity: "worker-blocked" },
+      {
+        workerIdentity: "worker-blocked",
+        packetCompletionReader: makePacketReader(
+          err({
+            code: "den_unavailable",
+            message: "Den Core read failed",
+            retryable: true,
+          }),
+        ),
+      },
       crew.workerRoleMapping,
       crew.sessionManager,
       crew.instancePool,
@@ -383,7 +411,8 @@ describe("Capstone: Den worker runtime lifecycle", () => {
     const packet = await runtime.executeAssignment(binding, new PacketAuditor());
 
     expect(packet).toBeDefined();
-    expect(packet.status).toBe("completed");
+    expect(packet.status).toBe("blocked");
+    expect(packet.blocker?.reason).toBe("den_unavailable");
 
     // Verify completion.posted event was emitted
     const posted = eventBus.emitted.filter(

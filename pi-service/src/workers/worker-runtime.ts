@@ -31,6 +31,7 @@ import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 import { AgentSupervisor, type AgentLike } from "./agent-supervisor.js";
 import { PacketAuditorRoleAssembly } from "./packet-auditor-role-assembly.js";
 import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
+import type { PacketCompletionReader } from "./packet-auditor-workflow.js";
 
 /**
  * A worker executor implements the role-specific logic for a worker
@@ -66,6 +67,10 @@ export interface WorkerExecutionContext {
   buildWorkerRoleInput(targetPacketRef?: TargetPacketRef): WorkerRoleInput;
   /** Resolve the service-local role assembly for this worker role. */
   getWorkerRoleAssembly(): WorkerRoleAssembly | undefined;
+  /** Den/Core reader for roles that audit target completion packets. */
+  readonly packetCompletionReader?: PacketCompletionReader;
+  /** Structured completion poster exposed for specialized workflows. */
+  readonly completionPoster?: CompletionPoster;
 }
 
 /** Result of worker execution. */
@@ -88,6 +93,10 @@ export interface WorkerExecutionResult {
   readonly turnCount?: number;
   /** Execution summary for the completion packet. */
   readonly summary: string;
+  /** Optional exact packet produced by a specialized worker workflow. */
+  readonly completionPacketOverride?: CompletionPacket;
+  /** True when the specialized workflow already called the poster. */
+  readonly completionAlreadyPosted?: boolean;
   /** Optional release reason override for specialized failure paths. */
   readonly releaseReason?: "timeout" | "failed" | "completed";
   /** Blocker details (only when status is "blocked" or "failed"). */
@@ -102,6 +111,8 @@ export interface WorkerExecutionResult {
 export interface WorkerRuntimeConfig {
   /** Identity of this runtime instance. */
   readonly workerIdentity: string;
+  /** Optional Den/Core reader for packet-auditor target completion packets. */
+  readonly packetCompletionReader?: PacketCompletionReader;
 }
 
 /**
@@ -205,7 +216,8 @@ export class WorkerRuntime {
 
     const packet = this.#buildCompletionPacket(binding, result, startedAt);
     idleWatchdog?.touch("completing");
-    await this.#postCompletion(packet);
+    if (result.completionAlreadyPosted) this.#emitCompletionPosted(packet);
+    else await this.#postCompletion(packet);
 
     const releaseReason =
       result.releaseReason ?? (packet.status === "completed" ? "completed" : "failed");
@@ -288,6 +300,8 @@ export class WorkerRuntime {
       roleConfig,
       contextUsageTracker,
       drainModeManager,
+      packetCompletionReader: this.#config.packetCompletionReader,
+      completionPoster: this.#poster,
       contextStatus: (): ContextPressureSnapshot =>
         contextStatusTool(
           contextUsageTracker,
@@ -336,7 +350,7 @@ export class WorkerRuntime {
         sessionId: session.id,
         profileId,
         roleConfig,
-        targetPacketRef,
+        targetPacketRef: targetPacketRef ?? binding.targetPacketRef,
       }),
       getWorkerRoleAssembly: (): WorkerRoleAssembly | undefined =>
         binding.role === "packet-auditor" || binding.role === "packet_auditor"
@@ -369,6 +383,7 @@ export class WorkerRuntime {
     result: WorkerExecutionResult,
     startedAt: number,
   ): CompletionPacket {
+    if (result.completionPacketOverride !== undefined) return result.completionPacketOverride;
     return {
       assignmentId: binding.assignmentId,
       runId: binding.runId,

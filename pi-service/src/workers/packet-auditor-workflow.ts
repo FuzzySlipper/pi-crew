@@ -16,7 +16,6 @@ import type {
 } from "@pi-crew/core";
 import type { CompletionPoster } from "@pi-crew/tools";
 import type { WorkerBinding } from "../sessions/types.js";
-import { PacketAuditor } from "./packet-auditor.js";
 import type { AuditResult } from "./packet-auditor.js";
 import type { TargetPacketRef } from "./worker-role-assembly.js";
 
@@ -44,6 +43,12 @@ export interface PacketCompletionReader {
   ): Promise<Result<CompletionPacket, PacketAuditFetchFailure>>;
 }
 
+/** Pure packet auditor dependency used by the workflow. */
+export interface PacketAuditorLike {
+  /** Validate a fetched completion packet. */
+  auditPacket(packet: CompletionPacket): AuditResult;
+}
+
 /** Input for one packet-auditor supervised workflow pass. */
 export interface PacketAuditWorkflowInput {
   /** Auditor assignment/run/task binding, not the target packet binding. */
@@ -54,8 +59,12 @@ export interface PacketAuditWorkflowInput {
   readonly reader: PacketCompletionReader;
   /** CompletionPoster from #2061 used for structured Den completion. */
   readonly poster: CompletionPoster;
-  /** Optional auditor implementation override for tests. */
-  readonly auditor?: PacketAuditor;
+  /** Auditor implementation used for field-level packet validation. */
+  readonly auditor: PacketAuditorLike;
+  /** Auditor worker session ID for Den-visible correlation evidence. */
+  readonly auditorSessionId: string;
+  /** Auditor profile ID for Den-visible correlation evidence. */
+  readonly auditorProfileId: string;
   /** Clock injection for deterministic tests. */
   readonly now?: () => string;
 }
@@ -106,8 +115,7 @@ export async function runPacketAuditWorkflow(
     };
   }
 
-  const auditor = input.auditor ?? new PacketAuditor();
-  const auditResult = auditor.auditPacket(fetched.value);
+  const auditResult = input.auditor.auditPacket(fetched.value);
   const completionPacket = buildAuditCompletionPacket(
     input,
     auditResult,
@@ -147,7 +155,7 @@ function buildAuditCompletionPacket(
       {
         type: "audit_context",
         ref: `session/${input.auditorBinding.projectId}/${input.auditorBinding.runId}`,
-        summary: `session=${input.auditorBinding.assignmentId}; profile/session supplied by WorkerRoleInput`,
+        summary: `session=${input.auditorSessionId}; profile=${input.auditorProfileId}; assignment=${input.auditorBinding.assignmentId}`,
       },
     ],
     filesTouched: [],

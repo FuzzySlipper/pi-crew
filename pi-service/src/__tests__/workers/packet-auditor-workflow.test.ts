@@ -18,6 +18,7 @@ import type {
 import { err, ok } from "@pi-crew/core";
 import type { CompletionPoster } from "@pi-crew/tools";
 import type { WorkerBinding } from "../../sessions/types.js";
+import { PacketAuditor } from "../../workers/packet-auditor.js";
 import type {
   PacketAuditFetchFailure,
   PacketCompletionReader,
@@ -95,6 +96,9 @@ describe("runPacketAuditWorkflow", () => {
       targetPacketRef: makeTargetRef(),
       reader: makeReader(ok(makeCompletionPacket())),
       poster: capturePoster(posted),
+      auditor: new PacketAuditor(),
+      auditorSessionId: "session-audit-01",
+      auditorProfileId: "packet-auditor",
       now: () => "2026-06-07T10:20:00.000Z",
     });
 
@@ -131,6 +135,9 @@ describe("runPacketAuditWorkflow", () => {
       targetPacketRef: makeTargetRef(),
       reader: makeReader(ok(malformed)),
       poster: capturePoster(posted),
+      auditor: new PacketAuditor(),
+      auditorSessionId: "session-audit-01",
+      auditorProfileId: "packet-auditor",
       now: () => "2026-06-07T10:20:01.000Z",
     });
 
@@ -154,6 +161,9 @@ describe("runPacketAuditWorkflow", () => {
       targetPacketRef: makeTargetRef(),
       reader: makeReader(err(failure)),
       poster: capturePoster(posted),
+      auditor: new PacketAuditor(),
+      auditorSessionId: "session-audit-01",
+      auditorProfileId: "packet-auditor",
       now: () => "2026-06-07T10:20:02.000Z",
     });
 
@@ -178,6 +188,9 @@ describe("runPacketAuditWorkflow", () => {
       targetPacketRef: makeTargetRef(),
       reader: makeReader(err(failure)),
       poster: capturePoster(posted),
+      auditor: new PacketAuditor(),
+      auditorSessionId: "session-audit-01",
+      auditorProfileId: "packet-auditor",
       now: () => "2026-06-07T10:20:03.000Z",
     });
 
@@ -202,6 +215,9 @@ describe("runPacketAuditWorkflow", () => {
       targetPacketRef: makeTargetRef(),
       reader: makeReader(err(failure)),
       poster: capturePoster(posted),
+      auditor: new PacketAuditor(),
+      auditorSessionId: "session-audit-01",
+      auditorProfileId: "packet-auditor",
       now: () => "2026-06-07T10:20:04.000Z",
     });
 

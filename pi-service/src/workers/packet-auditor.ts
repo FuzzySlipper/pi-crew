@@ -37,6 +37,7 @@ import type {
   WorkerExecutionContext,
   WorkerExecutionResult,
 } from "./worker-runtime.js";
+import { runPacketAuditWorkflow } from "./packet-auditor-workflow.js";
 
 // ── Audit result types ────────────────────────────────────────
 
@@ -180,84 +181,114 @@ export class PacketAuditor implements WorkerExecutor {
     context: WorkerExecutionContext,
   ): Promise<WorkerExecutionResult> {
     const turnStartedAt = Date.now();
-    context.emitEvent({
-      event: "turn.started",
-      payload: {
-        ...{
-          assignmentId: context.binding.assignmentId,
-          runId: context.binding.runId,
-          taskId: context.binding.taskId,
-          profileId: context.session.profileId,
-        },
-        sessionId: context.session.id,
-        turnNumber: 1,
-      },
-    });
-
-    context.log("info", "PacketAuditor starting validation");
+    this.emitTurnStarted(context);
+    context.log("info", "PacketAuditor starting Den-backed validation");
 
     const assembly = context.getWorkerRoleAssembly();
+    const assemblyInput = context.buildWorkerRoleInput();
     if (assembly !== undefined) {
-      const assemblyInput = context.buildWorkerRoleInput();
       await context.writeAudit("packet_auditor.role_assembly.selected", {
         role: assembly.role,
         sessionId: assemblyInput.sessionId,
         profileId: assemblyInput.profileId,
+        targetPacketRef: assemblyInput.targetPacketRef,
         mcpToolSets: assembly.selectMcpToolSets(assemblyInput),
         drainEssentialTools: assembly.drainEssentialTools(assemblyInput),
       });
     }
 
-    // Use the exported test-packet factory for backward compat.
-    // The PacketAuditorRoleAssembly path uses Den-fetched packets.
-    const testPackets = buildAuditorTestPackets(context.binding);
-
-    const results: AuditResult[] = [];
-    for (const packet of testPackets) {
-      const result = this.auditPacket(packet);
-      results.push(result);
-
-      await context.writeAudit("packet.audited", {
-        assignmentId: packet.assignmentId,
-        runId: packet.runId,
-        valid: result.valid,
-        findingCount: result.findings.length,
-      });
+    const targetPacketRef = assemblyInput.targetPacketRef;
+    const reader = context.packetCompletionReader;
+    const poster = context.completionPoster;
+    if (targetPacketRef === undefined || reader === undefined || poster === undefined) {
+      this.emitTurnCompleted(context, turnStartedAt);
+      return this.buildMissingDenTargetResult(context, targetPacketRef !== undefined);
     }
 
-    const validCount = results.filter((r) => r.valid).length;
-    const invalidCount = results.filter((r) => !r.valid).length;
+    const workflow = await runPacketAuditWorkflow({
+      auditorBinding: context.binding,
+      targetPacketRef,
+      reader,
+      poster,
+      auditor: this,
+      auditorSessionId: context.session.id,
+      auditorProfileId: context.session.profileId,
+    });
+    await context.writeAudit("packet.audited", {
+      targetRunId: targetPacketRef.runId,
+      targetTaskId: targetPacketRef.taskId,
+      valid: workflow.auditResult?.valid ?? false,
+      findingCount: workflow.auditResult?.findings.length ?? 0,
+      fetchFailure: workflow.fetchFailure?.code,
+    });
+    this.emitTurnCompleted(context, turnStartedAt);
 
-    context.log("info", `Audit complete: ${String(validCount)} valid, ${String(invalidCount)} invalid`);
+    return {
+      status: workflow.completionPacket.status,
+      artifacts: workflow.completionPacket.artifacts,
+      filesTouched: workflow.completionPacket.filesTouched,
+      toolsUsed: workflow.completionPacket.toolsUsed,
+      tokensConsumed: workflow.completionPacket.tokensConsumed,
+      turnCount: workflow.completionPacket.turnCount,
+      summary: workflow.auditResult?.summary ?? workflow.fetchFailure?.message ?? "Packet audit complete",
+      blocker: workflow.completionPacket.blocker,
+      completionPacketOverride: workflow.completionPacket,
+      completionAlreadyPosted: true,
+    };
+  }
+
+  private emitTurnStarted(context: WorkerExecutionContext): void {
+    context.emitEvent({
+      event: "turn.started",
+      payload: {
+        assignmentId: context.binding.assignmentId,
+        runId: context.binding.runId,
+        taskId: context.binding.taskId,
+        profileId: context.session.profileId,
+        sessionId: context.session.id,
+        turnNumber: 1,
+      },
+    });
+  }
+
+  private emitTurnCompleted(
+    context: WorkerExecutionContext,
+    turnStartedAt: number,
+  ): void {
     context.emitEvent({
       event: "turn.completed",
       payload: {
-        ...{
-          assignmentId: context.binding.assignmentId,
-          runId: context.binding.runId,
-          taskId: context.binding.taskId,
-          profileId: context.session.profileId,
-        },
+        assignmentId: context.binding.assignmentId,
+        runId: context.binding.runId,
+        taskId: context.binding.taskId,
+        profileId: context.session.profileId,
         sessionId: context.session.id,
         turnNumber: 1,
         durationMs: Date.now() - turnStartedAt,
       },
     });
+  }
 
+  private buildMissingDenTargetResult(
+    context: WorkerExecutionContext,
+    hasTargetRef: boolean,
+  ): WorkerExecutionResult {
+    const reason = hasTargetRef
+      ? "packet_auditor_missing_den_reader_or_poster"
+      : "packet_auditor_missing_target_packet_ref";
     return {
-      status: invalidCount === 0 ? "completed" : "completed",
-      artifacts: [
-        {
-          type: "audit_report",
-          ref: `audit-${context.binding.runId}`,
-          summary: `Packet audit: ${String(validCount)}/${String(results.length)} packets valid. ${String(invalidCount)} with missing fields.`,
-        },
-      ],
+      status: "blocked",
+      artifacts: [{ type: "audit_setup_failure", ref: `assignment/${context.binding.assignmentId}`, summary: reason }],
       filesTouched: [],
       toolsUsed: ["packet-auditor"],
-      tokensConsumed: 150,
+      tokensConsumed: 0,
       turnCount: 1,
-      summary: results.map((r) => r.summary).join("\n"),
+      summary: reason,
+      blocker: {
+        reason,
+        requires: "dependency",
+        details: "PacketAuditor requires a targetPacketRef plus PacketCompletionReader and CompletionPoster dependencies.",
+      },
     };
   }
 

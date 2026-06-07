@@ -135,3 +135,7 @@ export {
   type AuditFinding,
   type AuditResult,
 } from "./workers/packet-auditor.js";
+export {
+  type PacketAuditFetchFailure,
+  type PacketCompletionReader,
+} from "./workers/packet-auditor-workflow.js";

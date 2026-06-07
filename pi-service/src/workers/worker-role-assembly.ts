@@ -22,7 +22,7 @@ import type {
   BeforeToolCallContext,
   AfterToolCallContext,
 } from "@earendil-works/pi-agent-core";
-import type { WorkerBinding } from "../sessions/types.js";
+import type { WorkerBinding, WorkerTargetPacketRef } from "../sessions/types.js";
 import type { WorkerRoleConfig } from "./worker-role-config.js";
 
 // ── Input ────────────────────────────────────────────────────────
@@ -55,14 +55,7 @@ export interface WorkerRoleInput {
 }
 
 /** A Den packet reference that a role assembly can use to assemble audit/validation context. */
-export interface TargetPacketRef {
-  /** Den project ID the packet belongs to. */
-  readonly projectId: string;
-  /** Den task ID the packet belongs to. */
-  readonly taskId: string;
-  /** Den worker run ID (the packet's run, not the auditor's). */
-  readonly runId: string;
-}
+export interface TargetPacketRef extends WorkerTargetPacketRef {}
 
 // ── Hooks ────────────────────────────────────────────────────────
 
