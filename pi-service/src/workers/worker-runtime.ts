@@ -9,6 +9,10 @@
  * logic) so it remains role-agnostic. The packet-auditor is one such
  * executor.
  *
+ * Worker role→profile resolution is now driven by an injected
+ * {@link WorkerRoleMappingConfig} instead of a v1 hardcoded switch.
+ * See {@link worker-role-config.ts} for the schema and loaders.
+ *
  * @module pi-service/workers/worker-runtime
  */
 
@@ -29,6 +33,12 @@ import type {
   SessionRecord,
 } from "../sessions/types.js";
 import type { AuditRepository } from "../persistence/types.js";
+import {
+  type WorkerRoleConfig,
+  type WorkerRoleMappingConfig,
+  resolveProfileId,
+  resolveRoleConfig,
+} from "./worker-role-config.js";
 
 // ── Worker executor contract ──────────────────────────────────
 
@@ -47,6 +57,8 @@ export interface WorkerExecutionContext {
   readonly binding: WorkerBinding;
   /** The session record for this worker. */
   readonly session: SessionRecord;
+  /** Role-specific runtime config resolved from injected mapping. */
+  readonly roleConfig?: WorkerRoleConfig;
   /** Emit an event on the gateway bus. */
   emitEvent(event: GatewayEvent): void;
   /** Log a message with the worker's correlation context. */
@@ -100,9 +112,14 @@ export interface WorkerRuntimeConfig {
  * 4. Posts a structured CompletionPacket.
  * 5. Releases the assignment (emits assignment.released).
  * 6. Archives the worker session.
+ *
+ * Role-to-profile resolution is handled via the injected
+ * {@link WorkerRoleMappingConfig}, validated at construction
+ * time (no duplicate roles, at least one binding required).
  */
 export class WorkerRuntime {
   readonly #config: WorkerRuntimeConfig;
+  readonly #roleMapping: WorkerRoleMappingConfig;
   readonly #sessionManager: SessionManager;
   readonly #eventBus: EventBus;
   readonly #logger: Logger;
@@ -111,6 +128,7 @@ export class WorkerRuntime {
 
   constructor(
     config: WorkerRuntimeConfig,
+    roleMapping: WorkerRoleMappingConfig,
     sessionManager: SessionManager,
     pool: InstancePool,
     eventBus: EventBus,
@@ -120,6 +138,7 @@ export class WorkerRuntime {
   ) {
     void pool; // retained for future policy checks, kept in signature for composition
     this.#config = config;
+    this.#roleMapping = roleMapping;
     this.#sessionManager = sessionManager;
     this.#eventBus = eventBus;
     this.#logger = logger;
@@ -135,7 +154,8 @@ export class WorkerRuntime {
     executor: WorkerExecutor,
   ): Promise<CompletionPacket> {
     const startedAt = Date.now();
-    const profileId = this.#resolveProfileId(binding.role);
+    const profileId = resolveProfileId(this.#roleMapping, binding.role);
+    const roleConfig = resolveRoleConfig(this.#roleMapping, binding.role);
 
     // ── Phase 1: Claim ──────────────────────────────────────
     this.#logLifecycle("claiming", binding);
@@ -148,7 +168,7 @@ export class WorkerRuntime {
     // ── Phase 3: Execute worker logic ───────────────────────
     this.#emitTurnStarted(session.id, 1);
 
-    const context = this.#buildContext(binding, session);
+    const context = this.#buildContext(binding, session, roleConfig);
     let result: WorkerExecutionResult;
 
     try {
@@ -258,10 +278,12 @@ export class WorkerRuntime {
   #buildContext(
     binding: WorkerBinding,
     session: SessionRecord,
+    roleConfig: WorkerRoleConfig | undefined,
   ): WorkerExecutionContext {
     return {
       binding,
       session,
+      roleConfig,
       emitEvent: (event: GatewayEvent): void => {
         this.#eventBus.emit(event);
       },
@@ -372,22 +394,7 @@ export class WorkerRuntime {
     });
   }
 
-  // ── Internal: helpers ────────────────────────────────────────
-
-  #resolveProfileId(role: string): string {
-    switch (role) {
-      case "packet-auditor":
-        return "packet-auditor";
-      case "coder":
-        return "spawned-coder";
-      case "reviewer":
-        return "spawned-reviewer";
-      case "validator":
-        return "spawned-validator";
-      default:
-        return `worker-${role}`;
-    }
-  }
+  // ── Internal: lifecycle logging ───────────────────────────────
 
   #logLifecycle(
     phase: string,
@@ -406,5 +413,14 @@ export class WorkerRuntime {
 
   get workerIdentity(): string {
     return this.#config.workerIdentity;
+  }
+
+  /**
+   * The injected worker role mapping used for profile resolution.
+   * Exposed for test inspection — production code should use
+   * {@link resolveProfileId} / {@link resolveRoleConfig} instead.
+   */
+  get roleMapping(): WorkerRoleMappingConfig {
+    return this.#roleMapping;
   }
 }

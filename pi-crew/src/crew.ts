@@ -36,8 +36,11 @@ import {
   RuntimeDb,
   SqliteAuditRepository,
   SqliteSessionRepository,
+  WorkerRoleMappingConfigSchema,
+  DEFAULT_WORKER_ROLE_BINDINGS,
   type GatewayConfig,
   type ServiceRegistry,
+  type WorkerRoleMappingConfig,
 } from "@pi-crew/service";
 
 import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
@@ -90,6 +93,9 @@ export const CrewConfigSchema = z.object({
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
+  workers: WorkerRoleMappingConfigSchema.default({
+    bindings: DEFAULT_WORKER_ROLE_BINDINGS,
+  }),
 });
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;
@@ -136,6 +142,7 @@ export class Crew {
   readonly #gateway: Gateway;
   readonly #runtimeDb: RuntimeDb;
   readonly #auditRepository: SqliteAuditRepository;
+  readonly #workerRoleMapping: WorkerRoleMappingConfig;
 
   readonly #channelProvider: ChannelProvider;
   readonly #mcpClient: MCPClient;
@@ -161,6 +168,13 @@ export class Crew {
     // runtime routing. Rationale: SessionManager should receive policy, not
     // own global profile loading or magic fallback identifiers.
     loadProfile(config.sessions.fallbackProfileId);
+
+    // DESIGN: The worker role mapping is validated at config-parse time
+    // (duplicate roles rejected, at least one binding required, every
+    // role + profileId must be non-empty). Store it so callers can
+    // inject it into WorkerRuntime instead of relying on a hardcoded
+    // role-to-profile switch.
+    this.#workerRoleMapping = config.workers;
 
     // 1. Infrastructure
     this.#logger = logger ?? new FakeLogger();
@@ -438,6 +452,16 @@ export class Crew {
 
   get toolPolicyEnforcer(): ToolPolicyEnforcer {
     return this.#toolPolicyEnforcer;
+  }
+
+  /**
+   * The validated worker role mapping for injecting into WorkerRuntime.
+   *
+   * Replaces the v1 hardcoded role-to-profile switch. Validated at
+   * config-parse time (no duplicate roles, at least one binding).
+   */
+  get workerRoleMapping(): WorkerRoleMappingConfig {
+    return this.#workerRoleMapping;
   }
 }
 

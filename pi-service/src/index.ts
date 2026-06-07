@@ -117,6 +117,19 @@ export {
   type WorkerExecutionResult,
 } from "./workers/worker-runtime.js";
 export {
+  type WorkerRoleBinding,
+  type WorkerRoleConfig,
+  type WorkerRoleMappingConfig,
+  type RoleToolPolicy,
+  REQUIRED_WORKER_ROLES,
+  DEFAULT_WORKER_ROLE_BINDINGS,
+  WorkerRoleBindingSchema,
+  WorkerRoleMappingConfigSchema,
+  loadWorkerRoleMapping,
+  resolveProfileId,
+  resolveRoleConfig,
+} from "./workers/worker-role-config.js";
+export {
   PacketAuditor,
   type AuditFinding,
   type AuditResult,

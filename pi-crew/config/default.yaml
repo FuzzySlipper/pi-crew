@@ -127,6 +127,25 @@ toolPolicy:
   # Explicitly denied hosts.
   deniedHosts: []
 
+# ── Worker role→profile mappings ─────────────────────────────────
+# Maps Den worker roles to profile IDs. WorkerRuntime resolves
+# profileId through this config instead of a hardcoded switch.
+# Validated at startup: duplicate roles are rejected.
+workers:
+  bindings:
+    - role: "packet-auditor"
+      profileId: "packet-auditor"
+    - role: "packet_auditor"
+      profileId: "packet-auditor"
+    - role: "coder"
+      profileId: "spawned-coder"
+    - role: "reviewer"
+      profileId: "spawned-reviewer"
+    - role: "validator"
+      profileId: "spawned-validator"
+    - role: "drift_checker"
+      profileId: "worker-drift_checker"
+
 # ── Cron (DEFERRED — not required for this task) ──────────────────
 # cron:
 #   # Future cron integration hook.

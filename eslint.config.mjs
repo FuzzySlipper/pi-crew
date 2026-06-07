@@ -23,6 +23,7 @@ export default tseslint.config(
       "**/vitest.config.ts",
       "vitest.config.ts",
       "eslint.config.mjs",
+      "spikes/**",
     ],
   },
 );

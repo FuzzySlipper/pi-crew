@@ -161,6 +161,7 @@ describe("Capstone: Den worker runtime lifecycle", () => {
     // ── Phase B: Execute via WorkerRuntime ──────────────────
     const runtime = new WorkerRuntime(
       { workerIdentity: "pi-worker-capstone" },
+      crew.workerRoleMapping,
       crew.sessionManager,
       crew.instancePool,
       eventBus,
@@ -290,6 +291,7 @@ describe("Capstone: Den worker runtime lifecycle", () => {
 
     const runtime1 = new WorkerRuntime(
       { workerIdentity: "worker-1" },
+      crew.workerRoleMapping,
       crew.sessionManager,
       crew.instancePool,
       eventBus,
@@ -369,6 +371,7 @@ describe("Capstone: Den worker runtime lifecycle", () => {
 
     const runtime = new WorkerRuntime(
       { workerIdentity: "worker-blocked" },
+      crew.workerRoleMapping,
       crew.sessionManager,
       crew.instancePool,
       eventBus,
