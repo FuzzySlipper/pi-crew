@@ -5,6 +5,15 @@ import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import { WorkerRuntime, type WorkerExecutor } from "../../workers/worker-runtime.js";
 import type { AgentLike } from "../../workers/agent-supervisor.js";
+import type {
+  AgentTool,
+  AgentToolResult,
+  BeforeToolCallContext,
+  BeforeToolCallResult,
+  AfterToolCallContext,
+  AfterToolCallResult,
+} from "../../workers/guarded-tool-types.js";
+import type { WorkerRoleMappingConfig } from "../../workers/worker-role-config.js";
 import {
   FakeAuditRepo,
   FakeSessionManager,
@@ -45,6 +54,81 @@ class FakeAgent implements AgentLike {
       }
     }
   }
+}
+
+class FakeGuardedAgent extends FakeAgent {
+  beforeToolCall?: (
+    context: BeforeToolCallContext,
+    signal?: AbortSignal,
+  ) => Promise<BeforeToolCallResult | undefined>;
+  afterToolCall?: (
+    context: AfterToolCallContext,
+    signal?: AbortSignal,
+  ) => Promise<AfterToolCallResult | undefined>;
+  readonly rawToolCalls: Array<{
+    readonly toolCallId: string;
+    readonly params: unknown;
+  }> = [];
+  override readonly state = {
+    tools: [this.makeDangerousTool()],
+  };
+
+  async runToolCallThroughAgentPath(toolName: string): Promise<AgentToolResult> {
+    const tool = this.state.tools.find((candidate) => candidate.name === toolName);
+    if (tool === undefined) {
+      return { content: [{ type: "text", text: "missing tool" }], details: {} };
+    }
+
+    const hookContext: BeforeToolCallContext = {
+      toolCall: { type: "function", id: "call-guarded", name: toolName, input: {} },
+      args: {},
+    };
+    const beforeResult = await this.beforeToolCall?.(hookContext);
+    if (beforeResult?.block) {
+      return {
+        content: [{ type: "text", text: beforeResult.reason ?? "Tool execution was blocked" }],
+        details: { blocked: true },
+      };
+    }
+
+    return tool.execute("call-guarded", {});
+  }
+
+  private makeDangerousTool(): AgentTool {
+    return {
+      label: "Dangerous tool",
+      name: "dangerous_tool",
+      description: "A fake side-effecting tool",
+      parameters: {},
+      execute: (toolCallId: string, params: unknown): Promise<AgentToolResult> => {
+        this.rawToolCalls.push({ toolCallId, params });
+        return Promise.resolve({
+          content: [{ type: "text", text: "dangerous executed" }],
+          details: { executed: true },
+        });
+      },
+    };
+  }
+}
+
+function makeDeniedToolRoleMapping(): WorkerRoleMappingConfig {
+  const base = makeRoleMapping();
+  return {
+    bindings: base.bindings.map((binding) =>
+      binding.role === "coder"
+        ? {
+            ...binding,
+            config: {
+              ...binding.config,
+              toolPolicyDefaults: {
+                ...binding.config?.toolPolicyDefaults,
+                deniedTools: ["dangerous_tool"],
+              },
+            },
+          }
+        : binding,
+    ),
+  };
 }
 
 function turnStart(): AgentEvent {
@@ -142,6 +226,59 @@ describe("WorkerRuntime AgentSupervisor wiring", () => {
         });
       },
     });
+  });
+
+  it("installs guarded hooks and tool wrappers on the supervised Agent path", async () => {
+    const bus = new FakeEventBus();
+    const agent = new FakeGuardedAgent();
+    const executor: WorkerExecutor = {
+      async execute(context) {
+        const supervisor = context.createAgentSupervisor(agent);
+        expect(agent.beforeToolCall).toBeDefined();
+        expect(agent.afterToolCall).toBeDefined();
+
+        const result = await agent.runToolCallThroughAgentPath("dangerous_tool");
+        const text = result.content.find((block) => block.type === "text")?.text;
+        expect(text).toContain("denied");
+        expect(agent.rawToolCalls).toHaveLength(0);
+
+        const wrappedTool = agent.state.tools[0];
+        if (wrappedTool === undefined) {
+          throw new Error("expected guarded tool");
+        }
+        const wrapperResult = await wrappedTool.execute("call-wrapper", {});
+        const wrapperText = wrapperResult.content.find((block) => block.type === "text")?.text;
+        expect(wrapperText).toContain("dangerous_tool");
+        expect(agent.rawToolCalls).toHaveLength(0);
+
+        supervisor.stop();
+        return {
+          status: "completed",
+          artifacts: [],
+          filesTouched: [],
+          toolsUsed: agent.state.tools.map((tool) => tool.name),
+          tokensConsumed: 0,
+          summary: "guarded-agent",
+          turnCount: supervisor.turnCount,
+        };
+      },
+    };
+
+    const runtime = new WorkerRuntime(
+      { workerIdentity: "test-worker" },
+      makeDeniedToolRoleMapping(),
+      new FakeSessionManager(),
+      makeFakePool(),
+      bus,
+      new FakeLogger(),
+      new FakeAuditRepo(),
+      makeAcceptingPoster(),
+    );
+
+    await runtime.executeAssignment(makeBinding(), executor);
+    const deniedEvents = bus.emitted.filter((event) => event.event === "tool.denied");
+    expect(deniedEvents).toHaveLength(2);
+    expect(deniedEvents[0]?.payload.assignmentId).toBe("101");
   });
 
   it("lets executors bridge Agent events with Den correlation and packet turn count", async () => {

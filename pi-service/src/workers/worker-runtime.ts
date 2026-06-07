@@ -33,6 +33,7 @@ import { PacketAuditorRoleAssembly } from "./packet-auditor-role-assembly.js";
 import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
 import type { PacketCompletionReader } from "./packet-auditor-workflow.js";
 import { buildGuardedToolContext } from "./guarded-tool-context-factory.js";
+import { installGuardedAgentRuntime } from "./guarded-agent-installer.js";
 import type {
   AgentTool,
   BeforeToolCallContext,
@@ -310,6 +311,15 @@ export class WorkerRuntime {
     for (const tool of roleConfig?.drainEssentialTools ?? []) {
       drainModeManager.addEssentialTool(tool);
     }
+    const guardedToolContext = buildGuardedToolContext(
+      binding,
+      session,
+      profileId,
+      roleConfig,
+      supervisorEventBus,
+      this.#logger,
+    );
+
     return {
       binding,
       session,
@@ -347,8 +357,9 @@ export class WorkerRuntime {
           eventData: data,
         });
       },
-      createAgentSupervisor: (agent: AgentLike): AgentSupervisor =>
-        new AgentSupervisor(
+      createAgentSupervisor: (agent: AgentLike): AgentSupervisor => {
+        installGuardedAgentRuntime(agent, guardedToolContext, null);
+        return new AgentSupervisor(
           {
             binding,
             sessionId: session.id,
@@ -360,7 +371,8 @@ export class WorkerRuntime {
             drainManager: drainModeManager,
           },
           agent,
-        ),
+        );
+      },
       buildWorkerRoleInput: (targetPacketRef?: TargetPacketRef): WorkerRoleInput => ({
         binding,
         sessionId: session.id,
@@ -372,10 +384,7 @@ export class WorkerRuntime {
         binding.role === "packet-auditor" || binding.role === "packet_auditor"
           ? PacketAuditorRoleAssembly
           : undefined,
-      ...buildGuardedToolContext(
-        binding, session, profileId, roleConfig,
-        supervisorEventBus, this.#logger,
-      ),
+      ...guardedToolContext,
     };
   }
 
