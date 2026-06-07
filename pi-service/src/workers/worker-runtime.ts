@@ -39,6 +39,7 @@ import {
   resolveProfileId,
   resolveRoleConfig,
 } from "./worker-role-config.js";
+import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 
 // ── Worker executor contract ──────────────────────────────────
 
@@ -59,6 +60,8 @@ export interface WorkerExecutionContext {
   readonly session: SessionRecord;
   /** Role-specific runtime config resolved from injected mapping. */
   readonly roleConfig?: WorkerRoleConfig;
+  /** AbortSignal for cooperative cancellation (timeout, drain, etc.). */
+  readonly signal?: AbortSignal;
   /** Emit an event on the gateway bus. */
   emitEvent(event: GatewayEvent): void;
   /** Log a message with the worker's correlation context. */
@@ -85,6 +88,8 @@ export interface WorkerExecutionResult {
   readonly tokensConsumed: number;
   /** Execution summary for the completion packet. */
   readonly summary: string;
+  /** Optional release reason override for specialized failure paths. */
+  readonly releaseReason?: "timeout" | "failed" | "completed";
   /** Blocker details (only when status is "blocked" or "failed"). */
   readonly blocker?: {
     readonly reason: string;
@@ -108,7 +113,8 @@ export interface WorkerRuntimeConfig {
  *
  * 1. Claims the assignment (emits assignment.claimed).
  * 2. Creates a fresh worker session with WorkerBinding.
- * 3. Executes the worker logic via the injected executor.
+ * 3. Executes the worker logic via the injected executor with
+ *    a hard assignment-duration timeout.
  * 4. Posts a structured CompletionPacket.
  * 5. Releases the assignment (emits assignment.released).
  * 6. Archives the worker session.
@@ -116,6 +122,10 @@ export interface WorkerRuntimeConfig {
  * Role-to-profile resolution is handled via the injected
  * {@link WorkerRoleMappingConfig}, validated at construction
  * time (no duplicate roles, at least one binding required).
+ *
+ * On timeout, the runtime stops executor work, posts structured
+ * failure evidence with correlation IDs, and ensures no orphaned
+ * local worker session remains.
  */
 export class WorkerRuntime {
   readonly #config: WorkerRuntimeConfig;
@@ -148,6 +158,10 @@ export class WorkerRuntime {
 
   /**
    * Execute the full worker lifecycle for an assignment.
+   *
+   * Enforces a hard assignment-duration timer from claim/start.
+   * On timeout, stops executor work, posts failure evidence,
+   * and releases the assignment with reason `"timeout"`.
    */
   async executeAssignment(
     binding: WorkerBinding,
@@ -157,7 +171,6 @@ export class WorkerRuntime {
     const profileId = resolveProfileId(this.#roleMapping, binding.role);
     const roleConfig = resolveRoleConfig(this.#roleMapping, binding.role);
 
-    // ── Phase 1: Claim ──────────────────────────────────────
     this.#logLifecycle("claiming", binding);
     this.#emitAssignmentClaimed(binding);
 
@@ -165,68 +178,36 @@ export class WorkerRuntime {
     const session = await this.#createWorkerSession(binding, profileId);
     this.#logLifecycle("session_created", binding, { sessionId: session.id });
 
-    // ── Phase 3: Execute worker logic ───────────────────────
+    // ── Phase 3: Execute worker logic with timeout ──────────
     this.#emitTurnStarted(session.id, 1);
 
     const context = this.#buildContext(binding, session, roleConfig);
-    let result: WorkerExecutionResult;
 
-    try {
-      result = await executor.execute(context);
-    } catch (error: unknown) {
-      const errMsg = (error as Error).message;
-      this.#logLifecycle("execution_failed", binding, { error: errMsg });
-      result = {
-        status: "failed",
-        artifacts: [],
-        filesTouched: [],
-        toolsUsed: [],
-        tokensConsumed: 0,
-        summary: `Worker execution failed: ${errMsg}`,
-        blocker: {
-          reason: errMsg,
-          requires: "human",
-          details: (error as Error).stack ?? errMsg,
-        },
-      };
-    }
-
-    this.#emitTurnCompleted(session.id, 1, Date.now() - startedAt);
+    const result = await executeWithAssignmentTimeout({
+      executor,
+      context,
+      binding,
+      session,
+      profileId,
+      roleConfig,
+      startedAt,
+      eventBus: this.#eventBus,
+      logLifecycle: (
+        phase: string,
+        target: WorkerBinding | null,
+        extra?: Record<string, unknown>,
+      ): void => {
+        this.#logLifecycle(phase, target, extra);
+      },
+    });
 
     // ── Phase 4: Build and post completion packet ───────────
     const packet = this.#buildCompletionPacket(binding, result, startedAt);
-
-    if (this.#poster) {
-      try {
-        const postResult = await postStructuredCompletion(
-          packet,
-          this.#poster,
-          this.#eventBus,
-          this.#logger,
-        );
-        this.#logger.info("WorkerRuntime: completion posted to Den", {
-          assignmentId: packet.assignmentId,
-          runId: packet.runId,
-          accepted: postResult.accepted,
-        });
-      } catch (err: unknown) {
-        // postStructuredCompletion may throw on validation failure.
-        // Emit the event ourselves and continue — the poster already
-        // handles Den-unavailability internally (fail-closed).
-        this.#logger.error("WorkerRuntime: completion post threw", {
-          assignmentId: packet.assignmentId,
-          runId: packet.runId,
-          error: (err as Error).message,
-        });
-        this.#emitCompletionPosted(packet);
-      }
-    } else {
-      this.#emitCompletionPosted(packet);
-    }
+    await this.#postCompletion(packet);
 
     // ── Phase 5: Release ────────────────────────────────────
-    const releaseReason =
-      packet.status === "completed" ? "completed" : "failed";
+    const releaseReason = result.releaseReason ??
+      (packet.status === "completed" ? "completed" : "failed");
     this.#emitAssignmentReleased(binding, releaseReason);
 
     // ── Phase 6: Archive session, release instance ──────────
@@ -349,6 +330,38 @@ export class WorkerRuntime {
     });
   }
 
+  // ── Internal: completion posting ─────────────────────────────
+
+  async #postCompletion(packet: CompletionPacket): Promise<void> {
+    if (this.#poster) {
+      try {
+        const postResult = await postStructuredCompletion(
+          packet,
+          this.#poster,
+          this.#eventBus,
+          this.#logger,
+        );
+        this.#logger.info("WorkerRuntime: completion posted to Den", {
+          assignmentId: packet.assignmentId,
+          runId: packet.runId,
+          accepted: postResult.accepted,
+        });
+      } catch (err: unknown) {
+        // postStructuredCompletion may throw on validation failure.
+        // Emit the event ourselves and continue — the poster already
+        // handles Den-unavailability internally (fail-closed).
+        this.#logger.error("WorkerRuntime: completion post threw", {
+          assignmentId: packet.assignmentId,
+          runId: packet.runId,
+          error: (err as Error).message,
+        });
+        this.#emitCompletionPosted(packet);
+      }
+    } else {
+      this.#emitCompletionPosted(packet);
+    }
+  }
+
   // ── Internal: release ────────────────────────────────────────
 
   #emitAssignmentReleased(
@@ -380,17 +393,6 @@ export class WorkerRuntime {
     this.#eventBus.emit({
       event: "turn.started",
       payload: { sessionId, turnNumber },
-    });
-  }
-
-  #emitTurnCompleted(
-    sessionId: string,
-    turnNumber: number,
-    durationMs: number,
-  ): void {
-    this.#eventBus.emit({
-      event: "turn.completed",
-      payload: { sessionId, turnNumber, durationMs },
     });
   }
 

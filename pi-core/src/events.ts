@@ -67,6 +67,19 @@ export interface AssignmentReleasedPayload {
   readonly reason: string;
 }
 
+/** Fired when a worker assignment exceeds its duration timeout. */
+export interface AssignmentTimedOutPayload {
+  readonly assignmentId: number;
+  readonly runId: string;
+  readonly taskId: string;
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly role: string;
+  readonly timeoutMs: number;
+  readonly elapsedMs: number;
+  readonly reason: string;
+}
+
 /** Fired when a turn (agent reasoning step) begins. */
 export interface TurnStartedPayload {
   readonly sessionId: string;
@@ -197,6 +210,7 @@ export type GatewayEvent =
   | { event: "blackboard.written"; payload: BlackboardWrittenPayload }
   | { event: "assignment.claimed"; payload: AssignmentClaimedPayload }
   | { event: "assignment.released"; payload: AssignmentReleasedPayload }
+  | { event: "assignment.timed_out"; payload: AssignmentTimedOutPayload }
   | { event: "turn.started"; payload: TurnStartedPayload }
   | { event: "turn.completed"; payload: TurnCompletedPayload }
   | { event: "turn.errored"; payload: TurnErroredPayload }

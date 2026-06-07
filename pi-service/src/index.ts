@@ -116,6 +116,7 @@ export {
   type WorkerExecutionContext,
   type WorkerExecutionResult,
 } from "./workers/worker-runtime.js";
+export { AssignmentTimeoutError } from "./workers/worker-timeout.js";
 export {
   type WorkerRoleBinding,
   type WorkerRoleConfig,

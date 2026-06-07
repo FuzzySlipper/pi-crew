@@ -60,6 +60,7 @@ export {
   type BlackboardWrittenPayload,
   type AssignmentClaimedPayload,
   type AssignmentReleasedPayload,
+  type AssignmentTimedOutPayload,
   type TurnStartedPayload,
   type TurnCompletedPayload,
   type TurnErroredPayload,
