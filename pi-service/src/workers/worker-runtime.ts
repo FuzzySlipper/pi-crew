@@ -19,6 +19,8 @@ import type {
   CompletionStatus,
   GatewayEvent,
 } from "@pi-crew/core";
+import type { CompletionPoster } from "@pi-crew/tools";
+import { postStructuredCompletion } from "@pi-crew/tools";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { InstancePool } from "../instances/instance-pool.js";
 import type {
@@ -105,6 +107,7 @@ export class WorkerRuntime {
   readonly #eventBus: EventBus;
   readonly #logger: Logger;
   readonly #auditRepo: AuditRepository;
+  readonly #poster?: CompletionPoster;
 
   constructor(
     config: WorkerRuntimeConfig,
@@ -113,6 +116,7 @@ export class WorkerRuntime {
     eventBus: EventBus,
     logger: Logger,
     auditRepo: AuditRepository,
+    poster?: CompletionPoster,
   ) {
     void pool; // retained for future policy checks, kept in signature for composition
     this.#config = config;
@@ -120,6 +124,7 @@ export class WorkerRuntime {
     this.#eventBus = eventBus;
     this.#logger = logger;
     this.#auditRepo = auditRepo;
+    this.#poster = poster;
   }
 
   /**
@@ -168,9 +173,36 @@ export class WorkerRuntime {
 
     this.#emitTurnCompleted(session.id, 1, Date.now() - startedAt);
 
-    // ── Phase 4: Build and emit completion packet ───────────
+    // ── Phase 4: Build and post completion packet ───────────
     const packet = this.#buildCompletionPacket(binding, result, startedAt);
-    this.#emitCompletionPosted(packet);
+
+    if (this.#poster) {
+      try {
+        const postResult = await postStructuredCompletion(
+          packet,
+          this.#poster,
+          this.#eventBus,
+          this.#logger,
+        );
+        this.#logger.info("WorkerRuntime: completion posted to Den", {
+          assignmentId: packet.assignmentId,
+          runId: packet.runId,
+          accepted: postResult.accepted,
+        });
+      } catch (err: unknown) {
+        // postStructuredCompletion may throw on validation failure.
+        // Emit the event ourselves and continue — the poster already
+        // handles Den-unavailability internally (fail-closed).
+        this.#logger.error("WorkerRuntime: completion post threw", {
+          assignmentId: packet.assignmentId,
+          runId: packet.runId,
+          error: (err as Error).message,
+        });
+        this.#emitCompletionPosted(packet);
+      }
+    } else {
+      this.#emitCompletionPosted(packet);
+    }
 
     // ── Phase 5: Release ────────────────────────────────────
     const releaseReason =

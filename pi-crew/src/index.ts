@@ -30,3 +30,7 @@ export {
 } from "@pi-crew/tools";
 export { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
 export { type MemoryStore, type MemoryEntry } from "@pi-crew/memory";
+export {
+  createDenCompletionPoster,
+  type DenCompletionPosterConfig,
+} from "./den-completion-poster.js";

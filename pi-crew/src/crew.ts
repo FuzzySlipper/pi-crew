@@ -54,6 +54,8 @@ import {
   createSqliteCursorStore,
 } from "./den-connection-factory.js";
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
+import { createDenCompletionPoster } from "./den-completion-poster.js";
+import type { CompletionPoster } from "@pi-crew/tools";
 
 // ── Crew-level config schema ───────────────────────────────────
 
@@ -142,6 +144,7 @@ export class Crew {
   readonly #breadcrumbManager: BreadcrumbManager;
   readonly #auditLogger: AuditLogger;
   readonly #toolPolicyEnforcer: ToolPolicyEnforcer;
+  readonly #denCompletionPoster: CompletionPoster;
 
   readonly #instancePool: InstancePoolImpl;
 
@@ -220,6 +223,15 @@ export class Crew {
     // 3. MCP client + tool registry
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
+
+    // 3b. Den completion poster — posts structured completion packets
+    //     to Den Core via the MCP client (canonical post_worker_completion_packet).
+    this.#denCompletionPoster = createDenCompletionPoster({
+      mcpClient: this.#mcpClient,
+      projectId: "pi-crew",
+      requestedBy: "pi-crew",
+      logger: this.#logger,
+    });
 
     // 4. Instance pool + factory
     const responderFactory = buildRuntimeResponderFactory(
@@ -402,6 +414,10 @@ export class Crew {
 
   get mcpToolRegistry(): McpToolRegistry {
     return this.#mcpToolRegistry;
+  }
+
+  get denCompletionPoster(): CompletionPoster {
+    return this.#denCompletionPoster;
   }
 
   get sessionManager(): SessionManagerImpl {

@@ -166,6 +166,7 @@ describe("Capstone: Den worker runtime lifecycle", () => {
       eventBus,
       logger,
       auditRepo,
+      crew.denCompletionPoster,
     );
 
     const auditor = new PacketAuditor();
@@ -294,6 +295,7 @@ describe("Capstone: Den worker runtime lifecycle", () => {
       eventBus,
       logger,
       auditRepo,
+      crew.denCompletionPoster,
     );
 
     await runtime1.executeAssignment(binding1, new PacketAuditor());
@@ -372,6 +374,7 @@ describe("Capstone: Den worker runtime lifecycle", () => {
       eventBus,
       logger,
       auditRepo,
+      crew.denCompletionPoster,
     );
 
     const packet = await runtime.executeAssignment(binding, new PacketAuditor());
