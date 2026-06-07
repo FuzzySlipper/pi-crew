@@ -25,7 +25,7 @@
 
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger } from "@pi-crew/core";
-import type { ContextUsageTracker } from "@pi-crew/tools";
+import type { ContextUsageTracker, DrainModeManager } from "@pi-crew/tools";
 import { TokenPressureEmitter } from "@pi-crew/tools";
 import type { WorkerBinding } from "../sessions/types.js";
 
@@ -38,6 +38,10 @@ import type { WorkerBinding } from "../sessions/types.js";
  * streams.
  */
 export interface AgentLike {
+  /** Mutable Agent state used by pi-agent-core for its active tool surface. */
+  readonly state?: {
+    tools: AgentToolRef[];
+  };
   /**
    * Subscribe to Agent lifecycle events.
    *
@@ -47,6 +51,11 @@ export interface AgentLike {
   subscribe(
     listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void,
   ): () => void;
+}
+
+/** Minimal tool shape needed to reduce `agent.state.tools` in drain mode. */
+export interface AgentToolRef {
+  readonly name: string;
 }
 
 // ── Config ───────────────────────────────────────────────────────
@@ -76,6 +85,8 @@ export interface AgentSupervisorConfig {
    * thresholds after each turn.
    */
   readonly tokenTracker?: ContextUsageTracker;
+  /** Optional drain-mode manager used to shrink the real Agent tool surface. */
+  readonly drainManager?: DrainModeManager;
 }
 
 // ── AgentSupervisor ──────────────────────────────────────────────
@@ -117,6 +128,7 @@ export class AgentSupervisor {
   readonly #agent: AgentLike;
   readonly #tokenTracker: ContextUsageTracker | undefined;
   readonly #pressureEmitter: TokenPressureEmitter | undefined;
+  readonly #drainManager: DrainModeManager | undefined;
 
   #turnCount = 0;
   #turnStartTime = 0;
@@ -134,6 +146,7 @@ export class AgentSupervisor {
     this.#pressureEmitter = config.tokenTracker
       ? new TokenPressureEmitter()
       : undefined;
+    this.#drainManager = config.drainManager;
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -322,6 +335,29 @@ export class AgentSupervisor {
         this.#logger,
       );
     }
+
+    if (this.#tokenTracker && this.#drainManager?.autoActivateForTokens(this.#tokenTracker)) {
+      this.#applyDrainTools();
+    }
+  }
+
+  #applyDrainTools(): void {
+    const state = this.#agent.state;
+    if (!state || !this.#drainManager) return;
+
+    const before = state.tools;
+    const allowedNames = new Set(
+      this.#drainManager.filterForDrain(before.map((tool) => tool.name)),
+    );
+    const after = before.filter((tool) => allowedNames.has(tool.name));
+    if (after.length === before.length) return;
+
+    state.tools = after;
+    this.#logger.warn("AgentSupervisor: applied drain tool filter", {
+      ...this.#correlationCtx(),
+      before: before.length,
+      after: after.length,
+    });
   }
 
   #onAgentEnd(event: AgentEvent & { type: "agent_end" }): void {

@@ -22,6 +22,13 @@ type EventListener = (
 class FakeAgent implements AgentLike {
   readonly #listeners: EventListener[] = [];
   readonly #signal = new AbortController().signal;
+  readonly state = {
+    tools: [
+      { name: "read_file" },
+      { name: "context_status" },
+      { name: "post_structured_completion" },
+    ],
+  };
 
   subscribe(listener: EventListener): () => void {
     this.#listeners.push(listener);
@@ -58,6 +65,29 @@ function turnEnd(): AgentEvent {
       timestamp: Date.now(),
     },
     toolResults: [],
+  } as unknown as AgentEvent;
+}
+
+function messageEnd(tokens: number): AgentEvent {
+  return {
+    type: "message_end",
+    message: {
+      role: "assistant",
+      content: [],
+      api: "test",
+      provider: "test",
+      model: "test",
+      usage: {
+        input: tokens,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: tokens,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "end_turn",
+      timestamp: Date.now(),
+    },
   } as unknown as AgentEvent;
 }
 
@@ -128,6 +158,53 @@ describe("WorkerRuntime AgentSupervisor wiring", () => {
     const toolCalled = bus.emitted.find((event) => event.event === "tool.called");
     expect(toolCalled?.payload.toolName).toBe("read_file");
     expect(toolCalled?.payload.assignmentId).toBe("101");
+  });
+
+  it("shares token tracker with context_status and drains real Agent tools", async () => {
+    const bus = new FakeEventBus();
+    const agent = new FakeAgent();
+    const executor: WorkerExecutor = {
+      async execute(context) {
+        const supervisor = context.createAgentSupervisor(agent);
+        supervisor.start();
+        await agent.feed(turnStart(), messageEnd(170_000), turnEnd());
+        supervisor.stop();
+
+        const snapshot = context.contextStatus();
+        expect(snapshot.tokensUsed).toBe(170_000);
+        expect(context.contextUsageTracker.tokensUsed).toBe(170_000);
+        expect(context.drainModeManager.isActive).toBe(true);
+        expect(agent.state.tools.map((tool) => tool.name)).toEqual([
+          "context_status",
+          "post_structured_completion",
+        ]);
+
+        return {
+          status: "completed",
+          artifacts: [],
+          filesTouched: [],
+          toolsUsed: agent.state.tools.map((tool) => tool.name),
+          tokensConsumed: snapshot.tokensUsed,
+          summary: "token-aware",
+          turnCount: supervisor.turnCount,
+        };
+      },
+    };
+
+    const runtime = new WorkerRuntime(
+      { workerIdentity: "test-worker" },
+      makeRoleMapping(),
+      new FakeSessionManager(),
+      makeFakePool(),
+      bus,
+      new FakeLogger(),
+      new FakeAuditRepo(),
+      makeAcceptingPoster(),
+    );
+
+    const packet = await runtime.executeAssignment(makeBinding(), executor);
+    expect(packet.tokensConsumed).toBe(170_000);
+    expect(bus.emitted.some((event) => event.event === "drain.activated")).toBe(true);
   });
 
   it("does not emit synthetic turn.started when executor does not use an Agent", async () => {

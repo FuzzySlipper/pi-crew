@@ -1,31 +1,20 @@
-/**
- * WorkerRuntime — drives the Den worker claim→execute→complete→release lifecycle.
- *
- * Orchestrates the full worker assignment contract defined in
- * `den-worker-runtime-contract`. Every lifecycle transition emits
- * a typed event on the gateway EventBus with Den correlation IDs.
- *
- * The runtime is injected with a worker executor (the actual worker
- * logic) so it remains role-agnostic. The packet-auditor is one such
- * executor.
- *
- * Worker role→profile resolution is now driven by an injected
- * {@link WorkerRoleMappingConfig} instead of a v1 hardcoded switch.
- * See {@link worker-role-config.ts} for the schema and loaders.
- *
- * @module pi-service/workers/worker-runtime
- */
-
 import type {
   Logger,
   EventBus,
   CompletionPacket,
   CompletionStatus,
   GatewayEvent,
-  type EventPayload,
+  EventPayload,
+  ContextPressureSnapshot,
 } from "@pi-crew/core";
-import type { CompletionPoster } from "@pi-crew/tools";
-import { postStructuredCompletion } from "@pi-crew/tools";
+import type { CompletionPoster, ContextUsageTracker } from "@pi-crew/tools";
+import {
+  ContextUsageTrackerImpl,
+  DrainModeManager,
+  contextStatusTool,
+  createWorkerPolicy,
+  postStructuredCompletion,
+} from "@pi-crew/tools";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { InstancePool } from "../instances/instance-pool.js";
 import type {
@@ -47,7 +36,6 @@ import {
 import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 import { AgentSupervisor, type AgentLike } from "./agent-supervisor.js";
 
-// ── Worker executor contract ──────────────────────────────────
 
 /**
  * A worker executor implements the role-specific logic for a worker
@@ -76,6 +64,9 @@ export interface WorkerExecutionContext {
   writeAudit(eventType: string, data: Record<string, unknown>): Promise<void>;
   /** Create a supervisor that bridges pi-agent-core Agent events for this assignment. */
   createAgentSupervisor(agent: AgentLike): AgentSupervisor;
+  readonly contextUsageTracker: ContextUsageTracker;
+  readonly drainModeManager: DrainModeManager;
+  contextStatus(): ContextPressureSnapshot;
 }
 
 /** Result of worker execution. */
@@ -108,7 +99,6 @@ export interface WorkerExecutionResult {
   };
 }
 
-// ── WorkerRuntime config ──────────────────────────────────────
 
 /** Configuration for {@link WorkerRuntime}. */
 export interface WorkerRuntimeConfig {
@@ -116,7 +106,6 @@ export interface WorkerRuntimeConfig {
   readonly workerIdentity: string;
 }
 
-// ── WorkerRuntime ─────────────────────────────────────────────
 
 /**
  * Drives the Den worker lifecycle for a single assignment.
@@ -184,7 +173,6 @@ export class WorkerRuntime {
     this.#logLifecycle("claiming", binding);
     this.#emitAssignmentClaimed(binding);
 
-    // ── Phase 2: Create worker session ──────────────────────
     const session = await this.#createWorkerSession(binding, profileId);
     this.#logLifecycle("session_created", binding, { sessionId: session.id });
 
@@ -197,7 +185,6 @@ export class WorkerRuntime {
       roleConfig,
     });
 
-    // ── Phase 3: Execute worker logic with timeout ──────────
     idleWatchdog?.start("executing");
     const context = this.#buildContext(
       binding,
@@ -225,19 +212,16 @@ export class WorkerRuntime {
       },
     });
 
-    // ── Phase 4: Build and post completion packet ───────────
     const packet = this.#buildCompletionPacket(binding, result, startedAt);
     idleWatchdog?.touch("completing");
     await this.#postCompletion(packet);
 
-    // ── Phase 5: Release ────────────────────────────────────
     const releaseReason = result.releaseReason ??
       (packet.status === "completed" ? "completed" : "failed");
     this.#emitAssignmentReleased(binding, releaseReason);
     idleWatchdog?.touch("released");
     idleWatchdog?.stop();
 
-    // ── Phase 6: Archive session, release instance ──────────
     await this.#cleanupSession(session);
 
     const durationMs = Date.now() - startedAt;
@@ -252,7 +236,6 @@ export class WorkerRuntime {
     return packet;
   }
 
-  // ── Internal: claim ──────────────────────────────────────────
 
   #emitAssignmentClaimed(binding: WorkerBinding): void {
     this.#eventBus.emit({
@@ -265,7 +248,6 @@ export class WorkerRuntime {
     });
   }
 
-  // ── Internal: session management ─────────────────────────────
 
   async #createWorkerSession(
     binding: WorkerBinding,
@@ -281,7 +263,6 @@ export class WorkerRuntime {
     return this.#sessionManager.create(config);
   }
 
-  // ── Internal: execution context ──────────────────────────────
 
   #buildContext(
     binding: WorkerBinding,
@@ -291,10 +272,45 @@ export class WorkerRuntime {
     idleWatchdog?: IdleTimeoutWatchdog,
   ): WorkerExecutionContext {
     const supervisorEventBus = this.#buildSupervisorEventBus(idleWatchdog);
+    const contextUsageTracker = new ContextUsageTrackerImpl();
+    const policyDefaults = roleConfig?.toolPolicyDefaults;
+    const policy = createWorkerPolicy({
+      assignmentId: binding.assignmentId,
+      runId: binding.runId,
+      taskId: binding.taskId,
+      role: binding.role,
+      workdir: policyDefaults?.workdirRoot,
+      allowedTools: policyDefaults?.allowedTools,
+      deniedTools: policyDefaults?.deniedTools,
+      allowedHosts: policyDefaults?.allowedHosts,
+      deniedHosts: policyDefaults?.deniedHosts,
+      maxDurationMs: policyDefaults?.assignmentTimeoutMs,
+      idleTimeoutMs: policyDefaults?.idleTimeoutMs,
+    });
+    const drainModeManager = new DrainModeManager(
+      supervisorEventBus,
+      this.#logger,
+      session.id,
+      policy,
+    );
+    for (const tool of roleConfig?.drainEssentialTools ?? []) {
+      drainModeManager.addEssentialTool(tool);
+    }
     return {
       binding,
       session,
       roleConfig,
+      contextUsageTracker,
+      drainModeManager,
+      contextStatus: (): ContextPressureSnapshot =>
+        contextStatusTool(
+          contextUsageTracker,
+          drainModeManager,
+          undefined,
+          supervisorEventBus,
+          this.#logger,
+          session.id,
+        ),
       emitEvent: (event: GatewayEvent): void => {
         idleWatchdog?.touchForEvent(event);
         this.#eventBus.emit(event);
@@ -329,6 +345,8 @@ export class WorkerRuntime {
             profileId,
             eventBus: supervisorEventBus,
             logger: this.#logger,
+            tokenTracker: contextUsageTracker,
+            drainManager: drainModeManager,
           },
           agent,
         ),
@@ -354,7 +372,6 @@ export class WorkerRuntime {
     };
   }
 
-  // ── Internal: completion packet ──────────────────────────────
 
   #buildCompletionPacket(
     binding: WorkerBinding,
@@ -391,7 +408,6 @@ export class WorkerRuntime {
     });
   }
 
-  // ── Internal: completion posting ─────────────────────────────
 
   async #postCompletion(packet: CompletionPacket): Promise<void> {
     if (this.#poster) {
@@ -423,7 +439,6 @@ export class WorkerRuntime {
     }
   }
 
-  // ── Internal: release ────────────────────────────────────────
 
   #emitAssignmentReleased(
     binding: WorkerBinding,
@@ -439,7 +454,6 @@ export class WorkerRuntime {
     });
   }
 
-  // ── Internal: cleanup ────────────────────────────────────────
 
   async #cleanupSession(session: SessionRecord): Promise<void> {
     await this.#sessionManager.archive(session.id);
@@ -449,7 +463,6 @@ export class WorkerRuntime {
   }
 
 
-  // ── Internal: lifecycle logging ───────────────────────────────
 
   #logLifecycle(
     phase: string,
@@ -464,7 +477,6 @@ export class WorkerRuntime {
     });
   }
 
-  // ── Accessors ──────────────────────────────────────────────
 
   get workerIdentity(): string {
     return this.#config.workerIdentity;
