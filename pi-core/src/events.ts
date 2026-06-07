@@ -55,7 +55,14 @@ export interface ToolCompletedPayload extends DenWorkerCorrelationPayload {
   readonly result?: unknown;
 }
 
-/** Fired when structured data is written to the blackboard. */
+/**
+ * Fired when structured data is written to the blackboard.
+ *
+ * Deferred for the initial pi-crew implementation. Den docs
+ * `planning-clarifications-v1` §10 and `submodule-architecture` define
+ * pi-memory/blackboard as deferred; Den remains authoritative for durable
+ * workflow state. Keep this type only for future-compatible event plumbing.
+ */
 export interface BlackboardWrittenPayload {
   readonly entryId: string;
   readonly sessionId: string;
@@ -256,8 +263,10 @@ export type GatewayEvent =
  * type P = EventPayload<"session.created">; // SessionCreatedPayload
  * ```
  */
-export type EventPayload<E extends GatewayEvent["event"]> =
-  Extract<GatewayEvent, { event: E }>["payload"];
+export type EventPayload<E extends GatewayEvent["event"]> = Extract<
+  GatewayEvent,
+  { event: E }
+>["payload"];
 
 // ── EventBus interface ──────────────────────────────────────────
 
@@ -285,8 +294,5 @@ export interface EventBus {
   /**
    * Remove a specific handler for an event.
    */
-  off<E extends GatewayEvent["event"]>(
-    event: E,
-    handler: (payload: EventPayload<E>) => void,
-  ): void;
+  off<E extends GatewayEvent["event"]>(event: E, handler: (payload: EventPayload<E>) => void): void;
 }

@@ -110,17 +110,13 @@ export class BreadcrumbManager {
 
   // ── Event handlers ───────────────────────────────────────────
 
-  private async handleToolCalled(
-    payload: ToolCalledPayload,
-  ): Promise<void> {
+  private async handleToolCalled(payload: ToolCalledPayload): Promise<void> {
     const key = `tool:${payload.toolName}:${payload.sessionId}`;
     const desc = `Called ${payload.toolName}`;
     await this.startBreadcrumb(key, "tool", desc);
   }
 
-  private async handleToolCompleted(
-    payload: ToolCompletedPayload,
-  ): Promise<void> {
+  private async handleToolCompleted(payload: ToolCompletedPayload): Promise<void> {
     const key = `tool:${payload.toolName}:${payload.sessionId}`;
     if (payload.success) {
       const desc = `${payload.toolName} completed (${String(payload.durationMs)}ms)`;
@@ -131,32 +127,28 @@ export class BreadcrumbManager {
     }
   }
 
-  private async handleAssignmentClaimed(
-    payload: AssignmentClaimedPayload,
-  ): Promise<void> {
+  private async handleAssignmentClaimed(payload: AssignmentClaimedPayload): Promise<void> {
     const desc = `Worker ${payload.workerIdentity} claimed assignment #${String(payload.assignmentId)} (task #${String(payload.taskId)})`;
     await this.emitBreadcrumb("worker", "completed", desc);
   }
 
-  private async handleTurnStarted(
-    payload: TurnStartedPayload,
-  ): Promise<void> {
+  private async handleTurnStarted(payload: TurnStartedPayload): Promise<void> {
     const key = `turn:${payload.sessionId}:${String(payload.turnNumber)}`;
     const desc = `Turn ${String(payload.turnNumber)} started`;
     await this.startBreadcrumb(key, "turn", desc);
   }
 
-  private async handleTurnCompleted(
-    payload: TurnCompletedPayload,
-  ): Promise<void> {
+  private async handleTurnCompleted(payload: TurnCompletedPayload): Promise<void> {
     const key = `turn:${payload.sessionId}:${String(payload.turnNumber)}`;
     const desc = `Turn ${String(payload.turnNumber)} completed (${String(payload.durationMs)}ms)`;
     await this.finishBreadcrumb(key, "completed", desc);
   }
 
-  private async handleBlackboardWritten(
-    payload: BlackboardWrittenPayload,
-  ): Promise<void> {
+  // DESIGN: `blackboard.written` remains subscribed only as deferred
+  // future-compatible plumbing. Rationale: Den docs
+  // `planning-clarifications-v1` and `submodule-architecture` declare
+  // pi-memory/blackboard deferred, with Den authoritative for workflow state.
+  private async handleBlackboardWritten(payload: BlackboardWrittenPayload): Promise<void> {
     const desc = `Entry ${payload.entryId} written (session ${payload.sessionId})`;
     await this.emitBreadcrumb("memory", "completed", desc);
   }
@@ -194,11 +186,7 @@ export class BreadcrumbManager {
     return breadcrumb.id;
   }
 
-  private async startBreadcrumb(
-    key: string,
-    category: string,
-    description: string,
-  ): Promise<void> {
+  private async startBreadcrumb(key: string, category: string, description: string): Promise<void> {
     const id = await this.emitBreadcrumb(category, "started", description);
     this.activeKeys.set(key, id);
   }

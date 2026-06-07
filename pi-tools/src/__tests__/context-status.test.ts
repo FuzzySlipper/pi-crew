@@ -102,9 +102,7 @@ describe("TokenPressureEmitter", () => {
 
     emitter.checkAndEmit(tracker, "sess-1", eventBus, logger);
 
-    const pressureEvents = eventBus.emitted.filter(
-      (e) => e.event === "context.pressure",
-    );
+    const pressureEvents = eventBus.emitted.filter((e) => e.event === "context.pressure");
     expect(pressureEvents).toHaveLength(0);
   });
 
@@ -117,9 +115,7 @@ describe("TokenPressureEmitter", () => {
 
     emitter.checkAndEmit(tracker, "sess-1", eventBus, logger);
 
-    const pressureEvents = eventBus.emitted.filter(
-      (e) => e.event === "context.pressure",
-    );
+    const pressureEvents = eventBus.emitted.filter((e) => e.event === "context.pressure");
     expect(pressureEvents).toHaveLength(1);
     expect(pressureEvents[0]?.payload).toMatchObject({
       sessionId: "sess-1",
@@ -136,9 +132,7 @@ describe("TokenPressureEmitter", () => {
       turnsRemainingEstimate: 5,
     });
     emitter.checkAndEmit(t0, "sess-1", eventBus, logger);
-    expect(
-      eventBus.emitted.filter((e) => e.event === "context.pressure"),
-    ).toHaveLength(1); // 70%
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(1); // 70%
 
     // 85% — second event
     const t1 = new ContextUsageTrackerImpl({
@@ -147,9 +141,7 @@ describe("TokenPressureEmitter", () => {
       turnsRemainingEstimate: 3,
     });
     emitter.checkAndEmit(t1, "sess-1", eventBus, logger);
-    expect(
-      eventBus.emitted.filter((e) => e.event === "context.pressure"),
-    ).toHaveLength(2); // 70% + 85%
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(2); // 70% + 85%
 
     // 95% — third event
     const t2 = new ContextUsageTrackerImpl({
@@ -158,9 +150,7 @@ describe("TokenPressureEmitter", () => {
       turnsRemainingEstimate: 1,
     });
     emitter.checkAndEmit(t2, "sess-1", eventBus, logger);
-    expect(
-      eventBus.emitted.filter((e) => e.event === "context.pressure"),
-    ).toHaveLength(3); // 70% + 85% + 95%
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(3); // 70% + 85% + 95%
   });
 
   it("does not re-emit the same threshold", () => {
@@ -174,9 +164,7 @@ describe("TokenPressureEmitter", () => {
       emitter.checkAndEmit(tracker, "sess-1", eventBus, logger);
     }
 
-    const pressureEvents = eventBus.emitted.filter(
-      (e) => e.event === "context.pressure",
-    );
+    const pressureEvents = eventBus.emitted.filter((e) => e.event === "context.pressure");
     expect(pressureEvents).toHaveLength(1); // only 70% emitted once
   });
 
@@ -188,17 +176,13 @@ describe("TokenPressureEmitter", () => {
     });
 
     emitter.checkAndEmit(tracker, "sess-1", eventBus, logger);
-    expect(
-      eventBus.emitted.filter((e) => e.event === "context.pressure"),
-    ).toHaveLength(1);
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(1);
 
     emitter.reset();
 
     // Same threshold should emit again after reset
     emitter.checkAndEmit(tracker, "sess-1", eventBus, logger);
-    expect(
-      eventBus.emitted.filter((e) => e.event === "context.pressure"),
-    ).toHaveLength(2);
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(2);
   });
 
   it("emits 70% and 85% in separate calls, 95% not crossed", () => {
@@ -218,16 +202,12 @@ describe("TokenPressureEmitter", () => {
     });
     emitter.checkAndEmit(t2, "sess-1", eventBus, logger);
 
-    const events = eventBus.emitted.filter(
-      (e) => e.event === "context.pressure",
-    );
+    const events = eventBus.emitted.filter((e) => e.event === "context.pressure");
     expect(events).toHaveLength(2);
 
     // 95% not yet crossed — second call at same level no-op
     emitter.checkAndEmit(t2, "sess-1", eventBus, logger);
-    expect(
-      eventBus.emitted.filter((e) => e.event === "context.pressure"),
-    ).toHaveLength(2);
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(2);
   });
 });
 
@@ -301,12 +281,7 @@ describe("contextStatusTool", () => {
       taskId: "1",
       role: "coder",
     });
-    const drainManager = new DrainModeManager(
-      eventBus,
-      logger,
-      "sess-1",
-      policy,
-    );
+    const drainManager = new DrainModeManager(eventBus, logger, "sess-1", policy);
     drainManager.activate("iteration_budget");
 
     const tracker = new ContextUsageTrackerImpl({
@@ -329,13 +304,33 @@ describe("contextStatusTool", () => {
 
     contextStatusTool(tracker, null, undefined, eventBus, logger, "sess-1");
 
-    const pressureEvents = eventBus.emitted.filter(
-      (e) => e.event === "context.pressure",
-    );
+    const pressureEvents = eventBus.emitted.filter((e) => e.event === "context.pressure");
     expect(pressureEvents.length).toBe(1);
     expect(pressureEvents[0]?.payload).toMatchObject({
       sessionId: "sess-1",
     });
+  });
+
+  it("deduplicates inline context.pressure events per threshold", () => {
+    const tracker = new ContextUsageTrackerImpl({
+      tokensUsed: 150_000,
+      tokensTotal: 200_000,
+      turnsRemainingEstimate: 3,
+    });
+
+    contextStatusTool(tracker, null, undefined, eventBus, logger, "sess-1");
+    contextStatusTool(tracker, null, undefined, eventBus, logger, "sess-1");
+
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(1);
+
+    tracker.update({
+      tokensUsed: 172_000,
+      tokensTotal: 200_000,
+      turnsRemainingEstimate: 2,
+    });
+    contextStatusTool(tracker, null, undefined, eventBus, logger, "sess-1");
+
+    expect(eventBus.emitted.filter((e) => e.event === "context.pressure")).toHaveLength(2);
   });
 
   it("does not emit context.pressure for normal usage", () => {
@@ -347,9 +342,7 @@ describe("contextStatusTool", () => {
 
     contextStatusTool(tracker, null, undefined, eventBus, logger, "sess-1");
 
-    const pressureEvents = eventBus.emitted.filter(
-      (e) => e.event === "context.pressure",
-    );
+    const pressureEvents = eventBus.emitted.filter((e) => e.event === "context.pressure");
     expect(pressureEvents.length).toBe(0);
   });
 

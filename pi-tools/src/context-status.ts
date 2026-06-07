@@ -7,11 +7,7 @@
  * @module pi-tools/context-status
  */
 
-import type {
-  ContextPressureSnapshot,
-  EventBus,
-  Logger,
-} from "@pi-crew/core";
+import type { ContextPressureSnapshot, EventBus, Logger } from "@pi-crew/core";
 import type { DrainModeManager } from "./drain-mode.js";
 
 // ── Context usage tracker ────────────────────────────────────
@@ -41,11 +37,7 @@ export interface ContextUsageTracker {
    * Used when the provider reports actual token counts.
    * Replaces the entire state.
    */
-  update(usage: {
-    tokensUsed: number;
-    tokensTotal: number;
-    turnsRemainingEstimate: number;
-  }): void;
+  update(usage: { tokensUsed: number; tokensTotal: number; turnsRemainingEstimate: number }): void;
 
   /**
    * Accumulate incremental token usage from a single turn or tool call.
@@ -68,9 +60,11 @@ export class ContextUsageTrackerImpl implements ContextUsageTracker {
   private _tokensTotal = 200_000;
   private _turnsRemainingEstimate = 10;
 
-  constructor(
-    initial?: { tokensUsed: number; tokensTotal: number; turnsRemainingEstimate: number },
-  ) {
+  constructor(initial?: {
+    tokensUsed: number;
+    tokensTotal: number;
+    turnsRemainingEstimate: number;
+  }) {
     if (initial) {
       this._tokensUsed = initial.tokensUsed;
       this._tokensTotal = initial.tokensTotal;
@@ -100,11 +94,7 @@ export class ContextUsageTrackerImpl implements ContextUsageTracker {
     return this._turnsRemainingEstimate;
   }
 
-  update(usage: {
-    tokensUsed: number;
-    tokensTotal: number;
-    turnsRemainingEstimate: number;
-  }): void {
+  update(usage: { tokensUsed: number; tokensTotal: number; turnsRemainingEstimate: number }): void {
     this._tokensUsed = usage.tokensUsed;
     this._tokensTotal = usage.tokensTotal;
     this._turnsRemainingEstimate = usage.turnsRemainingEstimate;
@@ -168,16 +158,13 @@ export class TokenPressureEmitter {
           },
         });
 
-        logger?.warn(
-          `TokenPressureEmitter: context pressure ${String(threshold)}%`,
-          {
-            sessionId,
-            usagePercent: pct,
-            threshold,
-            tokensUsed: tracker.tokensUsed,
-            tokensTotal: tracker.tokensTotal,
-          },
-        );
+        logger?.warn(`TokenPressureEmitter: context pressure ${String(threshold)}%`, {
+          sessionId,
+          usagePercent: pct,
+          threshold,
+          tokensUsed: tracker.tokensUsed,
+          tokensTotal: tracker.tokensTotal,
+        });
       }
     }
   }
@@ -196,10 +183,31 @@ export interface ContextStatusConfig {
   readonly compressionThreshold?: number;
   /** Critical threshold percent (default 85). */
   readonly criticalThreshold?: number;
+  /** Session-scoped pressure emitter used to deduplicate inline events. */
+  readonly pressureEmitter?: TokenPressureEmitter;
 }
 
 const DEFAULT_COMPRESSION_THRESHOLD = 70;
 const DEFAULT_CRITICAL_THRESHOLD = 85;
+const INLINE_PRESSURE_EMITTERS = new WeakMap<EventBus, Map<string, TokenPressureEmitter>>();
+
+function resolveInlinePressureEmitter(
+  eventBus: EventBus,
+  sessionId: string,
+  configured?: TokenPressureEmitter,
+): TokenPressureEmitter {
+  if (configured) return configured;
+  const bySession =
+    INLINE_PRESSURE_EMITTERS.get(eventBus) ?? new Map<string, TokenPressureEmitter>();
+  if (!INLINE_PRESSURE_EMITTERS.has(eventBus)) {
+    INLINE_PRESSURE_EMITTERS.set(eventBus, bySession);
+  }
+  const existing = bySession.get(sessionId);
+  if (existing) return existing;
+  const created = new TokenPressureEmitter();
+  bySession.set(sessionId, created);
+  return created;
+}
 
 /**
  * The `context_status` tool returns a snapshot of the current
@@ -220,10 +228,8 @@ export function contextStatusTool(
   logger?: Logger,
   sessionId?: string,
 ): ContextPressureSnapshot {
-  const compressionThreshold =
-    config?.compressionThreshold ?? DEFAULT_COMPRESSION_THRESHOLD;
-  const criticalThreshold =
-    config?.criticalThreshold ?? DEFAULT_CRITICAL_THRESHOLD;
+  const compressionThreshold = config?.compressionThreshold ?? DEFAULT_COMPRESSION_THRESHOLD;
+  const criticalThreshold = config?.criticalThreshold ?? DEFAULT_CRITICAL_THRESHOLD;
 
   const pct = tracker.usagePercent;
   const compressionImminent = pct > compressionThreshold;
@@ -232,14 +238,12 @@ export function contextStatusTool(
 
   let recommendation: string;
   if (pct > 95) {
-    recommendation =
-      "EMERGENCY: Context nearly full. Stop all non-essential work immediately.";
+    recommendation = "EMERGENCY: Context nearly full. Stop all non-essential work immediately.";
   } else if (critical) {
     recommendation =
       "CRITICAL: Avoid launching new workers or large research tasks. Consider handoff or compaction.";
   } else if (compressionImminent) {
-    recommendation =
-      "WARNING: Compression imminent. Avoid large context-loading operations.";
+    recommendation = "WARNING: Compression imminent. Avoid large context-loading operations.";
   } else {
     recommendation = "Normal. Safe to proceed.";
   }
@@ -256,22 +260,19 @@ export function contextStatusTool(
     drainActive,
   };
 
-  // Emit pressure event if crossing a threshold (best-effort inline)
+  // Emit pressure event if crossing a threshold (best-effort inline).
+  // DESIGN: Inline calls use the session-scoped TokenPressureEmitter so
+  // repeated context_status invocations do not spam governance/audit with
+  // duplicate context.pressure events for a threshold already crossed.
+  // Rationale: context_status is an operator/worker visibility tool, while
+  // pressure events are lifecycle signals that should be once-per-threshold.
   if (eventBus && sessionId && (compressionImminent || critical)) {
-    eventBus.emit({
-      event: "context.pressure",
-      payload: {
-        sessionId,
-        usedTokens: tracker.tokensUsed,
-        maxTokens: tracker.tokensTotal,
-      },
-    });
-    logger?.warn("context_status: context pressure warning", {
+    const pressureEmitter = resolveInlinePressureEmitter(
+      eventBus,
       sessionId,
-      usagePercent: pct,
-      compressionImminent,
-      critical,
-    });
+      config?.pressureEmitter,
+    );
+    pressureEmitter.checkAndEmit(tracker, sessionId, eventBus, logger);
   }
 
   return snapshot;

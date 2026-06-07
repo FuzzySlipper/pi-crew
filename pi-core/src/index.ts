@@ -93,15 +93,12 @@ export {
 } from "./channel.js";
 
 // ── Retry ─────────────────────────────────────────────────────
-export {
-  type RetryPolicy,
-  DEFAULT_RETRY_POLICY,
-  retryWithBackoff,
-} from "./retry.js";
+export { type RetryPolicy, DEFAULT_RETRY_POLICY, retryWithBackoff } from "./retry.js";
 
 // ── Test helpers ───────────────────────────────────────────────
 // Co-located in test-helpers/ but exported directly (no nested barrel).
 export { InMemoryRepository } from "./test-helpers/in-memory-repository.js";
 export { FakeEventBus } from "./test-helpers/fake-event-bus.js";
+export { SpyEventBus, type SpyEventRecord } from "./test-helpers/spy-event-bus.js";
 export { FakeLogger, type LogEntry } from "./test-helpers/fake-logger.js";
 export { FakeChannelProvider } from "./test-helpers/fake-channel-provider.js";

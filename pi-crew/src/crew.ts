@@ -9,24 +9,14 @@
  * @module pi-crew/crew
  */
 
-import { readFileSync } from "node:fs";
-import { load as parseYaml } from "js-yaml";
-
-import { z } from "zod";
-
-import type {
-  Logger,
-  EventBus,
-  ChannelProvider,
-} from "@pi-crew/core";
-import { ConfigurationError, FakeLogger, FakeEventBus } from "@pi-crew/core";
+import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
+import { FakeLogger, FakeEventBus } from "@pi-crew/core";
 
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
 import type { DenChannelsAdapterConfig } from "@pi-crew/channels/den-channels/den-channels-adapter";
 
 import {
   loadConfig,
-  GatewayConfigSchema,
   Gateway,
   createServiceRegistry,
   SessionManagerImpl,
@@ -36,12 +26,13 @@ import {
   RuntimeDb,
   SqliteAuditRepository,
   SqliteSessionRepository,
-  WorkerRoleMappingConfigSchema,
-  DEFAULT_WORKER_ROLE_BINDINGS,
   type GatewayConfig,
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
 } from "@pi-crew/service";
+
+import { loadCrewConfig, type CrewConfig } from "./config.js";
+export { CrewConfigSchema, loadCrewConfig, type CrewConfig } from "./config.js";
 
 import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
@@ -52,78 +43,10 @@ import type { AuditEntry } from "@pi-crew/governance";
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
 import { loadProfile } from "@pi-crew/profiles";
 
-import {
-  buildDenConnection,
-  createSqliteCursorStore,
-} from "./den-connection-factory.js";
+import { buildDenConnection, createSqliteCursorStore } from "./den-connection-factory.js";
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 import { createDenCompletionPoster } from "./den-completion-poster.js";
 import type { CompletionPoster } from "@pi-crew/tools";
-
-// ── Crew-level config schema ───────────────────────────────────
-
-const McpConfigSchema = z.object({
-  transport: z.enum(["stdio", "streamable-http"]).default("streamable-http"),
-  endpoint: z.string().default("http://192.168.1.10:5199/mcp"),
-  requestTimeout: z.number().int().positive().default(30_000),
-  maxReconnectAttempts: z.number().int().positive().default(3),
-  reconnectBaseDelay: z.number().int().positive().default(1_000),
-});
-
-const SessionsConfigSchema = z.object({
-  maxTotal: z.number().int().positive().default(16),
-  maxPerProfile: z.number().int().positive().default(4),
-  idleTimeoutMs: z.number().int().positive().default(28_800_000),
-  fallbackProfileId: z.string().min(1).default("system-architect"),
-});
-
-const ToolPolicyDefaultsSchema = z.object({
-  allowedTools: z.array(z.string()).default([]),
-  deniedTools: z.array(z.string()).default([]),
-  allowedHosts: z.array(z.string()).default([]),
-  deniedHosts: z.array(z.string()).default([]),
-});
-
-export const CrewConfigSchema = z.object({
-  den: GatewayConfigSchema.shape.den,
-  database: GatewayConfigSchema.shape.database.default({}),
-  health: GatewayConfigSchema.shape.health.default({}),
-  logging: GatewayConfigSchema.shape.logging.default({}),
-  runtime: GatewayConfigSchema.shape.runtime,
-  mcp: McpConfigSchema.default({}),
-  sessions: SessionsConfigSchema.default({}),
-  toolPolicy: ToolPolicyDefaultsSchema.default({}),
-  workers: WorkerRoleMappingConfigSchema.default({
-    bindings: DEFAULT_WORKER_ROLE_BINDINGS,
-  }),
-});
-
-export type CrewConfig = z.infer<typeof CrewConfigSchema>;
-
-// ── CrewConfig default loader ──────────────────────────────────
-
-/**
- * Load crew-level configuration from a YAML file path.
- *
- * Validates the shape and falls back to sensible defaults for every
- * field except `den.coreUrl`, which must be provided.
- */
-export function loadCrewConfig(yamlPath: string): CrewConfig {
-  const raw = readFileSync(yamlPath, "utf-8");
-  const parsed: unknown = parseYaml(raw);
-
-  const result = CrewConfigSchema.safeParse(parsed ?? {});
-  if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
-      .join("\n");
-    throw new ConfigurationError(
-      `Invalid crew configuration:\n${issues}`,
-    );
-  }
-
-  return result.data;
-}
 
 // ── Crew ───────────────────────────────────────────────────────
 
@@ -157,11 +80,7 @@ export class Crew {
 
   #started = false;
 
-  constructor(
-    config: CrewConfig,
-    logger?: Logger,
-    eventBus?: EventBus,
-  ) {
+  constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
 
     // DESIGN: The composition root validates configured profile IDs before
@@ -204,10 +123,7 @@ export class Crew {
     // 1b. Local runtime persistence (#1866). Den remains workflow
     // source-of-truth; this DB stores hot sessions/audit/cache locally.
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
-    const sessionStore = new SqliteSessionRepository(
-      this.#runtimeDb.handle,
-      this.#logger,
-    );
+    const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
 
     // 2. Channel provider (Den Channels adapter)
@@ -223,16 +139,10 @@ export class Crew {
     // missing — no silent fallback to simulated.  Cursor persistence
     // uses the runtime_kv table via a SQLite-backed CursorStore.
     const cursorStore = createSqliteCursorStore(this.#runtimeDb);
-    const denConnection = buildDenConnection(
-      config.den,
-      this.#logger,
-      cursorStore,
-    );
-    this.#channelProvider = new DenChannelsAdapter(
-      denConnection,
-      this.#logger,
-      { name: "Den Channels Gateway" } satisfies DenChannelsAdapterConfig,
-    );
+    const denConnection = buildDenConnection(config.den, this.#logger, cursorStore);
+    this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
+      name: "Den Channels Gateway",
+    } satisfies DenChannelsAdapterConfig);
 
     // 3. MCP client + tool registry
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
@@ -248,14 +158,8 @@ export class Crew {
     });
 
     // 4. Instance pool + factory
-    const responderFactory = buildRuntimeResponderFactory(
-      config.runtime,
-      this.#eventBus,
-    );
-    const instanceFactory = new InstanceFactoryImpl(
-      this.#logger,
-      responderFactory,
-    );
+    const responderFactory = buildRuntimeResponderFactory(config.runtime, this.#eventBus);
+    const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
     this.#instancePool = new InstancePoolImpl(
       instanceFactory,
       {
@@ -295,26 +199,19 @@ export class Crew {
       this.#logger,
     );
 
-    this.#auditLogger = new AuditLogger(
-      this.#eventBus,
-      this.#logger,
-      {
-        writer: (entry) => {
-          void this.#auditRepository.write({
-            sessionId: entry.correlation.sessionId,
-            assignmentId: entry.correlation.assignmentId?.toString(),
-            eventType: entry.event,
-            eventData: auditEntryToRecord(entry),
-          });
-        },
+    this.#auditLogger = new AuditLogger(this.#eventBus, this.#logger, {
+      writer: (entry) => {
+        void this.#auditRepository.write({
+          sessionId: entry.correlation.sessionId,
+          assignmentId: entry.correlation.assignmentId?.toString(),
+          eventType: entry.event,
+          eventData: auditEntryToRecord(entry),
+        });
       },
-    );
+    });
 
     // 8. Tool policy enforcer (runtime tool filtering)
-    this.#toolPolicyEnforcer = new ToolPolicyEnforcer(
-      this.#eventBus,
-      this.#logger,
-    );
+    this.#toolPolicyEnforcer = new ToolPolicyEnforcer(this.#eventBus, this.#logger);
 
     this.#logger.info("Crew composition root assembled", {
       config: {

@@ -11,17 +11,14 @@ import type { CompletionPoster, ContextUsageTracker } from "@pi-crew/tools";
 import {
   ContextUsageTrackerImpl,
   DrainModeManager,
+  TokenPressureEmitter,
   contextStatusTool,
   createWorkerPolicy,
   postStructuredCompletion,
 } from "@pi-crew/tools";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { InstancePool } from "../instances/instance-pool.js";
-import type {
-  SessionConfig,
-  WorkerBinding,
-  SessionRecord,
-} from "../sessions/types.js";
+import type { SessionConfig, WorkerBinding, SessionRecord } from "../sessions/types.js";
 import type { AuditRepository } from "../persistence/types.js";
 import {
   type WorkerRoleConfig,
@@ -29,13 +26,9 @@ import {
   resolveProfileId,
   resolveRoleConfig,
 } from "./worker-role-config.js";
-import {
-  createWorkerIdleWatchdog,
-  type IdleTimeoutWatchdog,
-} from "./worker-idle-timeout.js";
+import { createWorkerIdleWatchdog, type IdleTimeoutWatchdog } from "./worker-idle-timeout.js";
 import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 import { AgentSupervisor, type AgentLike } from "./agent-supervisor.js";
-
 
 /**
  * A worker executor implements the role-specific logic for a worker
@@ -99,13 +92,11 @@ export interface WorkerExecutionResult {
   };
 }
 
-
 /** Configuration for {@link WorkerRuntime}. */
 export interface WorkerRuntimeConfig {
   /** Identity of this runtime instance. */
   readonly workerIdentity: string;
 }
-
 
 /**
  * Drives the Den worker lifecycle for a single assignment.
@@ -186,13 +177,7 @@ export class WorkerRuntime {
     });
 
     idleWatchdog?.start("executing");
-    const context = this.#buildContext(
-      binding,
-      session,
-      roleConfig,
-      profileId,
-      idleWatchdog,
-    );
+    const context = this.#buildContext(binding, session, roleConfig, profileId, idleWatchdog);
 
     const result = await executeWithAssignmentTimeout({
       executor,
@@ -216,8 +201,8 @@ export class WorkerRuntime {
     idleWatchdog?.touch("completing");
     await this.#postCompletion(packet);
 
-    const releaseReason = result.releaseReason ??
-      (packet.status === "completed" ? "completed" : "failed");
+    const releaseReason =
+      result.releaseReason ?? (packet.status === "completed" ? "completed" : "failed");
     this.#emitAssignmentReleased(binding, releaseReason);
     idleWatchdog?.touch("released");
     idleWatchdog?.stop();
@@ -236,7 +221,6 @@ export class WorkerRuntime {
     return packet;
   }
 
-
   #emitAssignmentClaimed(binding: WorkerBinding): void {
     this.#eventBus.emit({
       event: "assignment.claimed",
@@ -248,11 +232,7 @@ export class WorkerRuntime {
     });
   }
 
-
-  async #createWorkerSession(
-    binding: WorkerBinding,
-    profileId: string,
-  ): Promise<SessionRecord> {
+  async #createWorkerSession(binding: WorkerBinding, profileId: string): Promise<SessionRecord> {
     const config: SessionConfig = {
       profileId,
       kind: "worker",
@@ -263,7 +243,6 @@ export class WorkerRuntime {
     return this.#sessionManager.create(config);
   }
 
-
   #buildContext(
     binding: WorkerBinding,
     session: SessionRecord,
@@ -273,6 +252,7 @@ export class WorkerRuntime {
   ): WorkerExecutionContext {
     const supervisorEventBus = this.#buildSupervisorEventBus(idleWatchdog);
     const contextUsageTracker = new ContextUsageTrackerImpl();
+    const pressureEmitter = new TokenPressureEmitter();
     const policyDefaults = roleConfig?.toolPolicyDefaults;
     const policy = createWorkerPolicy({
       assignmentId: binding.assignmentId,
@@ -306,7 +286,7 @@ export class WorkerRuntime {
         contextStatusTool(
           contextUsageTracker,
           drainModeManager,
-          undefined,
+          { pressureEmitter },
           supervisorEventBus,
           this.#logger,
           session.id,
@@ -315,20 +295,14 @@ export class WorkerRuntime {
         idleWatchdog?.touchForEvent(event);
         this.#eventBus.emit(event);
       },
-      log: (
-        level: "debug" | "info" | "warn" | "error",
-        message: string,
-      ): void => {
+      log: (level: "debug" | "info" | "warn" | "error", message: string): void => {
         this.#logger[level](`[worker] ${message}`, {
           assignmentId: binding.assignmentId,
           runId: binding.runId,
           sessionId: session.id,
         });
       },
-      writeAudit: async (
-        eventType: string,
-        data: Record<string, unknown>,
-      ): Promise<void> => {
+      writeAudit: async (eventType: string, data: Record<string, unknown>): Promise<void> => {
         await this.#auditRepo.write({
           sessionId: session.id,
           assignmentId: binding.assignmentId,
@@ -346,6 +320,7 @@ export class WorkerRuntime {
             eventBus: supervisorEventBus,
             logger: this.#logger,
             tokenTracker: contextUsageTracker,
+            pressureEmitter,
             drainManager: drainModeManager,
           },
           agent,
@@ -371,7 +346,6 @@ export class WorkerRuntime {
       },
     };
   }
-
 
   #buildCompletionPacket(
     binding: WorkerBinding,
@@ -408,7 +382,6 @@ export class WorkerRuntime {
     });
   }
 
-
   async #postCompletion(packet: CompletionPacket): Promise<void> {
     if (this.#poster) {
       try {
@@ -439,11 +412,7 @@ export class WorkerRuntime {
     }
   }
 
-
-  #emitAssignmentReleased(
-    binding: WorkerBinding,
-    reason: string,
-  ): void {
+  #emitAssignmentReleased(binding: WorkerBinding, reason: string): void {
     this.#eventBus.emit({
       event: "assignment.released",
       payload: {
@@ -454,15 +423,12 @@ export class WorkerRuntime {
     });
   }
 
-
   async #cleanupSession(session: SessionRecord): Promise<void> {
     await this.#sessionManager.archive(session.id);
     this.#logLifecycle("session_archived", null, {
       sessionId: session.id,
     });
   }
-
-
 
   #logLifecycle(
     phase: string,
@@ -476,7 +442,6 @@ export class WorkerRuntime {
       ...extra,
     });
   }
-
 
   get workerIdentity(): string {
     return this.#config.workerIdentity;

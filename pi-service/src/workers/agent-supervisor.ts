@@ -48,9 +48,7 @@ export interface AgentLike {
    * Returns an unsubscribe function.  Listeners are called in
    * subscription order and are awaited before the next event.
    */
-  subscribe(
-    listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void,
-  ): () => void;
+  subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void;
 }
 
 /** Minimal tool shape needed to reduce `agent.state.tools` in drain mode. */
@@ -85,6 +83,8 @@ export interface AgentSupervisorConfig {
    * thresholds after each turn.
    */
   readonly tokenTracker?: ContextUsageTracker;
+  /** Optional shared pressure emitter for session-wide deduplication. */
+  readonly pressureEmitter?: TokenPressureEmitter;
   /** Optional drain-mode manager used to shrink the real Agent tool surface. */
   readonly drainManager?: DrainModeManager;
 }
@@ -144,7 +144,7 @@ export class AgentSupervisor {
     this.#agent = agent;
     this.#tokenTracker = config.tokenTracker;
     this.#pressureEmitter = config.tokenTracker
-      ? new TokenPressureEmitter()
+      ? (config.pressureEmitter ?? new TokenPressureEmitter())
       : undefined;
     this.#drainManager = config.drainManager;
   }
@@ -260,8 +260,7 @@ export class AgentSupervisor {
 
   #onToolEnd(event: AgentEvent & { type: "tool_execution_end" }): void {
     const startTime = this.#toolStartTimes.get(event.toolCallId);
-    const durationMs =
-      startTime !== undefined ? Date.now() - startTime : 0;
+    const durationMs = startTime !== undefined ? Date.now() - startTime : 0;
     this.#toolStartTimes.delete(event.toolCallId);
 
     this.#logger.info("AgentSupervisor: tool.end", {
@@ -291,25 +290,20 @@ export class AgentSupervisor {
    * cost of the model response.  We accumulate this into the token
    * tracker for context_status and drain-mode decisions.
    */
-  #onMessageEnd(
-    event: AgentEvent & { type: "message_end" },
-  ): void {
+  #onMessageEnd(event: AgentEvent & { type: "message_end" }): void {
     if (
       this.#tokenTracker &&
       "role" in event.message &&
       event.message.role === "assistant" &&
       "usage" in event.message
     ) {
-      const usage = (
-        event.message as { usage: { totalTokens: number } }
-      ).usage;
+      const usage = (event.message as { usage: { totalTokens: number } }).usage;
       this.#tokenTracker.accumulate({ tokensUsed: usage.totalTokens });
     }
   }
 
   #onTurnEnd(): void {
-    const durationMs =
-      this.#turnStartTime > 0 ? Date.now() - this.#turnStartTime : 0;
+    const durationMs = this.#turnStartTime > 0 ? Date.now() - this.#turnStartTime : 0;
     this.#logger.info("AgentSupervisor: turn.end", {
       ...this.#correlationCtx(),
       turnNumber: this.#turnCount,
