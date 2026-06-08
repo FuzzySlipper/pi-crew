@@ -80,6 +80,10 @@ describe("FakeEventBus", () => {
           workerIdentity: "w",
           assignmentId: 1,
           reason: "no_tools",
+          lastActivityAt: "2026-06-08T12:00:00.000Z",
+          lastLifecycleState: "executing",
+          idleTimeoutMs: 60000,
+          remediationRequired: true,
         },
       },
       {
