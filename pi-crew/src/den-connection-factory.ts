@@ -112,6 +112,8 @@ function buildHttpConnection(
     memberIdentity: den.channelsMemberIdentity,
     pollIntervalMs: den.channelsPollIntervalMs,
     pollLimit: den.channelsPollLimit,
+    subscriptionChannelId: den.channelsSubscriptionChannelId,
+    legacyDirectPolling: den.channelsAllowLegacyDirectPolling,
   });
 
   const httpConfig: DenHttpConnectionConfig = {
@@ -121,6 +123,18 @@ function buildHttpConnection(
     token: den.channelsToken,
     pollIntervalMs: den.channelsPollIntervalMs,
     pollLimit: den.channelsPollLimit,
+    subscription: den.channelsAllowLegacyDirectPolling
+      ? undefined
+      : {
+          channelId: den.channelsSubscriptionChannelId,
+          profileIdentity: den.channelsProfileIdentity,
+          memberRole: den.channelsMemberRole.length === 0 ? undefined : den.channelsMemberRole,
+          agentInstanceId: den.channelsAgentInstanceId,
+          sessionOwnerId: den.channelsSessionOwnerId,
+          sessionId: den.channelsSessionId,
+          subscriptionIdentity: den.channelsSubscriptionIdentity,
+        },
+    allowLegacyDirectPolling: den.channelsAllowLegacyDirectPolling,
   };
   return new DenHttpDirectAgentConnection(httpConfig, logger, cursorStore);
 }
@@ -134,6 +148,20 @@ function validateHttpConfig(den: DenConfig): void {
   if (den.channelsMemberIdentity.length === 0) {
     throw new ConfigurationError(
       "den.channelsMemberIdentity is required when channelsUrl uses http:// or https://",
+    );
+  }
+  if (den.channelsAllowLegacyDirectPolling) return;
+  const missing = [
+    ["channelsSubscriptionChannelId", den.channelsSubscriptionChannelId],
+    ["channelsProfileIdentity", den.channelsProfileIdentity],
+    ["channelsAgentInstanceId", den.channelsAgentInstanceId],
+    ["channelsSessionOwnerId", den.channelsSessionOwnerId],
+    ["channelsSessionId", den.channelsSessionId],
+    ["channelsSubscriptionIdentity", den.channelsSubscriptionIdentity],
+  ].find((entry) => entry[1].length === 0)?.[0];
+  if (missing !== undefined) {
+    throw new ConfigurationError(
+      `den.${missing} is required for HTTP Channels v8 subscription registration`,
     );
   }
 }

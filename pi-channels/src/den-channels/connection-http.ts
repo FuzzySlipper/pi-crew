@@ -18,6 +18,7 @@ import {
   type DirectAgentEventItem,
   type HttpDirectAgentClientOptions,
 } from "./connection-http-client.js";
+import { HttpSubscriptionClient } from "./connection-http-subscription-client.js";
 import type {
   DenConnection,
   DenConnectionEvents,
@@ -55,6 +56,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
   readonly #logger: Logger;
   readonly #cursorStore: CursorStore;
   readonly #client: HttpDirectAgentClient;
+  readonly #subscriptionClient: HttpSubscriptionClient;
 
   readonly #listeners = new Map<
     keyof DenConnectionEvents,
@@ -79,6 +81,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     this.#logger = logger;
     this.#cursorStore = cursorStore;
     this.#client = new HttpDirectAgentClient(config, logger, options);
+    this.#subscriptionClient = new HttpSubscriptionClient(config, logger, options);
   }
 
   get isOpen(): boolean {
@@ -89,6 +92,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     if (this.#open) return;
 
     await this.#restoreCursor();
+    await this.#registerSubscription();
     this.#open = true;
     this.#emit("connected");
 
@@ -114,6 +118,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       clearInterval(this.#pollState.timer);
       this.#pollState.timer = null;
     }
+    await this.#releaseSubscription();
     this.#pollState.controller.abort();
     await this.#persistCursor();
 
@@ -195,6 +200,25 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     return () => {
       set.delete(listener);
     };
+  }
+
+  async #registerSubscription(): Promise<void> {
+    try {
+      await this.#subscriptionClient.register(this.#pollState.controller.signal);
+    } catch (err: unknown) {
+      if (!this.#config.allowLegacyDirectPolling) throw err;
+      this.#logger.warn("Subscription registration failed; using explicit legacy polling fallback", {
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  async #releaseSubscription(): Promise<void> {
+    try {
+      await this.#subscriptionClient.release(this.#pollState.controller.signal);
+    } catch (err: unknown) {
+      this.#logger.warn("Subscription release failed", { error: errorMessage(err) });
+    }
   }
 
   async #poll(): Promise<void> {

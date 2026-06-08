@@ -31,6 +31,7 @@ function makeConfig(
     token: "test-token",
     pollIntervalMs: 5000,
     pollLimit: 10,
+    allowLegacyDirectPolling: true,
     ...overrides,
   };
 }

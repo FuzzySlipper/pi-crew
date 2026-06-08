@@ -16,7 +16,20 @@ Environment overrides:
   PI_DEN_CORE_URL               Den Core URL (default: http://den-k8plus:3030)
   PI_DEN_CHANNELS_URL           Den Channels HTTP URL (default: http://192.168.1.10:18081)
   PI_DEN_CHANNELS_PROJECT_ID    Direct-agent-events project scope (default: pi-crew)
-  PI_DEN_CHANNELS_MEMBER_ID     Service member identity (default: pi-crew-gateway)
+  PI_DEN_CHANNELS_MEMBER_ID     Service member identity (default: pi-crew-runner)
+  PI_DEN_CHANNELS_SUBSCRIPTION_CHANNEL_ID
+                                  Ordinary channel id for v8 subscription (default: 642)
+  PI_DEN_CHANNELS_PROFILE_ID    Stable profile identity (default: pi-crew-runner)
+  PI_DEN_CHANNELS_MEMBER_ROLE   Stable member role (default: runner)
+  PI_DEN_CHANNELS_AGENT_INSTANCE_ID
+                                  Concrete runtime instance id (default: pi-crew-runner-live)
+  PI_DEN_CHANNELS_SESSION_OWNER_ID
+                                  Durable session owner id (default: owner:den-k8plus:pi-crew-runner)
+  PI_DEN_CHANNELS_SESSION_ID    Durable session id (default: sess-pi-crew-runner-live)
+  PI_DEN_CHANNELS_SUBSCRIPTION_IDENTITY
+                                  Deterministic subscription identity (default: member:ordinary:session)
+  PI_DEN_CHANNELS_ALLOW_LEGACY_DIRECT_POLLING
+                                  Compatibility fallback (default: false)
   PI_DEN_CHANNELS_POLL_MS       HTTP cursor poll interval ms (default: 5000)
   PI_DEN_CHANNELS_POLL_LIMIT    HTTP cursor poll batch size (default: 10)
   PI_DEN_CHANNELS_TOKEN         Optional token; never printed by this script
@@ -54,7 +67,16 @@ health_port="${PI_CREW_HEALTH_PORT:-9236}"
 core_url="${PI_DEN_CORE_URL:-http://den-k8plus:3030}"
 channels_url="${PI_DEN_CHANNELS_URL:-http://192.168.1.10:18081}"
 channels_project_id="${PI_DEN_CHANNELS_PROJECT_ID:-pi-crew}"
-channels_member_id="${PI_DEN_CHANNELS_MEMBER_ID:-pi-crew-gateway}"
+channels_member_id="${PI_DEN_CHANNELS_MEMBER_ID:-pi-crew-runner}"
+channels_subscription_channel_id="${PI_DEN_CHANNELS_SUBSCRIPTION_CHANNEL_ID:-642}"
+channels_profile_id="${PI_DEN_CHANNELS_PROFILE_ID:-pi-crew-runner}"
+channels_member_role="${PI_DEN_CHANNELS_MEMBER_ROLE:-runner}"
+channels_agent_instance_id="${PI_DEN_CHANNELS_AGENT_INSTANCE_ID:-pi-crew-runner-live}"
+channels_session_owner_id="${PI_DEN_CHANNELS_SESSION_OWNER_ID:-owner:den-k8plus:pi-crew-runner}"
+channels_session_id="${PI_DEN_CHANNELS_SESSION_ID:-sess-pi-crew-runner-live}"
+default_subscription_identity="$channels_member_id:ordinary:$channels_session_id"
+channels_subscription_identity="${PI_DEN_CHANNELS_SUBSCRIPTION_IDENTITY:-$default_subscription_identity}"
+channels_allow_legacy="${PI_DEN_CHANNELS_ALLOW_LEGACY_DIRECT_POLLING:-false}"
 channels_poll_ms="${PI_DEN_CHANNELS_POLL_MS:-5000}"
 channels_poll_limit="${PI_DEN_CHANNELS_POLL_LIMIT:-10}"
 mcp_endpoint="${PI_DEN_MCP_ENDPOINT:-http://den-k8plus:3100/mcp}"
@@ -91,6 +113,8 @@ pi-crew user-service deployment plan
   Channels URL:      $channels_url
   Channels project:  $channels_project_id
   Channels member:   $channels_member_id
+  Subscription:      channel $channels_subscription_channel_id / $channels_subscription_identity
+  Legacy fallback:   $channels_allow_legacy
   Channels polling:  every ${channels_poll_ms}ms, limit $channels_poll_limit
   Channels token:    $redacted_token_state
 SUMMARY
@@ -133,6 +157,14 @@ den:
   channelsToken: "$channels_token"
   channelsProjectId: "$channels_project_id"
   channelsMemberIdentity: "$channels_member_id"
+  channelsSubscriptionChannelId: "$channels_subscription_channel_id"
+  channelsProfileIdentity: "$channels_profile_id"
+  channelsMemberRole: "$channels_member_role"
+  channelsAgentInstanceId: "$channels_agent_instance_id"
+  channelsSessionOwnerId: "$channels_session_owner_id"
+  channelsSessionId: "$channels_session_id"
+  channelsSubscriptionIdentity: "$channels_subscription_identity"
+  channelsAllowLegacyDirectPolling: $channels_allow_legacy
   channelsPollIntervalMs: $channels_poll_ms
   channelsPollLimit: $channels_poll_limit
   channelsRetryMaxAttempts: 5

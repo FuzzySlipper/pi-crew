@@ -93,6 +93,22 @@ const DenConfigSchema = z.object({
    * GET /api/direct-agent-events. Default 10.
    */
   channelsPollLimit: z.number().int().positive().default(10),
+  /** Ordinary Den Channels channel id used for v8 membership/subscription registration. */
+  channelsSubscriptionChannelId: z.string().default(""),
+  /** Stable profile identity for the public Den Channels agent membership. */
+  channelsProfileIdentity: z.string().default(""),
+  /** Optional member role included in Den Channels membership metadata. */
+  channelsMemberRole: z.string().default(""),
+  /** Concrete runtime instance id used for the active ordinary-channel subscription. */
+  channelsAgentInstanceId: z.string().default(""),
+  /** Durable conversational session owner id bound to the active subscription. */
+  channelsSessionOwnerId: z.string().default(""),
+  /** Durable conversational session id bound to the active subscription. */
+  channelsSessionId: z.string().default(""),
+  /** Deterministic subscription identity for the active ordinary-channel subscription. */
+  channelsSubscriptionIdentity: z.string().default(""),
+  /** Explicit compatibility escape hatch for deployments without Channels v8 registration routes. */
+  channelsAllowLegacyDirectPolling: z.boolean().default(false),
   /** Whether to refuse startup if Den is unreachable. */
   requiredAtStartup: z.boolean().default(true),
 });

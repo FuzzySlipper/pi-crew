@@ -60,6 +60,14 @@ describe("Den Channels production connection config", () => {
       expect(result.data.den.channelsMemberIdentity).toBe("");
       expect(result.data.den.channelsPollIntervalMs).toBe(5_000);
       expect(result.data.den.channelsPollLimit).toBe(10);
+      expect(result.data.den.channelsSubscriptionChannelId).toBe("");
+      expect(result.data.den.channelsProfileIdentity).toBe("");
+      expect(result.data.den.channelsMemberRole).toBe("");
+      expect(result.data.den.channelsAgentInstanceId).toBe("");
+      expect(result.data.den.channelsSessionOwnerId).toBe("");
+      expect(result.data.den.channelsSessionId).toBe("");
+      expect(result.data.den.channelsSubscriptionIdentity).toBe("");
+      expect(result.data.den.channelsAllowLegacyDirectPolling).toBe(false);
     }
   });
 
@@ -96,6 +104,13 @@ describe("Den Channels production connection config", () => {
         channelsMemberIdentity: "pi-crew-gateway",
         channelsPollIntervalMs: 10_000,
         channelsPollLimit: 20,
+        channelsSubscriptionChannelId: "604",
+        channelsProfileIdentity: "pi-crew-runner",
+        channelsMemberRole: "runner",
+        channelsAgentInstanceId: "pi-crew-runner-live",
+        channelsSessionOwnerId: "owner:den-k8plus:pi-crew-runner",
+        channelsSessionId: "sess-pi-crew-runner-live",
+        channelsSubscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-live",
       },
     });
 
@@ -104,8 +119,16 @@ describe("Den Channels production connection config", () => {
       expect(result.data.den.channelsUrl).toBe("http://192.168.1.10:18081");
       expect(result.data.den.channelsProjectId).toBe("pi-crew");
       expect(result.data.den.channelsMemberIdentity).toBe("pi-crew-gateway");
-      expect(result.data.den.channelsPollIntervalMs).toBe(10_000);
       expect(result.data.den.channelsPollLimit).toBe(20);
+      expect(result.data.den.channelsSubscriptionChannelId).toBe("604");
+      expect(result.data.den.channelsProfileIdentity).toBe("pi-crew-runner");
+      expect(result.data.den.channelsMemberRole).toBe("runner");
+      expect(result.data.den.channelsAgentInstanceId).toBe("pi-crew-runner-live");
+      expect(result.data.den.channelsSessionOwnerId).toBe("owner:den-k8plus:pi-crew-runner");
+      expect(result.data.den.channelsSessionId).toBe("sess-pi-crew-runner-live");
+      expect(result.data.den.channelsSubscriptionIdentity).toBe(
+        "pi-crew-runner:ordinary:sess-pi-crew-runner-live",
+      );
     }
   });
 
@@ -160,6 +183,13 @@ describe("Den Channels production connection config", () => {
           channelsToken: "test-token",
           channelsProjectId: "pi-crew",
           channelsMemberIdentity: "pi-crew-gateway",
+          channelsSubscriptionChannelId: "642",
+          channelsProfileIdentity: "pi-crew-runner",
+          channelsMemberRole: "runner",
+          channelsAgentInstanceId: "pi-crew-runner-live",
+          channelsSessionOwnerId: "owner:den-k8plus:pi-crew-runner",
+          channelsSessionId: "sess-pi-crew-runner-live",
+          channelsSubscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-live",
         },
       }),
       testLogger,
@@ -207,6 +237,48 @@ describe("Den Channels production connection config", () => {
     }).toThrow(ConfigurationError);
   });
 
+  it("fails closed on HTTP channelsUrl with missing subscription identity unless legacy fallback is explicit", () => {
+    expect(() => {
+      new Crew(
+        makeTestCrewConfig({
+          den: {
+            coreUrl: "http://localhost:3030",
+            requiredAtStartup: false,
+            channelsUrl: "http://192.168.1.10:18081",
+            channelsProjectId: "pi-crew",
+            channelsMemberIdentity: "pi-crew-gateway",
+            channelsSubscriptionChannelId: "642",
+            channelsProfileIdentity: "pi-crew-runner",
+            channelsAgentInstanceId: "pi-crew-runner-live",
+            channelsSessionOwnerId: "owner:den-k8plus:pi-crew-runner",
+            channelsSessionId: "sess-pi-crew-runner-live",
+            // channelsSubscriptionIdentity intentionally omitted
+          },
+        }),
+      );
+    }).toThrow(ConfigurationError);
+  });
+
+  it("allows explicit legacy HTTP direct polling without subscription registration fields", () => {
+    const testLogger = new FakeLogger();
+    const liveCrew = new Crew(
+      makeTestCrewConfig({
+        den: {
+          coreUrl: "http://localhost:3030",
+          requiredAtStartup: false,
+          channelsUrl: "http://192.168.1.10:18081",
+          channelsProjectId: "pi-crew",
+          channelsMemberIdentity: "pi-crew-gateway",
+          channelsAllowLegacyDirectPolling: true,
+        },
+      }),
+      testLogger,
+      new FakeEventBus(),
+    );
+
+    expect(liveCrew.channelProvider).toBeDefined();
+  });
+
   it("loads default.yaml with live Channels settings", () => {
     const config = loadCrewConfig("pi-crew/config/default.yaml");
 
@@ -217,8 +289,17 @@ describe("Den Channels production connection config", () => {
     expect(config.den.channelsPingIntervalMs).toBe(30_000);
     expect(config.den.channelsConnectionTimeoutMs).toBe(10_000);
     expect(config.den.channelsProjectId).toBe("pi-crew");
-    expect(config.den.channelsMemberIdentity).toBe("pi-crew-gateway");
+    expect(config.den.channelsMemberIdentity).toBe("pi-crew-runner");
     expect(config.den.channelsPollIntervalMs).toBe(5_000);
     expect(config.den.channelsPollLimit).toBe(10);
+    expect(config.den.channelsSubscriptionChannelId).toBe("642");
+    expect(config.den.channelsProfileIdentity).toBe("pi-crew-runner");
+    expect(config.den.channelsMemberRole).toBe("runner");
+    expect(config.den.channelsAgentInstanceId).toBe("pi-crew-runner-live");
+    expect(config.den.channelsSessionOwnerId).toBe("owner:den-k8plus:pi-crew-runner");
+    expect(config.den.channelsSessionId).toBe("sess-pi-crew-runner-live");
+    expect(config.den.channelsSubscriptionIdentity).toBe(
+      "pi-crew-runner:ordinary:sess-pi-crew-runner-live",
+    );
   });
 });

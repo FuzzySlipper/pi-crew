@@ -26,13 +26,31 @@ den:
   channelsProjectId: "pi-crew"
 
   # Member identity registered in Den Channels for event delivery.
-  channelsMemberIdentity: "pi-crew-gateway"
+  channelsMemberIdentity: "pi-crew-runner"
 
   # Polling interval in milliseconds for direct-agent-events consumption.
   channelsPollIntervalMs: 5000
 
   # Maximum events to fetch per poll.
   channelsPollLimit: 10
+
+  # ── Den Channels v8 membership/subscription registration ──
+  # Public ordinary channel where this pi-crew conversational agent is visible.
+  channelsSubscriptionChannelId: "642"
+
+  # Stable public member/profile/role metadata for this runtime.
+  channelsProfileIdentity: "pi-crew-runner"
+  channelsMemberRole: "runner"
+
+  # Concrete runtime/session binding for the active ordinary-channel subscription.
+  # Override these per deployment if multiple pi-crew runtimes run side by side.
+  channelsAgentInstanceId: "pi-crew-runner-live"
+  channelsSessionOwnerId: "owner:den-k8plus:pi-crew-runner"
+  channelsSessionId: "sess-pi-crew-runner-live"
+  channelsSubscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-live"
+
+  # Compatibility fallback for pre-v8 Channels deployments. Keep false for green path.
+  channelsAllowLegacyDirectPolling: false
 
   # Live Channels reconnect / heartbeat settings.
   channelsRetryMaxAttempts: 5

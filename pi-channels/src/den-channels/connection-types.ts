@@ -11,7 +11,7 @@
  * @module pi-channels/den-channels/connection-types
  */
 
-import type { RetryPolicy } from "@pi-crew/core";
+import type { ChannelSubscriptionStatus, RetryPolicy } from "@pi-crew/core";
 
 // ── Wire types ──────────────────────────────────────────────────
 
@@ -232,6 +232,32 @@ export interface DenConnectionConfig {
   readonly connectionTimeoutMs?: number;
 }
 
+export interface DenHttpSubscriptionConfig {
+  /** Den Channels ordinary channel id whose membership/subscription is registered. */
+  readonly channelId: string;
+
+  /** Stable Den-facing profile identity for this conversational runtime. */
+  readonly profileIdentity: string;
+
+  /** Optional Den-facing member role such as runner or planner. */
+  readonly memberRole?: string;
+
+  /** Concrete runtime instance identity; changes on recreate/rebind. */
+  readonly agentInstanceId: string;
+
+  /** Durable owner of the conversational session. */
+  readonly sessionOwnerId: string;
+
+  /** Durable pi-crew session id bound to the ordinary channel subscription. */
+  readonly sessionId: string;
+
+  /** Deterministic runtime+purpose subscription key. */
+  readonly subscriptionIdentity: string;
+
+  /** Status to apply during graceful close. Defaults to degraded. */
+  readonly closeStatus?: Extract<ChannelSubscriptionStatus, "idle" | "degraded" | "offline" | "needs_rebind">;
+}
+
 /**
  * Configuration for the HTTP cursor/polling Den Channels connection.
  *
@@ -261,6 +287,12 @@ export interface DenHttpConnectionConfig {
 
   /** Key used to persist the cursor in the cursor store. */
   readonly cursorPersistenceKey?: string;
+
+  /** V2 membership/subscription registration config for ordinary-channel polling. */
+  readonly subscription?: DenHttpSubscriptionConfig;
+
+  /** Explicit compatibility escape hatch for deployments without Channels v8 routes. */
+  readonly allowLegacyDirectPolling?: boolean;
 }
 
 // ── Cursor persistence ──────────────────────────────────────────

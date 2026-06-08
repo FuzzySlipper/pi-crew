@@ -19,6 +19,7 @@ function makeConfig(): DenHttpConnectionConfig {
     token: "test-token",
     pollIntervalMs: 5000,
     pollLimit: 1,
+    allowLegacyDirectPolling: true,
   };
 }
 
