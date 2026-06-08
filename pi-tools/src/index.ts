@@ -87,6 +87,17 @@ export {
   buildCompletionPacket,
 } from "./post-structured-completion.js";
 
+// ── Checkpoint requests ───────────────────────────────────────
+
+export {
+  type CheckpointPacket,
+  type CheckpointPoster,
+  type CheckpointRuntimeState,
+  type PostedCheckpoint,
+  createCheckpointState,
+  requestCheckpointTool,
+} from "./request-checkpoint.js";
+
 // ── Session tool filter ───────────────────────────────────────
 
 export { SessionToolFilter } from "./session-tool-filter.js";

@@ -30,6 +30,10 @@ export interface GuardedAgentLike extends AgentLike {
   ) => Promise<AfterToolCallResult | undefined>;
 }
 
+export interface CheckpointToolHooks {
+  afterToolCall(context: AfterToolCallContext): AfterToolCallResult | undefined;
+}
+
 /**
  * Attach guarded hooks and wrap the Agent's current tool surface.
  *
@@ -42,15 +46,18 @@ export function installGuardedAgentRuntime(
   agent: GuardedAgentLike,
   context: GuardedToolContextMethods,
   executor: ToolExecutor | null,
+  checkpointHooks?: CheckpointToolHooks,
 ): void {
   const hooks = context.createGuardedToolHooks();
   agent.beforeToolCall = (hookContext, signal) => {
     void signal;
     return hooks.beforeToolCall(hookContext);
   };
-  agent.afterToolCall = (hookContext, signal) => {
+  agent.afterToolCall = async (hookContext, signal) => {
     void signal;
-    return hooks.afterToolCall(hookContext);
+    const guarded = await hooks.afterToolCall(hookContext);
+    const checkpoint = checkpointHooks?.afterToolCall(hookContext);
+    return mergeAfterToolCallResults(guarded, checkpoint);
   };
 
   const state = agent.state;
@@ -60,6 +67,20 @@ export function installGuardedAgentRuntime(
   if (!rawTools.every(isFullAgentTool)) return;
 
   state.tools = context.assembleGuardedTools(rawTools, executor);
+}
+
+function mergeAfterToolCallResults(
+  first: AfterToolCallResult | undefined,
+  second: AfterToolCallResult | undefined,
+): AfterToolCallResult | undefined {
+  if (first === undefined) return second;
+  if (second === undefined) return first;
+  return {
+    content: second.content ?? first.content,
+    details: second.details ?? first.details,
+    isError: second.isError ?? first.isError,
+    terminate: second.terminate ?? first.terminate,
+  };
 }
 
 function isFullAgentTool(tool: AgentToolRef): tool is AgentTool {

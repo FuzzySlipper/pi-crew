@@ -20,6 +20,7 @@ const DEFAULT_MCP_TOOL_SETS = ["filesystem", "terminal", "git", "den"] as const;
 const DEFAULT_DRAIN_ESSENTIAL_TOOLS = [
   "context_status",
   "post_structured_completion",
+  "request_checkpoint",
 ] as const;
 
 /**

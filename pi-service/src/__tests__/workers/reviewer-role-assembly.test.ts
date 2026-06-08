@@ -70,6 +70,7 @@ describe("ReviewerRoleAssembly", () => {
     expect(ReviewerRoleAssembly.drainEssentialTools(makeInput())).toEqual([
       "context_status",
       "post_structured_completion",
+      "request_checkpoint",
     ]);
   });
 

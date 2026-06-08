@@ -60,6 +60,7 @@ const AUDITOR_TOOL_SETS = ["den"];
 const DRAIN_ESSENTIAL_TOOLS = [
   "context_status",
   "post_structured_completion",
+  "request_checkpoint",
 ];
 
 // ── Required field definitions (shared with packet-auditor.ts) ───

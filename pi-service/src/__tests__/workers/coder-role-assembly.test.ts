@@ -72,6 +72,7 @@ describe("CoderRoleAssembly", () => {
     expect(tools).toEqual([
       "context_status",
       "post_structured_completion",
+      "request_checkpoint",
     ]);
   });
 

@@ -87,6 +87,22 @@ export class AgentRuntimeRegistry {
     return this.#byAssignmentId.get(assignmentId);
   }
 
+  steerByRunId(runId: string, message: Parameters<SteerableAgent["steer"]>[0]): boolean {
+    const entry = this.findByRunId(runId);
+    if (entry === undefined) return false;
+    entry.supervisor.clearCheckpoint();
+    entry.agent.steer(message);
+    return true;
+  }
+
+  followUpByRunId(runId: string, message: Parameters<SteerableAgent["followUp"]>[0]): boolean {
+    const entry = this.findByRunId(runId);
+    if (entry === undefined) return false;
+    entry.supervisor.clearCheckpoint();
+    entry.agent.followUp(message);
+    return true;
+  }
+
   /** Number of currently registered agents. */
   get size(): number {
     return this.#byRunId.size;

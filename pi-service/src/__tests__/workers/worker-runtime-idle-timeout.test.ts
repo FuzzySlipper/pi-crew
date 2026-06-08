@@ -150,8 +150,12 @@ function checkpointWaitingExecutor(): WorkerExecutor {
         event: "checkpoint.waiting",
         payload: {
           workerIdentity: "test-worker",
-          assignmentId: 208,
-          checkpointId: 1,
+          assignmentId: "208",
+          runId: "piw_checkpoint_idle",
+          taskId: "2066",
+          checkpointId: "1",
+          reason: "idle timeout checkpoint test",
+          since: new Date().toISOString(),
         },
       });
       await sleep(60);

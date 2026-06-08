@@ -28,6 +28,8 @@ import type { EventBus, Logger } from "@pi-crew/core";
 import type { ContextUsageTracker, DrainModeManager } from "@pi-crew/tools";
 import { TokenPressureEmitter } from "@pi-crew/tools";
 import type { WorkerBinding } from "../sessions/types.js";
+import type { WorkerCheckpointController, CheckpointPhase } from "./worker-checkpoint-controller.js";
+import type { AfterToolCallResult } from "./guarded-tool-types.js";
 
 // ── AgentLike: testable subset of Agent's public API ─────────────
 
@@ -103,6 +105,8 @@ export interface AgentSupervisorConfig {
   readonly pressureEmitter?: TokenPressureEmitter;
   /** Optional drain-mode manager used to shrink the real Agent tool surface. */
   readonly drainManager?: DrainModeManager;
+  /** Optional checkpoint controller for request_checkpoint pause/resume state. */
+  readonly checkpointController?: WorkerCheckpointController;
 }
 
 // ── AgentSupervisor ──────────────────────────────────────────────
@@ -145,6 +149,7 @@ export class AgentSupervisor {
   readonly #tokenTracker: ContextUsageTracker | undefined;
   readonly #pressureEmitter: TokenPressureEmitter | undefined;
   readonly #drainManager: DrainModeManager | undefined;
+  readonly #checkpointController: WorkerCheckpointController | undefined;
 
   #turnCount = 0;
   #turnStartTime = 0;
@@ -164,6 +169,7 @@ export class AgentSupervisor {
       ? (config.pressureEmitter ?? new TokenPressureEmitter())
       : undefined;
     this.#drainManager = config.drainManager;
+    this.#checkpointController = config.checkpointController;
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -209,6 +215,18 @@ export class AgentSupervisor {
    */
   get tokenTracker(): ContextUsageTracker | undefined {
     return this.#tokenTracker;
+  }
+
+  get checkpointPhase(): CheckpointPhase {
+    return this.#checkpointController?.phase ?? "running";
+  }
+
+  afterToolCallForCheckpoint(): AfterToolCallResult | undefined {
+    return this.#checkpointController?.afterToolCall();
+  }
+
+  clearCheckpoint(): void {
+    this.#checkpointController?.clear();
   }
 
   // ── Event handler ────────────────────────────────────────────

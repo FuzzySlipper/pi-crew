@@ -127,8 +127,12 @@ export interface TurnExhaustedPayload {
 /** Fired when a worker enters a checkpoint and waits for orchestrator input. */
 export interface CheckpointWaitingPayload {
   readonly workerIdentity: string;
-  readonly assignmentId: number;
-  readonly checkpointId: number;
+  readonly assignmentId: string;
+  readonly runId: string;
+  readonly taskId: string;
+  readonly checkpointId?: string;
+  readonly reason: string;
+  readonly since: string;
 }
 
 /** Fired when the context window approaches its limit. */

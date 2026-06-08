@@ -30,6 +30,7 @@ describe("Coder role assembly runtime wiring", () => {
         expect(assembly?.drainEssentialTools(input)).toEqual([
           "context_status",
           "post_structured_completion",
+          "request_checkpoint",
         ]);
 
         return Promise.resolve({

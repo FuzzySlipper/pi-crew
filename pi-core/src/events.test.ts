@@ -116,8 +116,12 @@ describe("GatewayEvent union — dot-style names", () => {
       event: "checkpoint.waiting",
       payload: {
         workerIdentity: "pi-w",
-        assignmentId: 1,
-        checkpointId: 42,
+        assignmentId: "1",
+        runId: "run-1",
+        taskId: "task-1",
+        checkpointId: "42",
+        reason: "awaiting review",
+        since: "2026-06-08T00:00:00.000Z",
       },
     };
     expect(ev.event).toBe("checkpoint.waiting");

@@ -7,7 +7,7 @@ import type {
   EventPayload,
   ContextPressureSnapshot,
 } from "@pi-crew/core";
-import type { CompletionPoster, ContextUsageTracker } from "@pi-crew/tools";
+import type { CompletionPoster, ContextUsageTracker, CheckpointPoster } from "@pi-crew/tools";
 import {
   ContextUsageTrackerImpl,
   DrainModeManager,
@@ -45,6 +45,8 @@ import type {
 } from "./guarded-tool-types.js";
 import type { ToolExecutor } from "./guarded-tool-assembly.js";
 import type { AgentRuntimeRegistry } from "./agent-runtime-registry.js";
+import { WorkerCheckpointController } from "./worker-checkpoint-controller.js";
+import { installRequestCheckpointTool } from "./checkpoint-agent-installer.js";
 
 export interface WorkerExecutor {
   /** Execute the worker's role-specific logic. */
@@ -104,26 +106,12 @@ export interface WorkerRuntimeConfig {
   readonly workerIdentity: string;
   readonly packetCompletionReader?: PacketCompletionReader;
   readonly agentRuntimeRegistry?: AgentRuntimeRegistry;
+  readonly checkpointPoster?: CheckpointPoster;
 }
 
 /**
- * Drives the Den worker lifecycle for a single assignment.
- *
- * 1. Claims the assignment (emits assignment.claimed).
- * 2. Creates a fresh worker session with WorkerBinding.
- * 3. Executes the worker logic via the injected executor with
- *    a hard assignment-duration timeout.
- * 4. Posts a structured CompletionPacket.
- * 5. Releases the assignment (emits assignment.released).
- * 6. Archives the worker session.
- *
- * Role-to-profile resolution is handled via the injected
- * {@link WorkerRoleMappingConfig}, validated at construction
- * time (no duplicate roles, at least one binding required).
- *
- * On timeout, the runtime stops executor work, posts structured
- * failure evidence with correlation IDs, and ensures no orphaned
- * local worker session remains.
+ * Drives Den worker assignment execution: claim, session, executor,
+ * completion post, release, cleanup.
  */
 export class WorkerRuntime {
   readonly #config: WorkerRuntimeConfig;
@@ -154,13 +142,6 @@ export class WorkerRuntime {
     this.#poster = poster;
   }
 
-  /**
-   * Execute the full worker lifecycle for an assignment.
-   *
-   * Enforces a hard assignment-duration timer from claim/start.
-   * On timeout, stops executor work, posts failure evidence,
-   * and releases the assignment with reason `"timeout"`.
-   */
   async executeAssignment(
     binding: WorkerBinding,
     executor: WorkerExecutor,
@@ -293,6 +274,12 @@ export class WorkerRuntime {
       supervisorEventBus,
       this.#logger,
     );
+    const checkpointController = new WorkerCheckpointController({
+      binding,
+      workerIdentity: this.#config.workerIdentity,
+      eventBus: supervisorEventBus,
+      logger: this.#logger,
+    });
 
     return {
       binding,
@@ -332,7 +319,12 @@ export class WorkerRuntime {
         });
       },
       createAgentSupervisor: (agent: AgentLike): AgentSupervisor => {
-        installGuardedAgentRuntime(agent, guardedToolContext, null);
+        installRequestCheckpointTool({
+          agent,
+          binding,
+          checkpointState: checkpointController,
+          checkpointPoster: this.#config.checkpointPoster,
+        });
         const supervisor = new AgentSupervisor(
           {
             binding,
@@ -343,9 +335,13 @@ export class WorkerRuntime {
             tokenTracker: contextUsageTracker,
             pressureEmitter,
             drainManager: drainModeManager,
+            checkpointController,
           },
           agent,
         );
+        installGuardedAgentRuntime(agent, guardedToolContext, null, {
+          afterToolCall: () => supervisor.afterToolCallForCheckpoint(),
+        });
         if ("steer" in agent && "followUp" in agent) {
           this.#config.agentRuntimeRegistry?.register(binding.runId, binding.assignmentId, {
             agent: agent as SteerableAgent,

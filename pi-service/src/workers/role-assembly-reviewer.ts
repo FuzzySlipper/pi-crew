@@ -24,6 +24,7 @@ const DEFAULT_MCP_TOOL_SETS = [
 const DEFAULT_DRAIN_ESSENTIAL_TOOLS = [
   "context_status",
   "post_structured_completion",
+  "request_checkpoint",
 ] as const;
 
 /**

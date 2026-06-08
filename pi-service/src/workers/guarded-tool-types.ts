@@ -88,6 +88,7 @@ export interface AfterToolCallResult {
   readonly content?: readonly (TextContent | ImageContent)[];
   readonly details?: unknown;
   readonly isError?: boolean;
+  readonly terminate?: boolean;
 }
 
 /** Context passed to `afterToolCall`. Mirror of pi-agent-core. */
