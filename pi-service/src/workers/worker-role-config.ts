@@ -160,7 +160,15 @@ export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
       drainEssentialTools: ["context_status", "post_structured_completion"],
     },
   },
-  { role: "reviewer", profileId: "spawned-reviewer" },
+  {
+    role: "reviewer",
+    profileId: "spawned-reviewer",
+    config: {
+      systemPromptSource: "spawned-reviewer",
+      mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"],
+      drainEssentialTools: ["context_status", "post_structured_completion"],
+    },
+  },
   { role: "validator", profileId: "spawned-validator" },
   { role: "drift_checker", profileId: "worker-drift_checker" },
 ];

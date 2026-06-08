@@ -31,6 +31,7 @@ import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 import { AgentSupervisor, type AgentLike, type SteerableAgent } from "./agent-supervisor.js";
 import { PacketAuditorRoleAssembly } from "./packet-auditor-role-assembly.js";
 import { CoderRoleAssembly } from "./role-assembly-coder.js";
+import { ReviewerRoleAssembly } from "./role-assembly-reviewer.js";
 import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
 import type { PacketCompletionReader } from "./packet-auditor-workflow.js";
 import { buildGuardedToolContext } from "./guarded-tool-context-factory.js";
@@ -50,7 +51,6 @@ export interface WorkerExecutor {
   execute(context: WorkerExecutionContext): Promise<WorkerExecutionResult>;
 }
 
-/** Context passed to a worker executor. */
 export interface WorkerExecutionContext {
   readonly binding: WorkerBinding;
   readonly session: SessionRecord;
@@ -74,7 +74,6 @@ export interface WorkerExecutionContext {
   assembleGuardedTools(tools: readonly AgentTool[], executor: ToolExecutor | null): AgentTool[];
 }
 
-/** Result of worker execution. */
 export interface WorkerExecutionResult {
   /** Completion status. */
   readonly status: CompletionStatus;
@@ -367,7 +366,9 @@ export class WorkerRuntime {
           ? PacketAuditorRoleAssembly
           : binding.role === "coder"
             ? CoderRoleAssembly
-            : undefined,
+            : binding.role === "reviewer"
+              ? ReviewerRoleAssembly
+              : undefined,
       ...guardedToolContext,
     };
   }

@@ -283,6 +283,22 @@ describe("resolveRoleConfig", () => {
     ]);
   });
 
+  it("returns reviewer defaults from the validated default mapping", () => {
+    const mapping = loadWorkerRoleMapping(makeValidMapping());
+    const config = resolveRoleConfig(mapping, "reviewer");
+
+    expect(config?.systemPromptSource).toBe("spawned-reviewer");
+    expect(config?.mcpToolSet).toEqual([
+      "filesystem_readonly",
+      "git_diff_log",
+      "den",
+    ]);
+    expect(config?.drainEssentialTools).toEqual([
+      "context_status",
+      "post_structured_completion",
+    ]);
+  });
+
   it("returns config when per-role config is present", () => {
     const mapping = loadWorkerRoleMapping(
       withBinding({
@@ -314,7 +330,7 @@ describe("resolveRoleConfig", () => {
         },
       }),
     );
-    expect(resolveRoleConfig(mapping, "reviewer")).toBeUndefined();
+    expect(resolveRoleConfig(mapping, "validator")).toBeUndefined();
   });
 
   it("returns undefined for unknown role (no binding at all)", () => {
