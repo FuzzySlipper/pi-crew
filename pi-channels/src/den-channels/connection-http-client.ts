@@ -34,6 +34,7 @@ export interface DirectAgentEventItem {
   readonly completionStatus?: string | null;
   readonly body?: string | null;
   readonly status?: string | null;
+  readonly intent?: string | null;
   readonly createdAt?: string | null;
 }
 

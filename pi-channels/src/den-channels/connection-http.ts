@@ -377,6 +377,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         deliveryStatus: item.deliveryStatus,
         claimStatus: item.claimStatus,
         completionStatus: item.completionStatus,
+        intent: item.intent,
         status: item.status,
         eventId: item.id,
         eventKind: "direct-agent-event",

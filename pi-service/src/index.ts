@@ -135,6 +135,17 @@ export {
   resolveRoleConfig,
 } from "./workers/worker-role-config.js";
 export {
+  AgentSupervisor,
+  type AgentSupervisorConfig,
+  type AgentLike,
+  type AgentToolRef,
+  type SteerableAgent,
+} from "./workers/agent-supervisor.js";
+export {
+  AgentRuntimeRegistry,
+  type AgentRuntimeEntry,
+} from "./workers/agent-runtime-registry.js";
+export {
   PacketAuditor,
   type AuditFinding,
   type AuditResult,

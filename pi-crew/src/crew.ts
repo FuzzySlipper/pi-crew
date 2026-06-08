@@ -52,6 +52,8 @@ import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 import { createDenCompletionPoster } from "./den-completion-poster.js";
 import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
+import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
+import { AgentRuntimeRegistry } from "@pi-crew/service";
 import type { CompletionPoster } from "@pi-crew/tools";
 
 // ── Crew ───────────────────────────────────────────────────────
@@ -82,6 +84,11 @@ export class Crew {
   readonly #auditLogger: AuditLogger;
   readonly #toolPolicyEnforcer: ToolPolicyEnforcer;
   readonly #denCompletionPoster: CompletionPoster;
+
+  /** Registry of active supervised Agents keyed by runId for steer/followUp routing. */
+  readonly #agentRegistry: AgentRuntimeRegistry;
+  /** Bridge that routes steer/followUp direct-agent events to active Agents. */
+  readonly #steerFollowUpBridge: SteerFollowUpBridge;
 
   readonly #instancePool: InstancePoolImpl;
 
@@ -170,6 +177,16 @@ export class Crew {
       logger: this.#logger,
     });
 
+    // 3c. Agent runtime registry and steer/followUp bridge
+    //     Routes mid-assignment interaction from Den Channels direct-agent
+    //     events with intent=steer or intent=follow_up to the correct
+    //     active supervised Agent.
+    this.#agentRegistry = new AgentRuntimeRegistry();
+    this.#steerFollowUpBridge = new SteerFollowUpBridge(
+      this.#agentRegistry,
+      this.#logger,
+    );
+
     // 4. Instance pool + factory
     const responderFactory = buildRuntimeResponderFactory(config.runtime, this.#eventBus);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
@@ -228,8 +245,11 @@ export class Crew {
       this.#logger,
     );
 
-    // 6. Wire channel provider → session manager routing
+    // 6. Wire channel provider → steer/followUp bridge → session manager routing
+    //    Steer/followUp events with intent metadata are intercepted by the
+    //    bridge before falling through to normal session routing.
     this.#channelProvider.onMessage((message) => {
+      if (this.#steerFollowUpBridge.route(message)) return;
       return this.#sessionManager.routeMessage(this.#channelProvider, message);
     });
 
@@ -392,6 +412,18 @@ export class Crew {
 
   get toolPolicyEnforcer(): ToolPolicyEnforcer {
     return this.#toolPolicyEnforcer;
+  }
+
+  /**
+   * Registry of active supervised Agents.
+   *
+   * WorkerRuntime instances register their Agent on start and
+   * unregister on end.  The steer/followUp bridge queries this
+   * registry to route mid-assignment interaction from Den Channels
+   * direct-agent events.
+   */
+  get agentRegistry(): AgentRuntimeRegistry {
+    return this.#agentRegistry;
   }
 
   /**

@@ -23,7 +23,7 @@
  * @module pi-service/workers/agent-supervisor
  */
 
-import type { AgentEvent } from "@earendil-works/pi-agent-core";
+import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger } from "@pi-crew/core";
 import type { ContextUsageTracker, DrainModeManager } from "@pi-crew/tools";
 import { TokenPressureEmitter } from "@pi-crew/tools";
@@ -49,6 +49,22 @@ export interface AgentLike {
    * subscription order and are awaited before the next event.
    */
   subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void;
+}
+
+/**
+ * Extends {@link AgentLike} with queueing methods for mid-run
+ * steering and follow-up via Den Channels direct-agent events.
+ *
+ * The real pi-agent-core {@link Agent} satisfies this interface
+ * through its {@code steer()} and {@code followUp()} methods.
+ */
+export interface SteerableAgent extends AgentLike {
+  /** Queue a message to be injected after the current assistant turn finishes. */
+  steer(message: AgentMessage): void;
+  /** Queue a message to run only after the agent would otherwise stop. */
+  followUp(message: AgentMessage): void;
+  /** True when either steering or follow-up queue still has pending messages. */
+  hasQueuedMessages(): boolean;
 }
 
 /** Minimal tool shape needed to reduce `agent.state.tools` in drain mode. */
