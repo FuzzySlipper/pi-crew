@@ -8,7 +8,13 @@
  * @module pi-service/persistence/types
  */
 
-import type { SessionKind, SessionState, WorkerBinding } from "../sessions/types.js";
+import type {
+  ChannelBinding,
+  ChannelBindingRecord,
+  SessionKind,
+  SessionState,
+  WorkerBinding,
+} from "../sessions/types.js";
 import type { SessionRecord } from "../sessions/types.js";
 
 // ── SQLite row types ──────────────────────────────────────────────
@@ -176,7 +182,7 @@ export function rowToRecord(row: SessionRow): SessionRecord {
     lastActiveAt: row.last_activity,
     state: row.status,
     messageCount: 0,
-    channelBindings: parseJsonArray(row.channel_bindings_json),
+    channelBindings: parseChannelBindings(row.channel_bindings_json),
     workerBinding: parseWorkerBinding(row.worker_binding_json),
   };
 }
@@ -202,16 +208,40 @@ export function recordToRow(record: SessionRecord): SessionRow {
 
 // ── Internal helpers ──────────────────────────────────────────────
 
-function parseJsonArray(raw: string): string[] {
+function parseChannelBindings(raw: string): ChannelBinding[] {
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((v): v is string => typeof v === "string")) {
-      return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.flatMap(parseChannelBinding);
     }
   } catch {
     // Fall through to default.
   }
   return [];
+}
+
+function parseChannelBinding(value: unknown): ChannelBinding[] {
+  if (typeof value === "string") return [value];
+  if (typeof value !== "object" || value === null) return [];
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.providerId !== "string" || typeof candidate.channelId !== "string") return [];
+  return [{
+    providerId: candidate.providerId,
+    channelId: candidate.channelId,
+    ...readOptionalChannelBindingFields(candidate),
+  }];
+}
+
+function readOptionalChannelBindingFields(
+  candidate: Record<string, unknown>,
+): Omit<ChannelBindingRecord, "providerId" | "channelId"> {
+  return {
+    ...(typeof candidate.memberIdentity === "string" ? { memberIdentity: candidate.memberIdentity } : {}),
+    ...(typeof candidate.profileIdentity === "string" ? { profileIdentity: candidate.profileIdentity } : {}),
+    ...(typeof candidate.memberRole === "string" ? { memberRole: candidate.memberRole } : {}),
+    ...(typeof candidate.subscriptionIdentity === "string" ? { subscriptionIdentity: candidate.subscriptionIdentity } : {}),
+    ...(typeof candidate.sessionOwnerId === "string" ? { sessionOwnerId: candidate.sessionOwnerId } : {}),
+  };
 }
 
 function parseWorkerBinding(raw: string | null): WorkerBinding | null {

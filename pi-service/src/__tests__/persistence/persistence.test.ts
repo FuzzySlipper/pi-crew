@@ -7,7 +7,7 @@ import { SqliteMessageRepository } from "../../persistence/message-repository.js
 import { SqliteAuditRepository } from "../../persistence/audit-repository.js";
 import { StartupHydrator } from "../../persistence/startup-hydration.js";
 import type { DatabaseConfig } from "../../config.js";
-import type { SessionRecord, WorkerBinding } from "../../sessions/types.js";
+import type { ChannelBindingRecord, SessionRecord, WorkerBinding } from "../../sessions/types.js";
 import type { DenAssignmentReader, DenAssignmentStatus } from "../../persistence/types.js";
 
 const logger: Logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
@@ -44,6 +44,19 @@ function binding(overrides: Partial<WorkerBinding> = {}): WorkerBinding {
     taskId: "1866",
     projectId: "pi-crew",
     role: "coder",
+    ...overrides,
+  };
+}
+
+function channelBinding(overrides: Partial<ChannelBindingRecord> = {}): ChannelBindingRecord {
+  return {
+    providerId: "den-channels",
+    channelId: "642",
+    memberIdentity: "pi-crew-runner",
+    profileIdentity: "pi-crew-runner",
+    memberRole: "runner",
+    subscriptionIdentity: "pi-crew-runner:ordinary:sess-1",
+    sessionOwnerId: "owner:den-k8plus:pi-crew-runner",
     ...overrides,
   };
 }
@@ -96,6 +109,21 @@ describe("runtime persistence", () => {
     const reopened = new SqliteSessionRepository(db.handle, logger);
     expect(present(await reopened.findByChannel("den:604")).id).toBe("chat");
     expect(present(await reopened.get("worker")).workerBinding?.runId).toBe("run-1");
+  });
+
+  it("persists typed channel bindings and finds them by channel", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    await sessions.save(session({ id: "typed-chat", channelBindings: [channelBinding()] }));
+
+    const found = present(await sessions.findByChannel("642"));
+    const reopened = present(await sessions.get("typed-chat"));
+
+    expect(found.id).toBe("typed-chat");
+    expect(reopened.channelBindings[0]).toMatchObject({
+      channelId: "642",
+      memberIdentity: "pi-crew-runner",
+      subscriptionIdentity: "pi-crew-runner:ordinary:sess-1",
+    });
   });
 
   it("persists messages with token counts per session", async () => {

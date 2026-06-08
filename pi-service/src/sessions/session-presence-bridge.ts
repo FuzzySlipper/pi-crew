@@ -40,7 +40,7 @@ export class SessionPresenceBridge {
     const identity = readPresenceIdentity(payload);
     if (identity === null) return;
 
-    if (payload.reason === "archived") {
+    if (payload.membershipStatus === "left") {
       await this.markLeft(payload, identity);
       return;
     }

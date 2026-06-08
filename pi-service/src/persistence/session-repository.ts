@@ -15,6 +15,7 @@ import type { SessionStore } from "../sessions/session-store.js";
 import type { SessionRow, SqliteSessionStore } from "./types.js";
 import { rowToRecord, recordToRow } from "./types.js";
 import type { Logger } from "@pi-crew/core";
+import { bindingMatchesChannel } from "../sessions/session-channel-bindings.js";
 
 /**
  * SQLite-backed {@link SessionStore} with hydration extensions.
@@ -70,7 +71,9 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
 
     for (const row of rows) {
       const record = rowToRecord(row);
-      if (record.channelBindings.includes(channelId)) return Promise.resolve(record);
+      if (record.channelBindings.some((binding) => bindingMatchesChannel(binding, channelId))) {
+        return Promise.resolve(record);
+      }
     }
     return Promise.resolve(null);
   }

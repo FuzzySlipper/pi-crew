@@ -103,6 +103,18 @@ describe("SessionPresenceBridge", () => {
     expect(rows[0]?.presenceState).toBe("left");
   });
 
+  it("marks membership left when a conversational session unbinds a channel", async () => {
+    const { manager, presence } = harness();
+    const record = await manager.create(config());
+
+    await manager.unbindChannel(record.id, "ch-alpha");
+
+    const rows = await presence.getPresence({ channelId: "ch-alpha", memberIdentity: "pi-crew-runner" });
+    expect(rows[0]?.membershipStatus).toBe("left");
+    expect(rows[0]?.presenceState).toBe("left");
+    expect(presence.sentMessages).toHaveLength(0);
+  });
+
   it("does not publish conversational channel presence for worker sessions", async () => {
     const { manager, presence } = harness();
     await manager.create(config({
