@@ -32,6 +32,7 @@ import {
   type GatewayConfig,
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
+  type ChannelBinding,
 } from "@pi-crew/service";
 
 import { loadCrewConfig, type CrewConfig } from "./config.js";
@@ -218,6 +219,7 @@ export class Crew {
       this.#eventBus,
       this.#logger,
       config.sessions.fallbackProfileId,
+      createFallbackChannelBinding(config),
     );
 
     new SessionPresenceBridge(
@@ -403,7 +405,23 @@ export class Crew {
   }
 }
 
-function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
+function createFallbackChannelBinding(
+  config: GatewayConfig,
+): ((channelId: string) => ChannelBinding) | null {
+  if (config.den.channelsAllowLegacyDirectPolling) return null;
+  if (config.den.channelsSubscriptionIdentity.length === 0) return null;
+  return (channelId: string): ChannelBinding => ({
+    providerId: "den-channels",
+    channelId,
+    memberIdentity: config.den.channelsMemberIdentity,
+    profileIdentity: config.den.channelsProfileIdentity,
+    memberRole: config.den.channelsMemberRole.length === 0 ? undefined : config.den.channelsMemberRole,
+    subscriptionIdentity: config.den.channelsSubscriptionIdentity,
+    sessionOwnerId: config.den.channelsSessionOwnerId,
+  });
+}
+
+export function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
   return {
     timestamp: entry.timestamp,
     event: entry.event,

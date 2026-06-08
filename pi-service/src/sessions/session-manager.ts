@@ -21,9 +21,10 @@ import type {
   SessionConfig,
   SessionRecord,
   ChannelBindingRecord,
+  type ChannelBinding,
 } from "./types.js";
 import {
-  appendStringBinding,
+  appendChannelBinding,
   channelBindingId,
   isChannelBindingRecord,
   removeChannelBinding,
@@ -132,6 +133,7 @@ export class SessionManagerImpl implements SessionManager {
     private readonly eventBus: EventBus,
     private readonly logger: Logger,
     private readonly fallbackProfileId: string,
+    private readonly fallbackBinding: ((channelId: string) => ChannelBinding) | null = null,
   ) {}
 
   // ── SessionManager contract ───────────────────────────────────
@@ -169,10 +171,11 @@ export class SessionManagerImpl implements SessionManager {
 
     const updated: SessionRecord = {
       ...record,
-      channelBindings: appendStringBinding(record.channelBindings, channelId),
+      channelBindings: appendChannelBinding(record.channelBindings, this.bindingFor(channelId)),
     };
 
     await this.store.save(updated);
+    this.emitPresenceForBinding(updated, this.bindingFor(channelId), "bound", "active", "active");
 
     this.logger.info("Channel bound to session", {
       sessionId,
@@ -187,12 +190,16 @@ export class SessionManagerImpl implements SessionManager {
     const record = await this.store.get(sessionId);
     if (!record) return;
 
+    const removed = record.channelBindings.find((binding) => channelBindingId(binding) === channelId);
     const updated: SessionRecord = {
       ...record,
       channelBindings: removeChannelBinding(record.channelBindings, channelId),
     };
 
     await this.store.save(updated);
+    if (removed !== undefined) {
+      this.emitPresenceForBinding(record, removed, "unbound", "offline", "left");
+    }
 
     this.logger.info("Channel unbound from session", {
       sessionId,
@@ -343,7 +350,7 @@ export class SessionManagerImpl implements SessionManager {
     const newSession = await this.create({
       profileId: this.fallbackProfileId,
       kind: "conversational",
-      channelBindings: [channelId],
+      channelBindings: [this.bindingFor(channelId)],
     });
 
     this.eventBus.emit({
@@ -432,22 +439,37 @@ export class SessionManagerImpl implements SessionManager {
   ): void {
     if (record.kind !== "conversational") return;
     for (const binding of record.channelBindings) {
-      const channelBinding: ChannelBindingRecord = isChannelBindingRecord(binding)
-        ? binding
-        : { providerId: "legacy", channelId: binding };
-      this.eventBus.emit({
-        event: "session.presence",
-        payload: {
-          sessionId: record.id,
-          profileId: record.profileId,
-          kind: "conversational",
-          channelBinding,
-          agentInstanceId: record.instanceId,
-          subscriptionStatus,
-          membershipStatus,
-          reason,
-        },
-      });
+      this.emitPresenceForBinding(record, binding, reason, subscriptionStatus, membershipStatus);
     }
+  }
+
+  private emitPresenceForBinding(
+    record: SessionRecord,
+    binding: ChannelBinding,
+    reason: "created" | "routed" | "rehydrated" | "idle_evicted" | "archived" | "bound" | "unbound",
+    subscriptionStatus: ChannelSubscriptionStatus,
+    membershipStatus?: ChannelMembershipStatus,
+  ): void {
+    if (record.kind !== "conversational") return;
+    const channelBinding: ChannelBindingRecord = isChannelBindingRecord(binding)
+      ? binding
+      : { providerId: "legacy", channelId: binding };
+    this.eventBus.emit({
+      event: "session.presence",
+      payload: {
+        sessionId: record.id,
+        profileId: record.profileId,
+        kind: "conversational",
+        channelBinding,
+        agentInstanceId: record.instanceId,
+        subscriptionStatus,
+        membershipStatus,
+        reason,
+      },
+    });
+  }
+
+  private bindingFor(channelId: string): ChannelBinding {
+    return this.fallbackBinding?.(channelId) ?? channelId;
   }
 }

@@ -12,14 +12,14 @@ export function bindingMatchesChannel(binding: ChannelBinding, channelId: string
   return channelBindingId(binding) === channelId;
 }
 
-export function appendStringBinding(
+export function appendChannelBinding(
   bindings: readonly ChannelBinding[],
-  channelId: string,
+  binding: ChannelBinding,
 ): ChannelBinding[] {
-  if (bindings.some((binding) => bindingMatchesChannel(binding, channelId))) {
+  if (bindings.some((existing) => bindingMatchesChannel(existing, channelBindingId(binding)))) {
     return [...bindings];
   }
-  return [...bindings, channelId];
+  return [...bindings, binding];
 }
 
 export function removeChannelBinding(
