@@ -151,7 +151,15 @@ export const WorkerRoleMappingConfigSchema = z
 export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
   { role: "packet-auditor", profileId: "packet-auditor" },
   { role: "packet_auditor", profileId: "packet-auditor" },
-  { role: "coder", profileId: "spawned-coder" },
+  {
+    role: "coder",
+    profileId: "spawned-coder",
+    config: {
+      systemPromptSource: "spawned-coder",
+      mcpToolSet: ["filesystem", "terminal", "git", "den"],
+      drainEssentialTools: ["context_status", "post_structured_completion"],
+    },
+  },
   { role: "reviewer", profileId: "spawned-reviewer" },
   { role: "validator", profileId: "spawned-validator" },
   { role: "drift_checker", profileId: "worker-drift_checker" },

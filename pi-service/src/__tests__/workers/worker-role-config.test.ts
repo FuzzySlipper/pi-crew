@@ -271,10 +271,16 @@ describe("resolveProfileId", () => {
 // ── resolveRoleConfig ──────────────────────────────────────────
 
 describe("resolveRoleConfig", () => {
-  it("returns undefined when no per-role config exists", () => {
+  it("returns coder defaults from the validated default mapping", () => {
     const mapping = loadWorkerRoleMapping(makeValidMapping());
-    // The default mappings have no config
-    expect(resolveRoleConfig(mapping, "coder")).toBeUndefined();
+    const config = resolveRoleConfig(mapping, "coder");
+
+    expect(config?.systemPromptSource).toBe("spawned-coder");
+    expect(config?.mcpToolSet).toEqual(["filesystem", "terminal", "git", "den"]);
+    expect(config?.drainEssentialTools).toEqual([
+      "context_status",
+      "post_structured_completion",
+    ]);
   });
 
   it("returns config when per-role config is present", () => {

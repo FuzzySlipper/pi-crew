@@ -30,6 +30,7 @@ import { createWorkerIdleWatchdog, type IdleTimeoutWatchdog } from "./worker-idl
 import { executeWithAssignmentTimeout } from "./worker-timeout.js";
 import { AgentSupervisor, type AgentLike, type SteerableAgent } from "./agent-supervisor.js";
 import { PacketAuditorRoleAssembly } from "./packet-auditor-role-assembly.js";
+import { CoderRoleAssembly } from "./role-assembly-coder.js";
 import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
 import type { PacketCompletionReader } from "./packet-auditor-workflow.js";
 import { buildGuardedToolContext } from "./guarded-tool-context-factory.js";
@@ -44,10 +45,6 @@ import type {
 import type { ToolExecutor } from "./guarded-tool-assembly.js";
 import type { AgentRuntimeRegistry } from "./agent-runtime-registry.js";
 
-/**
- * A worker executor implements the role-specific logic for a worker
- * assignment (e.g., packet-auditor validation).
- */
 export interface WorkerExecutor {
   /** Execute the worker's role-specific logic. */
   execute(context: WorkerExecutionContext): Promise<WorkerExecutionResult>;
@@ -368,7 +365,9 @@ export class WorkerRuntime {
       getWorkerRoleAssembly: (): WorkerRoleAssembly | undefined =>
         binding.role === "packet-auditor" || binding.role === "packet_auditor"
           ? PacketAuditorRoleAssembly
-          : undefined,
+          : binding.role === "coder"
+            ? CoderRoleAssembly
+            : undefined,
       ...guardedToolContext,
     };
   }
