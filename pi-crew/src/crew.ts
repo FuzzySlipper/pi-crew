@@ -25,6 +25,7 @@ import {
   InstanceFactoryImpl,
   RuntimeDb,
   AdminServer,
+  RemediationControlService,
   SqliteAuditRepository,
   SqliteSessionRepository,
   type GatewayConfig,
@@ -48,6 +49,7 @@ import { buildDenConnection, createSqliteCursorStore } from "./den-connection-fa
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 import { createDenCompletionPoster } from "./den-completion-poster.js";
 import { createCrewDiagnostics } from "./crew-diagnostics.js";
+import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import type { CompletionPoster } from "@pi-crew/tools";
 
 // ── Crew ───────────────────────────────────────────────────────
@@ -129,16 +131,11 @@ export class Crew {
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
     const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
-    this.#adminServer = config.admin.enabled
-      ? new AdminServer({
-          config: this.#gatewayConfig.admin,
-          diagnostics: createCrewDiagnostics({
-            eventBus: this.#eventBus,
-            runtimeDb: this.#runtimeDb,
-            sessionStore,
-          }),
-        })
-      : null;
+    const diagnostics = createCrewDiagnostics({
+      eventBus: this.#eventBus,
+      runtimeDb: this.#runtimeDb,
+      sessionStore,
+    });
 
     // 2. Channel provider (Den Channels adapter)
     //
@@ -183,6 +180,27 @@ export class Crew {
       },
       this.#logger,
     );
+
+    this.#adminServer = config.admin.enabled
+      ? new AdminServer({
+          config: this.#gatewayConfig.admin,
+          diagnostics,
+          controls: new RemediationControlService({
+            diagnostics,
+            auditRepository: this.#auditRepository,
+            eventBus: this.#eventBus,
+            sessionStore,
+            instancePool: this.#instancePool,
+            evidencePoster: createDenAdminEvidencePoster({
+              mcpClient: this.#mcpClient,
+              projectId: "pi-crew",
+              sender: "pi-crew",
+              logger: this.#logger,
+            }),
+            validateConfig: validateGatewayConfig,
+          }),
+        })
+      : null;
 
     // 5. SQLite session store + agent factory + session manager
     const agentFactory = new AgentFactoryImpl(
@@ -385,6 +403,15 @@ function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
     payload: entry.payload,
     correlation: entry.correlation,
   };
+}
+
+function validateGatewayConfig(raw: unknown) {
+  try {
+    loadConfig(raw);
+    return { valid: true, errors: [] };
+  } catch (error: unknown) {
+    return { valid: false, errors: [(error as Error).message] };
+  }
 }
 
 // ── Convenience: bootstrap from YAML path ───────────────────────

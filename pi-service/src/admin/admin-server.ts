@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import type { AdminConfig } from "../config.js";
 import { redactDiagnosticValue } from "../diagnostics/event-journal.js";
 import type { DiagnosticsOverview } from "../diagnostics/types.js";
+import type { RemediationControlService, RemediationRequest } from "./remediation-control-service.js";
 
 export interface DiagnosticsProjector {
   projectOverview(): Promise<DiagnosticsOverview>;
@@ -12,6 +13,7 @@ export interface DiagnosticsProjector {
 export interface AdminServerDeps {
   readonly config: AdminConfig;
   readonly diagnostics: DiagnosticsProjector;
+  readonly controls?: RemediationControlService;
 }
 
 interface RouteContext {
@@ -24,11 +26,13 @@ interface RouteContext {
 export class AdminServer {
   readonly #config: AdminConfig;
   readonly #diagnostics: DiagnosticsProjector;
+  readonly #controls: RemediationControlService | null;
   #server: Server | null = null;
 
   constructor(deps: AdminServerDeps) {
     this.#config = deps.config;
     this.#diagnostics = deps.diagnostics;
+    this.#controls = deps.controls ?? null;
   }
 
   get host(): string {
@@ -83,6 +87,10 @@ export class AdminServer {
       writeJson(res, 401, { error: "unauthorized" });
       return;
     }
+    if (url.pathname.startsWith("/admin/control/")) {
+      await this.#routeControl(method, url, req, res);
+      return;
+    }
     if (method !== "GET") {
       writeJson(res, 404, { error: "not_found" });
       return;
@@ -122,6 +130,51 @@ export class AdminServer {
       return;
     }
     writeJson(context.res, 404, { error: "not_found" });
+  }
+
+  async #routeControl(
+    method: string,
+    url: URL,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (this.#controls === null || method !== "POST") {
+      writeJson(res, 404, { error: "not_found" });
+      return;
+    }
+    const request = await readControlRequest(req);
+    const pathname = url.pathname;
+    if (pathname === "/admin/control/drain") {
+      writeJson(res, 200, await this.#controls.drain(request));
+      return;
+    }
+    if (pathname === "/admin/control/resume") {
+      writeJson(res, 200, await this.#controls.resume(request));
+      return;
+    }
+    if (pathname.startsWith("/admin/control/sessions/") && pathname.endsWith("/recreate-instance")) {
+      const sessionId = decodeURIComponent(
+        pathname.slice("/admin/control/sessions/".length, -"/recreate-instance".length),
+      );
+      writeJson(res, 200, await this.#controls.recreateInstance(sessionId, request));
+      return;
+    }
+    if (pathname.startsWith("/admin/control/workers/") && pathname.endsWith("/mark-local-stale")) {
+      const assignmentId = decodeURIComponent(
+        pathname.slice("/admin/control/workers/".length, -"/mark-local-stale".length),
+      );
+      writeJson(res, 200, await this.#controls.markWorkerLocalStale(assignmentId, request));
+      return;
+    }
+    if (pathname === "/admin/control/config/validate") {
+      writeJson(res, 200, await this.#controls.validateConfig(request));
+      return;
+    }
+    if (pathname === "/admin/control/config/reload") {
+      writeJson(res, 200, await this.#controls.reloadConfig(request));
+      return;
+    }
+    writeJson(res, 404, { error: "not_found" });
   }
 
   #authorized(req: IncomingMessage): boolean {
@@ -168,6 +221,45 @@ function findAssignment(overview: DiagnosticsOverview, pathname: string) {
       (assignment) => assignment.workerBinding?.assignmentId === assignmentId,
     ) ?? { error: "not_found" }
   );
+}
+
+async function readControlRequest(req: IncomingMessage): Promise<RemediationRequest> {
+  const parsed = parseRecord(await readBody(req));
+  return {
+    operator: readString(parsed, "operator"),
+    reason: readString(parsed, "reason"),
+    idempotencyKey: readString(parsed, "idempotencyKey"),
+    dryRun: parsed["dryRun"] === true,
+    candidateConfig: parsed["candidateConfig"],
+  };
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk: string) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      resolve(body);
+    });
+    req.on("error", reject);
+  });
+}
+
+function parseRecord(body: string): Record<string, unknown> {
+  if (body.trim().length === 0) return {};
+  const parsed: unknown = JSON.parse(body);
+  if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+    return parsed as Record<string, unknown>;
+  }
+  return {};
+}
+
+function readString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
 }
 
 function limitedEvents(overview: DiagnosticsOverview, url: URL) {

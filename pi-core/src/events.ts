@@ -222,6 +222,21 @@ export interface SessionRehydratedPayload {
   readonly reason: "idle_session" | "instance_missing";
 }
 
+/** Fired when an authenticated local admin control request is accepted for evaluation. */
+export interface AdminControlRequestedPayload {
+  readonly action: string;
+  readonly operator: string;
+  readonly reason: string;
+  readonly idempotencyKey: string;
+  readonly dryRun: boolean;
+}
+
+/** Fired after a local admin control request records audit evidence. */
+export interface AdminControlCompletedPayload extends AdminControlRequestedPayload {
+  readonly accepted: boolean;
+  readonly localAuditId: number;
+}
+
 // ── GatewayEvent union ──────────────────────────────────────────
 
 /**
@@ -253,7 +268,9 @@ export type GatewayEvent =
   | { event: "drain.deactivated"; payload: DrainDeactivatedPayload }
   | { event: "policy.enforced"; payload: PolicyEnforcedPayload }
   | { event: "completion.posted"; payload: CompletionPostedPayload }
-  | { event: "session.rehydrated"; payload: SessionRehydratedPayload };
+  | { event: "session.rehydrated"; payload: SessionRehydratedPayload }
+  | { event: "admin.control.requested"; payload: AdminControlRequestedPayload }
+  | { event: "admin.control.completed"; payload: AdminControlCompletedPayload };
 
 /**
  * Helper to extract the payload type for a specific event name.

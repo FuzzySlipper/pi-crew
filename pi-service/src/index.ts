@@ -166,6 +166,16 @@ export {
   type DiagnosticsProjector,
 } from "./admin/admin-server.js";
 export {
+  RemediationControlService,
+  type ConfigValidationResult,
+  type DenEvidence,
+  type RemediationAction,
+  type RemediationEvidenceInput,
+  type RemediationEvidencePoster,
+  type RemediationRequest,
+  type RemediationResult,
+} from "./admin/remediation-control-service.js";
+export {
   type PacketAuditFetchFailure,
   type PacketCompletionReader,
 } from "./workers/packet-auditor-workflow.js";

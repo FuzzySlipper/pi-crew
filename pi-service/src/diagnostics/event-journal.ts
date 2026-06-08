@@ -37,6 +37,8 @@ const JOURNALED_EVENTS: readonly GatewayEvent["event"][] = [
   "policy.enforced",
   "completion.posted",
   "session.rehydrated",
+  "admin.control.requested",
+  "admin.control.completed",
 ];
 
 /**
