@@ -117,7 +117,7 @@ export class DenWebSocketConnection implements DenConnection {
   }
 
   async sendBreadcrumb(breadcrumb: DenBreadcrumbPayload): Promise<void> {
-    await this.#send("breadcrumb.send", breadcrumb);
+    await this.#send("breadcrumb.send", { ...breadcrumb });
   }
 
   async updateBreadcrumb(
@@ -381,6 +381,8 @@ export class DenWebSocketConnection implements DenConnection {
       throw new ConnectionError("Den WebSocket is not connected");
     }
 
+    const ws = this.#ws;
+
     return new Promise<DenSendResult>((resolve, reject) => {
       const requestId = crypto.randomUUID();
 
@@ -409,9 +411,9 @@ export class DenWebSocketConnection implements DenConnection {
         }
       };
 
-      this.#ws.addEventListener("message", handler);
+      ws.addEventListener("message", handler);
 
-      this.#ws.send(
+      ws.send(
         JSON.stringify({
           type,
           requestId,
