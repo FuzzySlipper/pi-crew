@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { ConfigurationError } from "@pi-crew/core";
+import { isLoopbackHost } from "./admin/admin-server.js";
 
 // ── Zod schemas ─────────────────────────────────────────────────
 
@@ -103,6 +104,37 @@ const HealthConfigSchema = z.object({
   host: z.string().min(1).default("127.0.0.1"),
 });
 
+const AdminConfigSchema = z
+  .object({
+    /** Enables the local read-only admin diagnostics HTTP surface. */
+    enabled: z.boolean().default(false),
+    /** Admin server bind host. Defaults to loopback for LAN safety. */
+    host: z.string().min(1).default("127.0.0.1"),
+    /** Admin server port. */
+    port: z.number().int().min(1).max(65535).default(9237),
+    /** Bearer token required for /admin/* routes. Load from environment. */
+    bearerToken: z.string().default(""),
+    /** Explicit opt-in for non-loopback admin bind hosts. */
+    allowLanBind: z.boolean().default(false),
+  })
+  .default({})
+  .superRefine((value, context) => {
+    if (value.enabled && value.bearerToken.length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["bearerToken"],
+        message: "admin.bearerToken is required when admin.enabled is true",
+      });
+    }
+    if (value.enabled && !value.allowLanBind && !isLoopbackHost(value.host)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["allowLanBind"],
+        message: "admin.allowLanBind must be true for non-loopback admin.host",
+      });
+    }
+  });
+
 const LoggingConfigSchema = z.object({
   /** Minimum log level: "debug" | "info" | "warn" | "error". */
   level: z.enum(["debug", "info", "warn", "error"]).default("info"),
@@ -144,6 +176,7 @@ const RuntimeConfigSchema = z
   });
 
 export const GatewayConfigSchema = z.object({
+  admin: AdminConfigSchema,
   database: DatabaseConfigSchema.default({}),
   den: DenConfigSchema,
   health: HealthConfigSchema.default({}),
@@ -164,6 +197,9 @@ export type DenConfig = z.infer<typeof DenConfigSchema>;
 
 /** Health-check sub-config. */
 export type HealthConfig = z.infer<typeof HealthConfigSchema>;
+
+/** Local admin diagnostics sub-config. */
+export type AdminConfig = z.infer<typeof AdminConfigSchema>;
 
 /** Logging sub-config. */
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;

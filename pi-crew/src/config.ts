@@ -43,6 +43,7 @@ const ToolPolicyDefaultsSchema = z.object({
 });
 
 export const CrewConfigSchema = z.object({
+  admin: GatewayConfigSchema.shape.admin,
   den: GatewayConfigSchema.shape.den,
   database: GatewayConfigSchema.shape.database.default({}),
   health: GatewayConfigSchema.shape.health.default({}),

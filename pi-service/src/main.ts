@@ -16,10 +16,13 @@ import { FakeEventBus } from "@pi-crew/core";
 import { loadConfig } from "./config.js";
 import { createServiceRegistry } from "./di.js";
 import { Gateway } from "./gateway.js";
+import { AdminServer } from "./admin/admin-server.js";
+import type { DiagnosticsOverview } from "./diagnostics/types.js";
 
 // ── Signal handlers ─────────────────────────────────────────────
 
 let gateway: Gateway | null = null;
+let adminServer: AdminServer | null = null;
 let shutdownInitiated = false;
 
 /**
@@ -34,6 +37,10 @@ async function onSigterm(): Promise<void> {
 
   process.stdout.write("\n"); // newline after ^C
   console.log("Received SIGTERM — initiating graceful shutdown");
+
+  if (adminServer !== null) {
+    await adminServer.stop();
+  }
 
   if (gateway?.isRunning) {
     await gateway.stop("SIGTERM");
@@ -77,6 +84,13 @@ async function main(): Promise<void> {
         port: Number(process.env["PI_HEALTH_PORT"] ?? 9236),
         host: process.env["PI_HEALTH_HOST"] ?? "127.0.0.1",
       },
+      admin: {
+        enabled: process.env["PI_ADMIN_ENABLED"]?.toLowerCase() === "true",
+        port: Number(process.env["PI_ADMIN_PORT"] ?? 9237),
+        host: process.env["PI_ADMIN_HOST"] ?? "127.0.0.1",
+        bearerToken: process.env["PI_ADMIN_BEARER_TOKEN"] ?? "",
+        allowLanBind: process.env["PI_ADMIN_ALLOW_LAN_BIND"]?.toLowerCase() === "true",
+      },
       logging: {
         level:
           (process.env["PI_LOG_LEVEL"] as
@@ -105,6 +119,17 @@ async function main(): Promise<void> {
 
   await gateway.start();
 
+  if (config.admin.enabled) {
+    adminServer = new AdminServer({
+      config: config.admin,
+      diagnostics: { projectOverview: () => Promise.resolve(emptyDiagnosticsOverview()) },
+    });
+    await adminServer.start();
+    console.log(
+      `Admin diagnostics running at http://${config.admin.host}:${String(config.admin.port)}/admin/diagnostics/overview`,
+    );
+  }
+
   console.log(
     `Gateway running — health check at http://${config.health.host}:${String(config.health.port)}/health`,
   );
@@ -117,6 +142,43 @@ async function main(): Promise<void> {
     void onSigterm();
   });
   process.on("SIGHUP", onSighup);
+}
+
+function emptyDiagnosticsOverview(): DiagnosticsOverview {
+  const now = new Date().toISOString();
+  return {
+    service: {
+      status: "ok",
+      version: "standalone-main",
+      uptimeSeconds: Math.floor(process.uptime()),
+      startedAt: now,
+      drainMode: "inactive",
+    },
+    classification: {
+      kind: "unknown",
+      summary: "Standalone pi-service main has admin diagnostics enabled without runtime projection wiring.",
+    },
+    denCore: { status: "unknown", lastOkAt: null },
+    denChannels: { status: "unknown", lastOkAt: null },
+    mcp: { status: "unknown", lastOkAt: null },
+    runtimeDb: {
+      status: "unavailable",
+      path: "",
+      walEnabled: false,
+      tableCount: 0,
+      schemaVersion: null,
+    },
+    counts: {
+      activeSessions: 0,
+      workerSessions: 0,
+      conversationalSessions: 0,
+      activeAssignmentsLocal: 0,
+      stuckWorkers: 0,
+      checkpointWaiting: 0,
+    },
+    sessions: [],
+    recentEvents: [],
+  };
 }
 
 // ── Entry ────────────────────────────────────────────────────────

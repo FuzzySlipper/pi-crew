@@ -24,6 +24,7 @@ import {
   InstancePoolImpl,
   InstanceFactoryImpl,
   RuntimeDb,
+  AdminServer,
   SqliteAuditRepository,
   SqliteSessionRepository,
   type GatewayConfig,
@@ -46,6 +47,7 @@ import { loadProfile } from "@pi-crew/profiles";
 import { buildDenConnection, createSqliteCursorStore } from "./den-connection-factory.js";
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 import { createDenCompletionPoster } from "./den-completion-poster.js";
+import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import type { CompletionPoster } from "@pi-crew/tools";
 
 // ── Crew ───────────────────────────────────────────────────────
@@ -63,6 +65,7 @@ export class Crew {
   readonly #eventBus: EventBus;
   readonly #registry: ServiceRegistry;
   readonly #gateway: Gateway;
+  readonly #adminServer: AdminServer | null;
   readonly #runtimeDb: RuntimeDb;
   readonly #auditRepository: SqliteAuditRepository;
   readonly #workerRoleMapping: WorkerRoleMappingConfig;
@@ -101,6 +104,7 @@ export class Crew {
 
     // Build the GatewayConfig subset for pi-service
     this.#gatewayConfig = loadConfig({
+      admin: config.admin,
       database: config.database,
       den: config.den,
       health: config.health,
@@ -125,6 +129,16 @@ export class Crew {
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
     const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
+    this.#adminServer = config.admin.enabled
+      ? new AdminServer({
+          config: this.#gatewayConfig.admin,
+          diagnostics: createCrewDiagnostics({
+            eventBus: this.#eventBus,
+            runtimeDb: this.#runtimeDb,
+            sessionStore,
+          }),
+        })
+      : null;
 
     // 2. Channel provider (Den Channels adapter)
     //
@@ -255,6 +269,7 @@ export class Crew {
 
     // Start the gateway (health check, etc.)
     await this.#gateway.start();
+    await this.#adminServer?.start();
 
     this.#started = true;
     this.#logger.info("Crew started");
@@ -280,6 +295,7 @@ export class Crew {
     await this.#channelProvider.disconnect();
 
     // Stop gateway
+    await this.#adminServer?.stop();
     await this.#gateway.stop(reason);
 
     // Close local runtime DB/cache after subscribers have flushed.

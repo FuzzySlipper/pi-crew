@@ -6,6 +6,7 @@ export {
   loadConfig,
   GatewayConfigSchema,
   type GatewayConfig,
+  type AdminConfig,
   type DatabaseConfig,
   type DenConfig,
   type HealthConfig,
@@ -158,6 +159,12 @@ export type {
   RuntimeHealthReader,
   RuntimeHealthSnapshot,
 } from "./diagnostics/types.js";
+export {
+  AdminServer,
+  isLoopbackHost,
+  type AdminServerDeps,
+  type DiagnosticsProjector,
+} from "./admin/admin-server.js";
 export {
   type PacketAuditFetchFailure,
   type PacketCompletionReader,
