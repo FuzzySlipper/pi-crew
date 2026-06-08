@@ -13,10 +13,11 @@ export interface CheckpointToolInstallConfig {
   readonly checkpointPoster?: CheckpointPoster;
 }
 
-const POSTER_NOT_CONFIGURED: CheckpointPoster = async () => ({
-  accepted: false,
-  message: "checkpoint poster is not configured for this WorkerRuntime",
-});
+const POSTER_NOT_CONFIGURED: CheckpointPoster = () =>
+  Promise.resolve({
+    accepted: false,
+    message: "checkpoint poster is not configured for this WorkerRuntime",
+  });
 
 export function installRequestCheckpointTool(config: CheckpointToolInstallConfig): void {
   const state = config.agent.state;

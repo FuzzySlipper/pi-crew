@@ -280,6 +280,7 @@ describe("resolveRoleConfig", () => {
     expect(config?.drainEssentialTools).toEqual([
       "context_status",
       "post_structured_completion",
+      "request_checkpoint",
     ]);
   });
 
@@ -296,7 +297,17 @@ describe("resolveRoleConfig", () => {
     expect(config?.drainEssentialTools).toEqual([
       "context_status",
       "post_structured_completion",
+      "request_checkpoint",
     ]);
+  });
+
+  it("keeps request_checkpoint available in default supervised role drain tools", () => {
+    const mapping = loadWorkerRoleMapping(makeValidMapping());
+    for (const role of ["packet-auditor", "packet_auditor", "coder", "reviewer"]) {
+      expect(resolveRoleConfig(mapping, role)?.drainEssentialTools).toContain(
+        "request_checkpoint",
+      );
+    }
   });
 
   it("returns config when per-role config is present", () => {

@@ -93,6 +93,7 @@ export class SteerFollowUpBridge {
     }
 
     const agentMessage = this.#buildAgentMessage(message.content);
+    entry.supervisor.clearCheckpoint();
 
     // Route to the correct queue
     if (intent === STEER_INTENT) {

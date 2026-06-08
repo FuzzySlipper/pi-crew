@@ -148,16 +148,30 @@ export const WorkerRoleMappingConfigSchema = z
     }
   });
 
+const DEFAULT_DRAIN_ESSENTIAL_TOOLS = [
+  "context_status",
+  "post_structured_completion",
+  "request_checkpoint",
+];
+
 export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
-  { role: "packet-auditor", profileId: "packet-auditor" },
-  { role: "packet_auditor", profileId: "packet-auditor" },
+  {
+    role: "packet-auditor",
+    profileId: "packet-auditor",
+    config: { drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS },
+  },
+  {
+    role: "packet_auditor",
+    profileId: "packet-auditor",
+    config: { drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS },
+  },
   {
     role: "coder",
     profileId: "spawned-coder",
     config: {
       systemPromptSource: "spawned-coder",
       mcpToolSet: ["filesystem", "terminal", "git", "den"],
-      drainEssentialTools: ["context_status", "post_structured_completion"],
+      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
     },
   },
   {
@@ -166,7 +180,7 @@ export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
     config: {
       systemPromptSource: "spawned-reviewer",
       mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"],
-      drainEssentialTools: ["context_status", "post_structured_completion"],
+      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
     },
   },
   { role: "validator", profileId: "spawned-validator" },

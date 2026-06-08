@@ -64,6 +64,7 @@ function makeSupervisor(isActive = true): AgentSupervisor {
     turnCount: 0,
     tokensUsed: 0,
     tokenTracker: undefined,
+    clearCheckpoint: vi.fn(),
   } as unknown as AgentSupervisor;
 }
 
@@ -102,6 +103,11 @@ describe("SteerFollowUpBridge", () => {
     expect(result).toBe(true);
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(vi.mocked(agent.steer)).toHaveBeenCalledTimes(1);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const clearCheckpointCalls = vi.mocked(supervisor.clearCheckpoint).mock.invocationCallOrder;
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const steerCallsOrder = vi.mocked(agent.steer).mock.invocationCallOrder;
+    expect(clearCheckpointCalls[0]).toBeLessThan(steerCallsOrder[0] ?? 0);
 
     // Verify the AgentMessage was constructed with the body text
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -135,6 +141,11 @@ describe("SteerFollowUpBridge", () => {
     expect(result).toBe(true);
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(vi.mocked(agent.followUp)).toHaveBeenCalledTimes(1);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const clearCheckpointCalls = vi.mocked(supervisor.clearCheckpoint).mock.invocationCallOrder;
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const followUpCallsOrder = vi.mocked(agent.followUp).mock.invocationCallOrder;
+    expect(clearCheckpointCalls[0]).toBeLessThan(followUpCallsOrder[0] ?? 0);
 
     // eslint-disable-next-line @typescript-eslint/unbound-method
     const followUpCalls = vi.mocked(agent.followUp).mock.calls;
