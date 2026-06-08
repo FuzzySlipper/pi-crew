@@ -182,10 +182,9 @@ describe("SteerFollowUpBridge", () => {
     const result = bridge.route(msg);
     expect(result).toBe(true);
 
-    const warnEntries = logger.entries.filter(
-      (e) => e.message.includes("missing runId or assignmentId"),
-    );
+    const warnEntries = logger.entries.filter((e) => e.level === "warn");
     expect(warnEntries.length).toBe(1);
+    expect(warnEntries[0]?.message).toContain("missing runId or assignmentId");
   });
 
   it("falls through for unknown intent values", () => {

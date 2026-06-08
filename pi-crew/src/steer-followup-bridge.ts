@@ -65,6 +65,14 @@ export class SteerFollowUpBridge {
     const workerRunId = typeof record.workerRunId === "string" ? record.workerRunId : undefined;
     const assignmentId = typeof record.assignmentId === "string" ? record.assignmentId : undefined;
 
+    if (workerRunId === undefined && assignmentId === undefined) {
+      this.#logger.warn(
+        "SteerFollowUpBridge: steer/followUp event missing runId or assignmentId",
+        { intent },
+      );
+      return true;
+    }
+
     const entry = this.#resolveEntry(workerRunId, assignmentId);
     if (entry === undefined) {
       this.#logger.warn("SteerFollowUpBridge: no active Agent for steer/followUp", {
