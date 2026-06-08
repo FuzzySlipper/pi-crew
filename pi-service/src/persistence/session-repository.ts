@@ -64,8 +64,7 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
       .prepare(
         `SELECT * FROM sessions
          WHERE status != 'archived'
-           AND channel_bindings_json LIKE @pattern
-         LIMIT 1`,
+           AND channel_bindings_json LIKE @pattern ESCAPE '\\'`,
       )
       .all({ pattern: `%${this.#escapeLike(channelId)}%` }) as SessionRow[];
 
@@ -149,6 +148,6 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
 
   #escapeLike(value: string): string {
     // Escape SQLite LIKE special characters.
-    return value.replace(/%/g, "\\%").replace(/_/g, "\\_");
+    return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
   }
 }

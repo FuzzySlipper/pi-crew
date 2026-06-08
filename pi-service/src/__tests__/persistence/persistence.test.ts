@@ -126,6 +126,21 @@ describe("runtime persistence", () => {
     });
   });
 
+  it("finds exact typed channel bindings after LIKE false positives", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    await sessions.save(session({ id: "false-positive", channelBindings: [channelBinding({ channelId: "x642" })] }));
+    await sessions.save(session({ id: "exact-match", channelBindings: [channelBinding({ channelId: "642" })] }));
+
+    expect(present(await sessions.findByChannel("642")).id).toBe("exact-match");
+  });
+
+  it("finds typed channel bindings whose IDs contain LIKE wildcards", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    await sessions.save(session({ id: "underscore-channel", channelBindings: [channelBinding({ channelId: "ch_alpha" })] }));
+
+    expect(present(await sessions.findByChannel("ch_alpha")).id).toBe("underscore-channel");
+  });
+
   it("persists messages with token counts per session", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
     await sessions.save(session({ id: "chat" }));
