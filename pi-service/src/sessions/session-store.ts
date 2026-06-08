@@ -8,6 +8,7 @@
  */
 
 import type { SessionRecord, SessionState } from "./types.js";
+import { bindingMatchesChannel } from "./session-channel-bindings.js";
 
 // ── SessionStore interface ──────────────────────────────────────
 
@@ -61,7 +62,7 @@ export class InMemorySessionStore implements SessionStore {
   findByChannel(channelId: string): Promise<SessionRecord | null> {
     for (const record of this.store.values()) {
       if (record.state === "archived") continue;
-      if (record.channelBindings.includes(channelId)) {
+      if (record.channelBindings.some((binding) => bindingMatchesChannel(binding, channelId))) {
         return Promise.resolve(record);
       }
     }

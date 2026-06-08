@@ -14,11 +14,20 @@ import type {
   ChannelProvider,
   ChannelMessage,
   ChannelContent,
+  type ChannelMembershipStatus,
+  type ChannelSubscriptionStatus,
 } from "@pi-crew/core";
 import type {
   SessionConfig,
   SessionRecord,
+  ChannelBindingRecord,
 } from "./types.js";
+import {
+  appendStringBinding,
+  channelBindingId,
+  isChannelBindingRecord,
+  removeChannelBinding,
+} from "./session-channel-bindings.js";
 import type { SessionStore } from "./session-store.js";
 import type { AgentFactory } from "../agents/agent-factory.js";
 import type { InstancePool } from "../instances/instance-pool.js";
@@ -128,7 +137,9 @@ export class SessionManagerImpl implements SessionManager {
   // ── SessionManager contract ───────────────────────────────────
 
   async create(config: SessionConfig): Promise<SessionRecord> {
-    return this.factory.createSession(config);
+    const record = await this.factory.createSession(config);
+    this.emitPresence(record, "created", "active", "active");
+    return record;
   }
 
   async get(sessionId: string): Promise<SessionRecord | null> {
@@ -154,11 +165,11 @@ export class SessionManagerImpl implements SessionManager {
       return;
     }
 
-    if (record.channelBindings.includes(channelId)) return;
+    if (record.channelBindings.some((binding) => channelBindingId(binding) === channelId)) return;
 
     const updated: SessionRecord = {
       ...record,
-      channelBindings: [...record.channelBindings, channelId],
+      channelBindings: appendStringBinding(record.channelBindings, channelId),
     };
 
     await this.store.save(updated);
@@ -178,9 +189,7 @@ export class SessionManagerImpl implements SessionManager {
 
     const updated: SessionRecord = {
       ...record,
-      channelBindings: record.channelBindings.filter(
-        (id) => id !== channelId,
-      ),
+      channelBindings: removeChannelBinding(record.channelBindings, channelId),
     };
 
     await this.store.save(updated);
@@ -221,6 +230,7 @@ export class SessionManagerImpl implements SessionManager {
         };
 
         await this.store.save(rehydrated);
+        this.emitPresence(rehydrated, "rehydrated", "active", "active");
 
         this.eventBus.emit({
           event: "session.rehydrated",
@@ -309,6 +319,8 @@ export class SessionManagerImpl implements SessionManager {
         this.pool.touch(existing.instanceId);
       }
 
+      this.emitPresence(existing, "routed", "active", "active");
+
       this.eventBus.emit({
         event: "session.routing",
         payload: {
@@ -367,6 +379,7 @@ export class SessionManagerImpl implements SessionManager {
     };
 
     await this.store.save(updated);
+    this.emitPresence(record, "archived", "offline", "left");
 
     this.eventBus.emit({
       event: "session.expired",
@@ -397,6 +410,7 @@ export class SessionManagerImpl implements SessionManager {
           instanceId: null,
         };
         await this.store.save(updated);
+        this.emitPresence(updated, "idle_evicted", "idle", "active");
         updatedCount += 1;
       }
     }
@@ -408,5 +422,32 @@ export class SessionManagerImpl implements SessionManager {
     }
 
     return evictedCount;
+  }
+
+  private emitPresence(
+    record: SessionRecord,
+    reason: "created" | "routed" | "rehydrated" | "idle_evicted" | "archived" | "bound" | "unbound",
+    subscriptionStatus: ChannelSubscriptionStatus,
+    membershipStatus?: ChannelMembershipStatus,
+  ): void {
+    if (record.kind !== "conversational") return;
+    for (const binding of record.channelBindings) {
+      const channelBinding: ChannelBindingRecord = isChannelBindingRecord(binding)
+        ? binding
+        : { providerId: "legacy", channelId: binding };
+      this.eventBus.emit({
+        event: "session.presence",
+        payload: {
+          sessionId: record.id,
+          profileId: record.profileId,
+          kind: "conversational",
+          channelBinding,
+          agentInstanceId: record.instanceId,
+          subscriptionStatus,
+          membershipStatus,
+          reason,
+        },
+      });
+    }
   }
 }

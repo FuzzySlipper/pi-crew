@@ -20,6 +20,7 @@ import {
   Gateway,
   createServiceRegistry,
   SessionManagerImpl,
+  SessionPresenceBridge,
   AgentFactoryImpl,
   InstancePoolImpl,
   InstanceFactoryImpl,
@@ -217,6 +218,12 @@ export class Crew {
       this.#eventBus,
       this.#logger,
       config.sessions.fallbackProfileId,
+    );
+
+    new SessionPresenceBridge(
+      this.#eventBus,
+      this.#channelProvider,
+      this.#logger,
     );
 
     // 6. Wire channel provider → session manager routing

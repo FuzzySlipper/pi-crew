@@ -24,6 +24,8 @@ export {
   type SessionKind,
   type SessionState,
   type WorkerBinding,
+  type ChannelBinding,
+  type ChannelBindingRecord,
   type SessionRecord,
   type SessionConfig,
 } from "./sessions/types.js";
@@ -35,6 +37,7 @@ export {
   type SessionManager,
   SessionManagerImpl,
 } from "./sessions/session-manager.js";
+export { SessionPresenceBridge } from "./sessions/session-presence-bridge.js";
 
 // ── Instances ───────────────────────────────────────────────────
 export {

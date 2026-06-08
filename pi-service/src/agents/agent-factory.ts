@@ -64,7 +64,7 @@ export class AgentFactoryImpl implements AgentFactory {
       lastActiveAt: now,
       state: "active",
       messageCount: 0,
-      channelBindings: config.channelBindings ?? [],
+      channelBindings: config.kind === "worker" ? [] : config.channelBindings ?? [],
       workerBinding: config.workerBinding ?? null,
     };
 

@@ -10,7 +10,17 @@
  * @module pi-channels/den-channels/connection-http
  */
 
-import type { Logger } from "@pi-crew/core";
+import type {
+  ChannelMembership,
+  ChannelMembershipUpsert,
+  ChannelPresence,
+  ChannelPresenceQuery,
+  ChannelSubscription,
+  ChannelSubscriptionRelease,
+  ChannelSubscriptionStatusUpdate,
+  ChannelSubscriptionUpsert,
+  Logger,
+} from "@pi-crew/core";
 import { ConnectionError } from "@pi-crew/core";
 
 import {
@@ -200,6 +210,26 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     return () => {
       set.delete(listener);
     };
+  }
+
+  async upsertMembership(input: ChannelMembershipUpsert): Promise<ChannelMembership> {
+    return this.#subscriptionClient.upsertMembership(input, this.#pollState.controller.signal);
+  }
+
+  async upsertSubscription(input: ChannelSubscriptionUpsert): Promise<ChannelSubscription> {
+    return this.#subscriptionClient.upsertSubscription(input, this.#pollState.controller.signal);
+  }
+
+  async releaseSubscription(input: ChannelSubscriptionRelease): Promise<void> {
+    await this.#subscriptionClient.releaseSubscription(input, this.#pollState.controller.signal);
+  }
+
+  async getPresence(input: ChannelPresenceQuery): Promise<readonly ChannelPresence[]> {
+    return this.#subscriptionClient.getPresence(input, this.#pollState.controller.signal);
+  }
+
+  async updateSubscriptionStatus(input: ChannelSubscriptionStatusUpdate): Promise<void> {
+    await this.#subscriptionClient.updateSubscriptionStatus(input, this.#pollState.controller.signal);
   }
 
   async #registerSubscription(): Promise<void> {

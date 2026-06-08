@@ -75,6 +75,8 @@ export {
   type PolicyEnforcedPayload,
   type CompletionPostedPayload,
   type SessionRehydratedPayload,
+  type SessionPresenceBindingPayload,
+  type SessionPresencePayload,
 } from "./events.js";
 
 // ── Repository ────────────────────────────────────────────────

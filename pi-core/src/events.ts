@@ -8,6 +8,8 @@
  * @module pi-core/events
  */
 
+import type { ChannelMembershipStatus, ChannelSubscriptionStatus } from "./channel-presence.js";
+
 // ── Event payloads ──────────────────────────────────────────────
 
 /** Optional Den worker correlation carried by runtime-originated events. */
@@ -222,6 +224,36 @@ export interface SessionRehydratedPayload {
   readonly reason: "idle_session" | "instance_missing";
 }
 
+/** Fired when a conversational session needs provider presence reconciliation. */
+export interface SessionPresenceBindingPayload {
+  readonly providerId?: string;
+  readonly channelId: string;
+  readonly memberIdentity?: string;
+  readonly profileIdentity?: string;
+  readonly memberRole?: string;
+  readonly subscriptionIdentity?: string;
+  readonly sessionOwnerId?: string;
+}
+
+/** Fired for non-chat session lifecycle transitions that affect presence. */
+export interface SessionPresencePayload {
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly kind: "conversational";
+  readonly channelBinding: SessionPresenceBindingPayload;
+  readonly agentInstanceId: string | null;
+  readonly subscriptionStatus: ChannelSubscriptionStatus;
+  readonly membershipStatus?: ChannelMembershipStatus;
+  readonly reason:
+    | "created"
+    | "routed"
+    | "rehydrated"
+    | "idle_evicted"
+    | "archived"
+    | "bound"
+    | "unbound";
+}
+
 /** Fired when an authenticated local admin control request is accepted for evaluation. */
 export interface AdminControlRequestedPayload {
   readonly action: string;
@@ -269,6 +301,7 @@ export type GatewayEvent =
   | { event: "policy.enforced"; payload: PolicyEnforcedPayload }
   | { event: "completion.posted"; payload: CompletionPostedPayload }
   | { event: "session.rehydrated"; payload: SessionRehydratedPayload }
+  | { event: "session.presence"; payload: SessionPresencePayload }
   | { event: "admin.control.requested"; payload: AdminControlRequestedPayload }
   | { event: "admin.control.completed"; payload: AdminControlCompletedPayload };
 

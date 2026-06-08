@@ -18,6 +18,21 @@ import type {
   MessageHandler,
   SentMessage,
   Logger,
+  type ChannelMembershipProvider,
+  type ChannelPresenceProvider,
+  type ChannelMembershipUpsert,
+  type ChannelMembership,
+  type ChannelSubscriptionUpsert,
+  type ChannelSubscription,
+  type ChannelSubscriptionRelease,
+  type ChannelPresenceQuery,
+  type ChannelPresence,
+  type ChannelSubscriptionStatusUpdate,
+} from "@pi-crew/core";
+import {
+  ConnectionError,
+  isChannelMembershipProvider,
+  isChannelPresenceProvider,
 } from "@pi-crew/core";
 import type { DenConnection } from "./connection.js";
 import {
@@ -50,7 +65,7 @@ export interface DenChannelsAdapterConfig {
  *    {@link MessageHandler}, and sends outbound messages/breadcrumbs
  *    through the connection.
  */
-export class DenChannelsAdapter implements ChannelProvider {
+export class DenChannelsAdapter implements ChannelProvider, ChannelMembershipProvider, ChannelPresenceProvider {
   readonly name: string;
   readonly providerId: string;
 
@@ -235,7 +250,46 @@ export class DenChannelsAdapter implements ChannelProvider {
     await Promise.resolve();
   }
 
+  async upsertMembership(input: ChannelMembershipUpsert): Promise<ChannelMembership> {
+    const provider = this.membershipProvider();
+    return provider.upsertMembership(input);
+  }
+
+  async upsertSubscription(input: ChannelSubscriptionUpsert): Promise<ChannelSubscription> {
+    const provider = this.membershipProvider();
+    return provider.upsertSubscription(input);
+  }
+
+  async releaseSubscription(input: ChannelSubscriptionRelease): Promise<void> {
+    const provider = this.membershipProvider();
+    await provider.releaseSubscription(input);
+  }
+
+  async getPresence(input: ChannelPresenceQuery): Promise<readonly ChannelPresence[]> {
+    const provider = this.presenceProvider();
+    return provider.getPresence(input);
+  }
+
+  async updateSubscriptionStatus(input: ChannelSubscriptionStatusUpdate): Promise<void> {
+    const provider = this.presenceProvider();
+    await provider.updateSubscriptionStatus(input);
+  }
+
   // ── Internals ─────────────────────────────────────────────────
+
+  private membershipProvider(): ChannelMembershipProvider {
+    if (!isChannelMembershipProvider(this.#connection)) {
+      throw new ConnectionError("Den connection does not support channel membership operations");
+    }
+    return this.#connection;
+  }
+
+  private presenceProvider(): ChannelPresenceProvider {
+    if (!isChannelPresenceProvider(this.#connection)) {
+      throw new ConnectionError("Den connection does not support channel presence operations");
+    }
+    return this.#connection;
+  }
 
   async #routeMessage(message: ChannelMessage): Promise<void> {
     if (this.#messageHandler) {

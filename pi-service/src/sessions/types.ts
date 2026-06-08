@@ -8,6 +8,28 @@
  * @module pi-service/sessions/types
  */
 
+// ── Channel binding ─────────────────────────────────────────────
+
+/**
+ * Den-facing metadata for a conversational channel binding.
+ *
+ * String bindings remain supported for old persisted rows; new V2 Den
+ * Channels bindings should use this structured record so session lifecycle
+ * events can update membership/subscription presence without chat messages.
+ */
+export interface ChannelBindingRecord {
+  readonly providerId: string;
+  readonly channelId: string;
+  readonly memberIdentity?: string;
+  readonly profileIdentity?: string;
+  readonly memberRole?: string;
+  readonly subscriptionIdentity?: string;
+  readonly sessionOwnerId?: string;
+}
+
+/** Backward-compatible channel binding shape. */
+export type ChannelBinding = string | ChannelBindingRecord;
+
 // ── Session kind ────────────────────────────────────────────────
 
 /** The two session kinds in pi-crew. */
@@ -83,8 +105,8 @@ export interface SessionRecord {
   readonly state: SessionState;
   /** Running count of messages exchanged in this session. */
   readonly messageCount: number;
-  /** Channel IDs bound to this session (empty for workers). */
-  readonly channelBindings: string[];
+  /** Channel bindings for this session (empty for workers). */
+  readonly channelBindings: ChannelBinding[];
   /** Den assignment binding (null for conversational). */
   readonly workerBinding: WorkerBinding | null;
 }
@@ -100,7 +122,7 @@ export interface SessionConfig {
   /** Conversational or worker. */
   readonly kind: SessionKind;
   /** Initial channel bindings (conversational only). */
-  readonly channelBindings?: string[];
+  readonly channelBindings?: ChannelBinding[];
   /** Den assignment binding (worker only). */
   readonly workerBinding?: WorkerBinding;
 }
