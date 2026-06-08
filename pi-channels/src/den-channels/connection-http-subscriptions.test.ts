@@ -67,7 +67,7 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
               memberType: "agent",
               memberIdentity: "pi-crew-runner",
               membershipStatus: "active",
-              wakePolicy: "subscription",
+              wakePolicy: "all_messages_except_self",
               createdAt: "2026-06-08T00:00:00Z",
               updatedAt: "2026-06-08T00:00:00Z",
             }),
@@ -144,7 +144,7 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
       memberType: "agent",
       memberIdentity: "pi-crew-runner",
       membershipStatus: "active",
-      wakePolicy: "subscription",
+      wakePolicy: "all_messages_except_self",
       profileIdentity: "pi-crew-runner",
       memberRole: "runner",
     });

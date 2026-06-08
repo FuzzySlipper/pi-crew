@@ -157,7 +157,7 @@ export class HttpSubscriptionClient {
           memberType: input.memberType,
           memberIdentity: input.memberIdentity,
           membershipStatus: input.status ?? "active",
-          wakePolicy: input.wakePolicy ?? "subscription",
+          wakePolicy: membershipWakePolicy(input.wakePolicy),
           canSend: true,
           canReact: true,
           canInvite: false,
@@ -251,7 +251,7 @@ export class HttpSubscriptionClient {
           memberType: "agent",
           memberIdentity: this.#config.memberIdentity,
           membershipStatus: "active",
-          wakePolicy: "subscription",
+          wakePolicy: membershipWakePolicy(undefined),
           canSend: true,
           canReact: true,
           canInvite: false,
@@ -353,6 +353,16 @@ function readMembershipId(payload: unknown): number | null {
   if (typeof payload !== "object" || payload === null) return null;
   const record = payload as MembershipWireResponse;
   return record.membershipId ?? record.id ?? null;
+}
+
+function membershipWakePolicy(wakePolicy: string | undefined): string {
+  // DESIGN: Membership wake policy uses the live Channels enum while
+  // subscription delivery remains represented by the subscription row.
+  // Rationale: deployed Channels rejects `subscription` on memberships.
+  if (wakePolicy === undefined || wakePolicy === "subscription") {
+    return "all_messages_except_self";
+  }
+  return wakePolicy;
 }
 
 function anySignal(signals: AbortSignal[]): AbortSignal {
