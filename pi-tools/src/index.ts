@@ -48,6 +48,9 @@ export {
   isPathAllowed,
   isHostAllowed,
   isCredentialAccessAllowed,
+  resolvePolicyPath,
+  isWithinOrEqual,
+  trimTrailingSeparator,
   isIterationBudgetExhausted,
   isIterationBudgetLow,
 } from "./worker-policy.js";

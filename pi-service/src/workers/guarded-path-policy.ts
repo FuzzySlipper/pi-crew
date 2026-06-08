@@ -1,5 +1,5 @@
-import path from "node:path";
 import type { WorkerPolicy } from "@pi-crew/core";
+import { isWithinOrEqual, resolvePolicyPath } from "@pi-crew/tools";
 
 export interface PathPolicyResult {
   readonly allowed: boolean;
@@ -74,23 +74,6 @@ function shouldTreatAsPath(key: string, value: string): boolean {
 
 function isPathLike(value: string): boolean {
   return value.startsWith("/") || value.startsWith("./") || value.startsWith("../");
-}
-
-function resolvePolicyPath(workdir: string, inputPath: string): string {
-  const base = path.resolve(workdir);
-  const resolved = path.isAbsolute(inputPath)
-    ? path.resolve(inputPath)
-    : path.resolve(base, inputPath);
-  return trimTrailingSeparator(resolved);
-}
-
-function isWithinOrEqual(target: string, root: string): boolean {
-  return target === root || target.startsWith(`${root}/`);
-}
-
-function trimTrailingSeparator(inputPath: string): string {
-  const normalized = path.normalize(inputPath);
-  return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

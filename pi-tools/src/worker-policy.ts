@@ -127,7 +127,7 @@ export function isPathAllowed(
   );
 }
 
-function resolvePolicyPath(workdir: string, inputPath: string): string {
+export function resolvePolicyPath(workdir: string, inputPath: string): string {
   const base = path.resolve(workdir);
   const resolved = path.isAbsolute(inputPath)
     ? path.resolve(inputPath)
@@ -135,11 +135,11 @@ function resolvePolicyPath(workdir: string, inputPath: string): string {
   return trimTrailingSeparator(resolved);
 }
 
-function isWithinOrEqual(target: string, root: string): boolean {
+export function isWithinOrEqual(target: string, root: string): boolean {
   return target === root || target.startsWith(`${root}/`);
 }
 
-function trimTrailingSeparator(inputPath: string): string {
+export function trimTrailingSeparator(inputPath: string): string {
   const normalized = path.normalize(inputPath);
   return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
 }
