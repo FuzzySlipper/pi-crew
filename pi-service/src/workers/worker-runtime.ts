@@ -28,7 +28,7 @@ import {
 } from "./worker-role-config.js";
 import { createWorkerIdleWatchdog, type IdleTimeoutWatchdog } from "./worker-idle-timeout.js";
 import { executeWithAssignmentTimeout } from "./worker-timeout.js";
-import { AgentSupervisor, type AgentLike } from "./agent-supervisor.js";
+import { AgentSupervisor, type AgentLike, type SteerableAgent } from "./agent-supervisor.js";
 import { PacketAuditorRoleAssembly } from "./packet-auditor-role-assembly.js";
 import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
 import type { PacketCompletionReader } from "./packet-auditor-workflow.js";
@@ -42,6 +42,7 @@ import type {
   AfterToolCallResult,
 } from "./guarded-tool-types.js";
 import type { ToolExecutor } from "./guarded-tool-assembly.js";
+import type { AgentRuntimeRegistry } from "./agent-runtime-registry.js";
 
 /**
  * A worker executor implements the role-specific logic for a worker
@@ -105,8 +106,8 @@ export interface WorkerExecutionResult {
 export interface WorkerRuntimeConfig {
   /** Identity of this runtime instance. */
   readonly workerIdentity: string;
-  /** Optional Den/Core reader for packet-auditor target completion packets. */
   readonly packetCompletionReader?: PacketCompletionReader;
+  readonly agentRuntimeRegistry?: AgentRuntimeRegistry;
 }
 
 /**
@@ -336,7 +337,7 @@ export class WorkerRuntime {
       },
       createAgentSupervisor: (agent: AgentLike): AgentSupervisor => {
         installGuardedAgentRuntime(agent, guardedToolContext, null);
-        return new AgentSupervisor(
+        const supervisor = new AgentSupervisor(
           {
             binding,
             sessionId: session.id,
@@ -349,6 +350,13 @@ export class WorkerRuntime {
           },
           agent,
         );
+        if ("steer" in agent && "followUp" in agent) {
+          this.#config.agentRuntimeRegistry?.register(binding.runId, binding.assignmentId, {
+            agent: agent as SteerableAgent,
+            supervisor,
+          });
+        }
+        return supervisor;
       },
       buildWorkerRoleInput: (targetPacketRef?: TargetPacketRef): WorkerRoleInput => ({
         binding,
@@ -451,6 +459,7 @@ export class WorkerRuntime {
   }
 
   #emitAssignmentReleased(binding: WorkerBinding, reason: string): void {
+    this.#config.agentRuntimeRegistry?.unregister(binding.runId);
     this.#eventBus.emit({
       event: "assignment.released",
       payload: {
@@ -485,11 +494,6 @@ export class WorkerRuntime {
     return this.#config.workerIdentity;
   }
 
-  /**
-   * The injected worker role mapping used for profile resolution.
-   * Exposed for test inspection — production code should use
-   * {@link resolveProfileId} / {@link resolveRoleConfig} instead.
-   */
   get roleMapping(): WorkerRoleMappingConfig {
     return this.#roleMapping;
   }

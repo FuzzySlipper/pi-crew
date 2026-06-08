@@ -249,7 +249,7 @@ export class Crew {
     //    Steer/followUp events with intent metadata are intercepted by the
     //    bridge before falling through to normal session routing.
     this.#channelProvider.onMessage((message) => {
-      if (this.#steerFollowUpBridge.route(message)) return;
+      if (this.#steerFollowUpBridge.route(message)) return Promise.resolve();
       return this.#sessionManager.routeMessage(this.#channelProvider, message);
     });
 

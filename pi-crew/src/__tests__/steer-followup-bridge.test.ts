@@ -56,10 +56,11 @@ function makeSteerableAgent(): SteerableAgent {
   };
 }
 
-function makeSupervisor(): AgentSupervisor {
+function makeSupervisor(isActive = true): AgentSupervisor {
   return {
     start: vi.fn(),
     stop: vi.fn(),
+    isActive,
     turnCount: 0,
     tokensUsed: 0,
     tokenTracker: undefined,
@@ -144,7 +145,7 @@ describe("SteerFollowUpBridge", () => {
     expect((fuMsg as Record<string, unknown> | undefined)?.content).toBe("review feedback incorporated");
   });
 
-  it("falls through (returns false) when no agent matches runId", () => {
+  it("handles with warn/no-op when no agent matches runId", () => {
     const registry = new AgentRuntimeRegistry();
     const logger = new FakeLogger();
     const bridge = new SteerFollowUpBridge(registry, logger);
@@ -157,7 +158,7 @@ describe("SteerFollowUpBridge", () => {
     });
 
     const result = bridge.route(msg);
-    expect(result).toBe(false);
+    expect(result).toBe(true);
 
     // Should have logged a warning
     const warnEntries = logger.entries.filter((e) => e.message.includes("no active Agent"));
@@ -166,7 +167,7 @@ describe("SteerFollowUpBridge", () => {
     expect(ctx?.workerRunId).toBe("nonexistent");
   });
 
-  it("falls through when metadata has no runId or assignmentId", () => {
+  it("handles with warn/no-op when metadata has no runId or assignmentId", () => {
     const registry = new AgentRuntimeRegistry();
     const logger = new FakeLogger();
     const bridge = new SteerFollowUpBridge(registry, logger);
@@ -179,7 +180,7 @@ describe("SteerFollowUpBridge", () => {
     });
 
     const result = bridge.route(msg);
-    expect(result).toBe(false);
+    expect(result).toBe(true);
 
     const warnEntries = logger.entries.filter(
       (e) => e.message.includes("missing runId or assignmentId"),
@@ -201,5 +202,26 @@ describe("SteerFollowUpBridge", () => {
 
     const result = bridge.route(msg);
     expect(result).toBe(false);
+  });
+
+  it("handles with warn/no-op when the target supervisor is inactive", () => {
+    const registry = new AgentRuntimeRegistry();
+    const logger = new FakeLogger();
+    const agent = makeSteerableAgent();
+    registry.register("run-123", "assign-456", {
+      agent,
+      supervisor: makeSupervisor(false),
+    });
+
+    const bridge = new SteerFollowUpBridge(registry, logger);
+    const result = bridge.route(makeChannelMessage({
+      metadata: { intent: "steer", workerRunId: "run-123" },
+    }));
+
+    expect(result).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(vi.mocked(agent.steer)).not.toHaveBeenCalled();
+    const warnEntries = logger.entries.filter((e) => e.message.includes("no longer active"));
+    expect(warnEntries.length).toBe(1);
   });
 });

@@ -150,6 +150,7 @@ export class AgentSupervisor {
   #turnStartTime = 0;
   #toolStartTimes = new Map<string, number>();
   #unsubscribe: (() => void) | null = null;
+  #active = false;
 
   constructor(config: AgentSupervisorConfig, agent: AgentLike) {
     this.#binding = config.binding;
@@ -170,6 +171,7 @@ export class AgentSupervisor {
   /** Start listening to Agent events. Idempotent. */
   start(): void {
     if (this.#unsubscribe !== null) return;
+    this.#active = true;
     this.#unsubscribe = this.#agent.subscribe((event) => {
       this.#handleEvent(event);
     });
@@ -180,6 +182,11 @@ export class AgentSupervisor {
     if (this.#unsubscribe === null) return;
     this.#unsubscribe();
     this.#unsubscribe = null;
+    this.#active = false;
+  }
+
+  get isActive(): boolean {
+    return this.#active;
   }
 
   /** Current turn count (1-based). Zero before agent_start. */
@@ -371,6 +378,7 @@ export class AgentSupervisor {
   }
 
   #onAgentEnd(event: AgentEvent & { type: "agent_end" }): void {
+    this.#active = false;
     this.#logger.info("AgentSupervisor: agent.end", {
       ...this.#correlationCtx(),
       turnCount: this.#turnCount,

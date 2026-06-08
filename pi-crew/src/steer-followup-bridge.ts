@@ -9,7 +9,7 @@
  * @module pi-crew/steer-followup-bridge
  */
 
-import type { ChannelMessage, Logger } from "@pi-crew/core";
+import type { ChannelContent, ChannelMessage, Logger } from "@pi-crew/core";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentRuntimeRegistry, AgentRuntimeEntry } from "@pi-crew/service";
 
@@ -72,12 +72,19 @@ export class SteerFollowUpBridge {
         workerRunId: workerRunId ?? "N/A",
         assignmentId: assignmentId ?? "N/A",
       });
-      return false;
+      return true;
     }
 
-    // Build the AgentMessage from the body text
-    const body = message.content.kind === "text" ? message.content.text : "";
-    const agentMessage = this.#buildAgentMessage(body);
+    if (!entry.supervisor.isActive) {
+      this.#logger.warn("SteerFollowUpBridge: Agent is no longer active", {
+        intent: intent,
+        workerRunId: workerRunId ?? "N/A",
+        assignmentId: assignmentId ?? "N/A",
+      });
+      return true;
+    }
+
+    const agentMessage = this.#buildAgentMessage(message.content);
 
     // Route to the correct queue
     if (intent === STEER_INTENT) {
@@ -127,11 +134,22 @@ export class SteerFollowUpBridge {
    * Uses the pi-agent-core UserMessage shape:
    * `{ role: "user", content: string, timestamp: number }`.
    */
-  #buildAgentMessage(text: string): AgentMessage {
+  #buildAgentMessage(content: ChannelContent): AgentMessage {
     return {
       role: "user",
-      content: text,
+      content: channelContentToText(content),
       timestamp: Date.now(),
-    } as AgentMessage;
+    };
+  }
+}
+
+function channelContentToText(content: ChannelContent): string {
+  switch (content.kind) {
+    case "text":
+      return content.text;
+    case "media":
+      return content.altText ?? content.url;
+    case "mixed":
+      return content.parts.map(channelContentToText).join("\n");
   }
 }

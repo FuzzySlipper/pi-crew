@@ -347,7 +347,9 @@ export class DenHttpDirectAgentConnection implements DenConnection {
 
   #shouldProcessEvent(item: DirectAgentEventItem): boolean {
     const sourceKind = item.sourceKind ?? "wake_event";
-    if (sourceKind !== "wake_event") return false;
+    const isWake = sourceKind === "wake_event";
+    const isGatewayIngress = sourceKind === "gateway_delivery" && isIngressIntent(item.intent);
+    if (!isWake && !isGatewayIngress) return false;
     return targetMemberIdentity(item) === this.#config.memberIdentity;
   }
 
@@ -384,7 +386,6 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       },
     };
   }
-
 
   async #advanceCursor(item: DirectAgentEventItem): Promise<void> {
     this.#lastCursor = item.id;
@@ -456,6 +457,10 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       }
     }
   }
+}
+
+function isIngressIntent(value: unknown): boolean {
+  return value === "steer" || value === "follow_up";
 }
 
 function targetMemberIdentity(item: DirectAgentEventItem): string | null {
