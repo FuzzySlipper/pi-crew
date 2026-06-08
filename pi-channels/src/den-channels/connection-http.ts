@@ -1,15 +1,3 @@
-/**
- * HTTP cursor/polling Den Channels direct-agent-events connection.
- *
- * Implements {@link DenConnection} for production use when Den Channels
- * exposes HTTP routes instead of WebSocket. Polls
- * `GET /api/direct-agent-events`, persists a cursor, maps events into
- * {@link DenInboundMessage}, emits lifecycle telemetry, and posts
- * gateway-delivery evidence through Den Channels HTTP routes.
- *
- * @module pi-channels/den-channels/connection-http
- */
-
 import type {
   ChannelMembership,
   ChannelMembershipUpsert,
@@ -29,6 +17,13 @@ import {
   type HttpDirectAgentClientOptions,
 } from "./connection-http-client.js";
 import { HttpSubscriptionClient } from "./connection-http-subscription-client.js";
+import {
+  type ActiveSubscriptionState,
+  cursorJsonForEvent,
+  readSubscriptionMessageCursor,
+  selectActiveSubscription,
+  subscriptionMetadata,
+} from "./connection-http-subscription-state.js";
 import type {
   DenConnection,
   DenConnectionEvents,
@@ -75,6 +70,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
 
   #open = false;
   #lastCursor: number | null = null;
+  #activeSubscription: ActiveSubscriptionState | null = null;
   #pollState: PollState = {
     timer: null,
     inFlight: false,
@@ -234,9 +230,33 @@ export class DenHttpDirectAgentConnection implements DenConnection {
 
   async #registerSubscription(): Promise<void> {
     try {
-      await this.#subscriptionClient.register(this.#pollState.controller.signal);
+      const result = await this.#subscriptionClient.register(this.#pollState.controller.signal);
+      const readback = await this.#subscriptionClient.readSubscriptions(this.#pollState.controller.signal);
+      this.#activeSubscription = selectActiveSubscription(
+        this.#config,
+        readback.subscriptions,
+        result.membershipId,
+      );
+      if (this.#activeSubscription === null) {
+        throw new ConnectionError("Registered subscription was not discoverable in channel-subscriptions readback");
+      }
+      const cursors = await this.#subscriptionClient.listSubscriptionCursors(
+        this.#activeSubscription.subscriptionId,
+        this.#pollState.controller.signal,
+      );
+      const cursor = readSubscriptionMessageCursor(cursors);
+      if (cursor !== null) {
+        this.#lastCursor = cursor;
+        await this.#persistCursor();
+      }
+      this.#logger.info("Den HTTP subscription cursor ready", {
+        subscriptionId: this.#activeSubscription.subscriptionId,
+        channelId: this.#activeSubscription.channelId,
+        cursor: this.#lastCursor,
+      });
     } catch (err: unknown) {
       if (!this.#config.allowLegacyDirectPolling) throw err;
+      this.#activeSubscription = null;
       this.#logger.warn("Subscription registration failed; using explicit legacy polling fallback", {
         error: errorMessage(err),
       });
@@ -260,6 +280,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         this.#lastCursor,
         this.#config.pollLimit ?? DEFAULT_POLL_LIMIT,
         this.#pollState.controller.signal,
+        this.#activeSubscription?.channelId,
       );
       this.#logger.debug("Poll returned events", { count: items.length });
 
@@ -267,8 +288,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         if (this.#shouldProcessEvent(item)) {
           await this.#handleEvent(item);
         }
-        this.#lastCursor = item.id;
-        await this.#persistCursor();
+        await this.#advanceCursor(item);
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
@@ -315,7 +335,6 @@ export class DenHttpDirectAgentConnection implements DenConnection {
 
     this.#emit("message", this.#mapEventToMessage(item));
 
-    await this.#postGatewayDeliveryResponse(item);
     await this.#client.postLifecycleEvent(
       "completed",
       eventId,
@@ -343,12 +362,20 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       content: { kind: "text", text: item.body ?? "" },
       timestamp: item.createdAt ?? new Date().toISOString(),
       metadata: {
+        ...(this.#activeSubscription === null ? {} : subscriptionMetadata(this.#activeSubscription)),
         sourceProjectId: item.sourceProjectId,
         targetProjectId: item.targetProjectId,
         targetTaskId: item.targetTaskId,
         assignmentId: item.assignmentId,
         workerRunId: item.workerRunId,
         workerRole: item.workerRole,
+        profileIdentity: item.profileIdentity,
+        agentInstanceId: item.agentInstanceId,
+        sessionOwnerId: item.sessionOwnerId,
+        sessionId: item.sessionId,
+        deliveryStatus: item.deliveryStatus,
+        claimStatus: item.claimStatus,
+        completionStatus: item.completionStatus,
         status: item.status,
         eventId: item.id,
         eventKind: "direct-agent-event",
@@ -356,16 +383,28 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     };
   }
 
-  async #postGatewayDeliveryResponse(
-    item: DirectAgentEventItem,
-  ): Promise<void> {
-    await this.#client.postGatewaySystemMessage(
-      item.channelId,
-      "gateway_delivery",
-      `direct-agent-event-${String(item.id)}`,
-      item.body ?? "",
-      this.#pollState.controller.signal,
-    );
+
+  async #advanceCursor(item: DirectAgentEventItem): Promise<void> {
+    this.#lastCursor = item.id;
+    if (this.#activeSubscription !== null) {
+      try {
+        await this.#subscriptionClient.upsertSubscriptionCursor(
+          this.#activeSubscription.subscriptionId,
+          item.id,
+          cursorJsonForEvent(this.#config, this.#activeSubscription, item),
+          this.#pollState.controller.signal,
+        );
+      } catch (err: unknown) {
+        if (isAbortError(err)) return;
+        this.#logger.warn("Failed to advance subscription cursor", {
+          subscriptionId: this.#activeSubscription.subscriptionId,
+          cursor: item.id,
+          error: errorMessage(err),
+        });
+        if (!this.#config.allowLegacyDirectPolling) throw err;
+      }
+    }
+    await this.#persistCursor();
   }
 
   async #restoreCursor(): Promise<void> {

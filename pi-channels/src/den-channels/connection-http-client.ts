@@ -26,7 +26,11 @@ export interface DirectAgentEventItem {
   readonly profileIdentity?: string | null;
   readonly agentInstanceId?: string | null;
   readonly poolMemberId?: string | null;
+  readonly sessionOwnerId?: string | null;
   readonly sessionId?: string | null;
+  readonly deliveryStatus?: string | null;
+  readonly claimStatus?: string | null;
+  readonly completionStatus?: string | null;
   readonly body?: string | null;
   readonly status?: string | null;
   readonly createdAt?: string | null;
@@ -116,8 +120,9 @@ export class HttpDirectAgentClient {
     cursor: number | null,
     limit: number,
     signal: AbortSignal,
+    channelId?: string,
   ): Promise<DirectAgentEventItem[]> {
-    const url = this.#directAgentEventsUrl(cursor, limit);
+    const url = this.#directAgentEventsUrl(cursor, limit, channelId);
     this.#logger.debug("Polling direct-agent events", { url });
 
     const response = await this.#fetchWithTimeout(url, {
@@ -320,11 +325,11 @@ export class HttpDirectAgentClient {
     }
   }
 
-  #directAgentEventsUrl(cursor: number | null, limit: number): string {
-    const params = new URLSearchParams({
-      projectId: this.#config.projectId,
-      limit: String(limit),
-    });
+  #directAgentEventsUrl(cursor: number | null, limit: number, channelId?: string): string {
+    const params = new URLSearchParams();
+    if (channelId === undefined) params.set("projectId", this.#config.projectId);
+    else params.set("channelId", channelId);
+    params.set("limit", String(limit));
     if (cursor !== null) {
       params.set("afterId", String(cursor));
     }

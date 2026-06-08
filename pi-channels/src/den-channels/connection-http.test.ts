@@ -292,8 +292,7 @@ describe("DenHttpDirectAgentConnection", () => {
       kind: "text",
       text: "Please use NON_ECHO_RUNTIME_OK for 19+23.",
     });
-    expect(postedGatewayBodies).toHaveLength(1);
-    expect(postedGatewayBodies[0]).toContain("gateway_delivery");
+    expect(postedGatewayBodies).toHaveLength(0);
     const cursor = await cursorStore.read("den_channels_cursor");
     expect(cursor).toBe("3002");
   });
@@ -342,7 +341,7 @@ describe("DenHttpDirectAgentConnection", () => {
     const gatewayUrls = postedUrls.filter((u) =>
       u.includes("/api/gateway/system-messages"),
     );
-    expect(gatewayUrls.length).toBeGreaterThanOrEqual(1);
+    expect(gatewayUrls).toHaveLength(0);
   });
 
   it("falls back to legacy activity events when canonical lifecycle POST fails server-side", async () => {

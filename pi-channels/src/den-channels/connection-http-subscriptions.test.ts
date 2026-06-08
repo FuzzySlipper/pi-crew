@@ -98,6 +98,24 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
           ),
         );
       }
+      if (url.includes("/api/channel-subscriptions?") && init?.method === "GET") {
+        return Promise.resolve(new Response(JSON.stringify({
+          memberIdentity: "pi-crew-runner",
+          subscriptions: [{
+            subscriptionId: 55,
+            channelId: 604,
+            memberIdentity: "pi-crew-runner",
+            profileIdentity: "pi-crew-runner",
+            agentInstanceId: "pi-crew-runner-live",
+            subscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-live",
+            subscriptionPurpose: "ordinary_channel",
+            subscriptionStatus: "active",
+          }],
+        }), { status: 200 }));
+      }
+      if (url.includes("/api/channel-subscriptions/55/cursors") && init?.method === "GET") {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
       if (url.includes("/api/direct-agent-events")) {
         return Promise.resolve(new Response("[]", { status: 200 }));
       }
@@ -118,8 +136,10 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
     expect(calls.slice(0, 3).map((call) => call.url)).toEqual([
       "http://192.168.1.10:18081/api/channels/604/memberships",
       "http://192.168.1.10:18081/api/channels/604/subscriptions",
-      "http://192.168.1.10:18081/api/direct-agent-events?projectId=pi-crew&limit=1",
+      "http://192.168.1.10:18081/api/channel-subscriptions?memberIdentity=pi-crew-runner&purpose=ordinary_channel&projectId=pi-crew&channelId=604",
     ]);
+    expect(calls[3]?.url).toBe("http://192.168.1.10:18081/api/channel-subscriptions/55/cursors");
+    expect(calls[4]?.url).toBe("http://192.168.1.10:18081/api/direct-agent-events?channelId=604&limit=1");
     expect(calls[0]?.body).toMatchObject({
       memberType: "agent",
       memberIdentity: "pi-crew-runner",
@@ -208,6 +228,21 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
       calls.push({ url, body: parseBody(init?.body) });
       if (url.includes("/api/direct-agent-events")) {
         return Promise.resolve(new Response("[]", { status: 200 }));
+      }
+      if (url.includes("/api/channel-subscriptions?") && init?.method === "GET") {
+        return Promise.resolve(new Response(JSON.stringify({
+          memberIdentity: "pi-crew-runner",
+          subscriptions: [{
+            subscriptionId: 55,
+            channelId: 604,
+            memberIdentity: "pi-crew-runner",
+            subscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-live",
+            subscriptionStatus: "active",
+          }],
+        }), { status: 200 }));
+      }
+      if (url.includes("/api/channel-subscriptions/55/cursors") && init?.method === "GET") {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify({ id: 44, channelId: 604 }), { status: 200 }));
     });

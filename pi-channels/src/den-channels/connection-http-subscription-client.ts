@@ -23,9 +23,30 @@ interface SubscriptionRegistrationResult {
   readonly membershipId: number | null;
 }
 
+export interface ChannelSubscriptionReadbackItem {
+  readonly subscriptionId: number;
+  readonly channelId: number;
+  readonly memberIdentity: string;
+  readonly profileIdentity?: string | null;
+  readonly agentInstanceId?: string | null;
+  readonly subscriptionIdentity: string;
+  readonly subscriptionStatus: string;
+  readonly targetProjectId?: string | null;
+  readonly targetTaskId?: number | null;
+  readonly assignmentId?: string | null;
+  readonly workerRunId?: string | null;
+  readonly workerRole?: string | null;
+}
+
+export interface ChannelSubscriptionCursorReadback {
+  readonly streamKind: string;
+  readonly lastSeenId: number;
+  readonly cursorJson?: string | null;
+}
+
 export interface ChannelSubscriptionReadback {
   readonly memberIdentity: string;
-  readonly subscriptions: readonly unknown[];
+  readonly subscriptions: readonly ChannelSubscriptionReadbackItem[];
 }
 
 export interface HttpSubscriptionClientOptions {
@@ -82,6 +103,48 @@ export class HttpSubscriptionClient {
       throw new ConnectionError(`Subscription readback failed with HTTP ${String(response.status)}`);
     }
     return (await response.json()) as ChannelSubscriptionReadback;
+  }
+
+  async listSubscriptionCursors(
+    subscriptionId: number,
+    signal: AbortSignal,
+  ): Promise<readonly ChannelSubscriptionCursorReadback[]> {
+    const response = await this.#fetchWithTimeout(
+      `${this.#baseUrl()}/api/channel-subscriptions/${encodeURIComponent(String(subscriptionId))}/cursors`,
+      {
+        method: "GET",
+        headers: this.#jsonHeaders(),
+        signal,
+      },
+    );
+    if (!response.ok) {
+      throw new ConnectionError(`Subscription cursor readback failed with HTTP ${String(response.status)}`);
+    }
+    return (await response.json()) as readonly ChannelSubscriptionCursorReadback[];
+  }
+
+  async upsertSubscriptionCursor(
+    subscriptionId: number,
+    lastSeenId: number,
+    cursorJson: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const response = await this.#fetchWithTimeout(
+      `${this.#baseUrl()}/api/channel-subscriptions/${encodeURIComponent(String(subscriptionId))}/cursors/subscription_messages`,
+      {
+        method: "PUT",
+        headers: this.#jsonHeaders(),
+        body: JSON.stringify({
+          streamKind: "subscription_messages",
+          lastSeenId,
+          cursorJson,
+        }),
+        signal,
+      },
+    );
+    if (!response.ok) {
+      throw new ConnectionError(`Subscription cursor upsert failed with HTTP ${String(response.status)}`);
+    }
   }
 
   async upsertMembership(input: ChannelMembershipUpsert, signal: AbortSignal): Promise<ChannelMembership> {

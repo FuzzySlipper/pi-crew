@@ -118,7 +118,7 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
     const activePayloads = payloads.filter((payload) => payload.eventType !== "completed");
     expect(activePayloads.every((payload) => typeof payload.stalenessDeadline === "string")).toBe(true);
     expect(payloads[payloads.length - 1]?.stalenessDeadline).toBeUndefined();
-    expect(gatewayBodies).toHaveLength(1);
+    expect(gatewayBodies).toHaveLength(0);
   });
 
   it("fails closed before delivery when lifecycle telemetry cannot be recorded", async () => {
