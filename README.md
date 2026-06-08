@@ -58,6 +58,12 @@ npm test -- pi-crew/src/__tests__/crew.test.ts
 
 The live service can be deployed as a persistent runtime, but deployment state is not inferred from this checkout alone. Treat Den task threads, completion packets, review rounds, live smoke evidence, and operator deployment notes as authoritative for what is running. Code review/merge and live deployment/smoke are separate gates.
 
+## Diagnostics and remediation boundary
+
+`pi-service/src/diagnostics` contains the read-only runtime diagnostic projection used by the V2 safe-remediation work. It joins local session records, Den assignment readback, runtime DB health, connectivity readers, and a bounded redacted event journal into operator-facing read models. The projection is diagnostic evidence only: Den remains authoritative for tasks, assignments, worker runs, review state, messages, and completion packets.
+
+Safe remediation controls must build on this projection without adding an alternate workflow ledger, arbitrary shell/file endpoints, or Den-bypassing mutation paths. If local runtime state and Den readback disagree, the projection classifies the disagreement and the operator path must fail closed unless a later task explicitly proves a Den-authoritative recovery action.
+
 ## Status framing
 
 V1 established the background-agent foundation: service runtime, Den Channels HTTP/direct-agent ingress, cursor/replay safety, deterministic response path, and lifecycle telemetry compatibility evidence. V2 is about turning that foundation into a trusted Den worker substrate: real supervised worker roles, Den-authoritative completions, policy enforcement, context/drain behavior, diagnostics, and safe operator controls.

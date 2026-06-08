@@ -136,6 +136,29 @@ export {
   type AuditResult,
 } from "./workers/packet-auditor.js";
 export {
+  DiagnosticsService,
+  type DiagnosticsServiceDeps,
+} from "./diagnostics/diagnostics-service.js";
+export {
+  InMemoryDiagnosticEventJournal,
+  redactDiagnosticValue,
+} from "./diagnostics/event-journal.js";
+export type {
+  DiagnosticClassification,
+  DiagnosticClassificationKind,
+  DiagnosticContextPressure,
+  DiagnosticCounts,
+  DiagnosticEventJournal,
+  DiagnosticEventRecord,
+  DiagnosticSessionProjection,
+  DiagnosticStatusReader,
+  DiagnosticStatusSnapshot,
+  DiagnosticsOverview,
+  ReachabilityStatus,
+  RuntimeHealthReader,
+  RuntimeHealthSnapshot,
+} from "./diagnostics/types.js";
+export {
   type PacketAuditFetchFailure,
   type PacketCompletionReader,
 } from "./workers/packet-auditor-workflow.js";
