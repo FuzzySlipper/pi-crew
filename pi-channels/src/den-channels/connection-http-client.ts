@@ -13,6 +13,7 @@ import type { DenHttpConnectionConfig } from "./connection-types.js";
 
 export interface DirectAgentEventItem {
   readonly id: number;
+  readonly eventId?: number;
   readonly channelId: number;
   readonly memberIdentity?: string | null;
   readonly sourceKind?: string | null;
@@ -149,6 +150,27 @@ export class HttpDirectAgentClient {
 
     this.#logger.warn("Unexpected direct-agent-events response shape");
     return [];
+  }
+
+  async readEvent(
+    eventId: number,
+    signal: AbortSignal,
+  ): Promise<DirectAgentEventItem | null> {
+    const url = `${this.#baseUrl()}/api/direct-agent-events/${String(eventId)}`;
+    const response = await this.#fetchWithTimeout(url, {
+      method: "GET",
+      headers: this.#authHeaders(),
+      signal,
+    });
+    if (!response.ok) {
+      this.#logger.warn("Direct-agent event readback returned non-OK", {
+        eventId,
+        status: response.status,
+      });
+      return null;
+    }
+    const payload: unknown = await response.json();
+    return normalizeDirectAgentEventItem(payload);
   }
 
   async postLifecycleEvent(
@@ -397,6 +419,14 @@ function isDirectAgentEventItem(value: unknown): value is DirectAgentEventItem {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
   return typeof record.id === "number" && typeof record.channelId === "number";
+}
+
+function normalizeDirectAgentEventItem(value: unknown): DirectAgentEventItem | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Partial<DirectAgentEventItem>;
+  const id = record.id ?? record.eventId;
+  if (typeof id !== "number" || typeof record.channelId !== "number") return null;
+  return { ...record, id, channelId: record.channelId };
 }
 
 function parseOptionalLong(value: unknown): number | null {

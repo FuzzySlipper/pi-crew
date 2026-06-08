@@ -302,43 +302,44 @@ export class DenHttpDirectAgentConnection implements DenConnection {
 
   async #handleEvent(item: DirectAgentEventItem): Promise<void> {
     const eventId = item.id;
+    const eventItem = await this.#client.readEvent(eventId, this.#pollState.controller.signal) ?? item;
     this.#logger.info("Handling Den HTTP direct-agent event", {
       eventId,
-      channelId: item.channelId,
-      targetProjectId: item.targetProjectId,
-      targetTaskId: item.targetTaskId,
+      channelId: eventItem.channelId,
+      targetProjectId: eventItem.targetProjectId,
+      targetTaskId: eventItem.targetTaskId,
     });
     await this.#client.postLifecycleEvent(
       "runtime_received",
       eventId,
-      item,
+      eventItem,
       this.#pollState.controller.signal,
     );
     await this.#client.postLifecycleEvent(
       "request_claimed",
       eventId,
-      item,
+      eventItem,
       this.#pollState.controller.signal,
     );
     await this.#client.postLifecycleEvent(
       "agent_turn_started",
       eventId,
-      item,
+      eventItem,
       this.#pollState.controller.signal,
     );
     await this.#client.postLifecycleEvent(
       "heartbeat",
       eventId,
-      item,
+      eventItem,
       this.#pollState.controller.signal,
     );
 
-    this.#emit("message", this.#mapEventToMessage(item));
+    this.#emit("message", this.#mapEventToMessage(eventItem));
 
     await this.#client.postLifecycleEvent(
       "completed",
       eventId,
-      item,
+      eventItem,
       this.#pollState.controller.signal,
     );
 

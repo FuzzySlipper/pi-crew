@@ -151,9 +151,9 @@ describe("DenHttpDirectAgentConnection subscription cursors", () => {
       if (url.endsWith("/api/channel-subscriptions/55/cursors")) {
         return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
       }
-      if (url.includes("/api/direct-agent-events")) {
-        return Promise.resolve(new Response(JSON.stringify({ items: [{
-          id: 3003,
+      if (url.includes("/api/direct-agent-events/3003")) {
+        return Promise.resolve(new Response(JSON.stringify({
+          eventId: 3003,
           channelId: 642,
           memberIdentity: "pi-crew-runner",
           sourceKind: "wake_event",
@@ -170,6 +170,25 @@ describe("DenHttpDirectAgentConnection subscription cursors", () => {
           deliveryStatus: "pending_subscription",
           claimStatus: "pending_claim",
           completionStatus: "running",
+          body: "route via subscription cursor",
+        }), { status: 200 }));
+      }
+      if (url.includes("/api/direct-agent-events")) {
+        return Promise.resolve(new Response(JSON.stringify({ items: [{
+          id: 3003,
+          channelId: 642,
+          memberIdentity: "pi-crew-runner",
+          sourceKind: "wake_event",
+          sourceProjectId: "pi-crew",
+          targetProjectId: "pi-crew",
+          targetTaskId: 2113,
+          assignmentId: "assignment-2113",
+          workerRunId: "piw_2113_cursor",
+          workerRole: "runner",
+          profileIdentity: "pi-crew-runner",
+          agentInstanceId: "inst-live-2",
+          sessionOwnerId: "owner:den-k8plus:pi-crew-runner",
+          sessionId: "sess-live",
           body: "route via subscription cursor",
         }], hasMore: false }), { status: 200 }));
       }
