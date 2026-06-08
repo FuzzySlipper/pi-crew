@@ -75,6 +75,27 @@ describe("AdminServer", () => {
     }
   });
 
+  it("serves Prometheus metrics with bearer auth", async () => {
+    const metrics = [
+      "# HELP pi_crew_runtime_uptime_seconds Runtime process uptime in seconds.",
+      "# TYPE pi_crew_runtime_uptime_seconds gauge",
+      "pi_crew_runtime_uptime_seconds 12",
+      "",
+    ].join("\n");
+    const server = await startServer(19365, healthyOverview(), metrics);
+    try {
+      const response = await adminFetch(server, "/admin/metrics", token);
+      const text = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/plain");
+      expect(text).toContain("# HELP pi_crew_runtime_uptime_seconds");
+      expect(text).not.toContain("assignment-1");
+    } finally {
+      await server.stop();
+    }
+  });
+
   it("redacts secrets in diagnostic event payloads", async () => {
     const overview = healthyOverview({
       recentEvents: [
@@ -143,7 +164,11 @@ describe("AdminServer", () => {
   });
 });
 
-async function startServer(port: number, overview: DiagnosticsOverview): Promise<AdminServer> {
+async function startServer(
+  port: number,
+  overview: DiagnosticsOverview,
+  metrics: string | null = null,
+): Promise<AdminServer> {
   const server = new AdminServer({
     config: {
       enabled: true,
@@ -153,6 +178,7 @@ async function startServer(port: number, overview: DiagnosticsOverview): Promise
       allowLanBind: false,
     },
     diagnostics: { projectOverview: () => Promise.resolve(overview) },
+    metrics: metrics === null ? undefined : { projectPrometheus: () => Promise.resolve(metrics) },
   });
   await server.start();
   return server;

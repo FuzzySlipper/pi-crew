@@ -14,14 +14,14 @@ import type {
   ChannelProvider,
   ChannelMessage,
   ChannelContent,
-  type ChannelMembershipStatus,
-  type ChannelSubscriptionStatus,
+  ChannelMembershipStatus,
+  ChannelSubscriptionStatus,
 } from "@pi-crew/core";
 import type {
   SessionConfig,
   SessionRecord,
   ChannelBindingRecord,
-  type ChannelBinding,
+  ChannelBinding,
 } from "./types.js";
 import {
   appendChannelBinding,

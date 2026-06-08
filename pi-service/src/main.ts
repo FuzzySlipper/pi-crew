@@ -17,6 +17,7 @@ import { loadConfig } from "./config.js";
 import { createServiceRegistry } from "./di.js";
 import { Gateway } from "./gateway.js";
 import { AdminServer } from "./admin/admin-server.js";
+import { RuntimeMetricsCollector, renderPrometheusMetrics } from "./diagnostics/runtime-metrics.js";
 import type { DiagnosticsOverview } from "./diagnostics/types.js";
 
 // ── Signal handlers ─────────────────────────────────────────────
@@ -113,6 +114,8 @@ async function main(): Promise<void> {
   const logger = new FakeLogger();
   const eventBus = new FakeEventBus();
   const registry = createServiceRegistry({ config, logger, eventBus });
+  const startedAt = new Date().toISOString();
+  const metricsCollector = new RuntimeMetricsCollector(registry.eventBus, { startedAt });
 
   // 3. Create and start the gateway
   gateway = new Gateway(registry.config, registry.logger, registry.eventBus);
@@ -120,9 +123,14 @@ async function main(): Promise<void> {
   await gateway.start();
 
   if (config.admin.enabled) {
+    const diagnostics = { projectOverview: () => Promise.resolve(emptyDiagnosticsOverview(startedAt)) };
     adminServer = new AdminServer({
       config: config.admin,
-      diagnostics: { projectOverview: () => Promise.resolve(emptyDiagnosticsOverview()) },
+      diagnostics,
+      metrics: {
+        projectPrometheus: async () =>
+          renderPrometheusMetrics(metricsCollector.snapshot(), await diagnostics.projectOverview()),
+      },
     });
     await adminServer.start();
     console.log(
@@ -144,29 +152,25 @@ async function main(): Promise<void> {
   process.on("SIGHUP", onSighup);
 }
 
-function emptyDiagnosticsOverview(): DiagnosticsOverview {
-  const now = new Date().toISOString();
+function emptyDiagnosticsOverview(startedAt: string): DiagnosticsOverview {
   return {
     service: {
       status: "ok",
       version: "standalone-main",
       uptimeSeconds: Math.floor(process.uptime()),
-      startedAt: now,
+      startedAt,
       drainMode: "inactive",
     },
     classification: {
       kind: "unknown",
       summary: "Standalone pi-service main has admin diagnostics enabled without runtime projection wiring.",
     },
-    denCore: { status: "unknown", lastOkAt: null },
-    denChannels: { status: "unknown", lastOkAt: null },
-    mcp: { status: "unknown", lastOkAt: null },
+    denCore: { status: "degraded", lastOkAt: null },
+    denChannels: { status: "degraded", lastOkAt: null },
+    mcp: { status: "degraded", lastOkAt: null },
     runtimeDb: {
-      status: "unavailable",
-      path: "",
-      walEnabled: false,
-      tableCount: 0,
-      schemaVersion: null,
+      status: "failed",
+      error: "Standalone main has no runtime DB health reader wired.",
     },
     counts: {
       activeSessions: 0,

@@ -113,24 +113,14 @@ function delayedExecutor(delayMs: number): WorkerExecutor {
   return {
     async execute() {
       await sleep(delayMs);
-      return makeFastExecutor().execute({
-        binding: makeBinding(),
-        session: {
-          id: "unused",
-          profileId: "unused",
-          instanceId: null,
-          kind: "worker",
-          createdAt: new Date().toISOString(),
-          lastActiveAt: new Date().toISOString(),
-          state: "active",
-          messageCount: 0,
-          channelBindings: [],
-          workerBinding: makeBinding(),
-        },
-        emitEvent: () => undefined,
-        log: () => undefined,
-        writeAudit: () => Promise.resolve(),
-      });
+      return {
+        status: "completed",
+        artifacts: [{ type: "test", ref: "r", summary: "delayed executor" }],
+        filesTouched: ["test.ts"],
+        toolsUsed: ["test-tool"],
+        tokensConsumed: 100,
+        summary: "done",
+      };
     },
   };
 }

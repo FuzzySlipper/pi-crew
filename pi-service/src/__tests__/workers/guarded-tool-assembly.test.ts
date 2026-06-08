@@ -136,16 +136,6 @@ function makeBeforeCtx(overrides?: {
   args?: unknown;
 }): Parameters<ReturnType<typeof createBeforeToolCallHook>>[0] {
   return {
-    assistantMessage: {
-      role: "assistant",
-      content: [{ type: "toolCall", id: "tc-1", name: overrides?.toolName ?? "test_tool", input: {} }],
-      api: "test",
-      provider: "test",
-      model: "test",
-      usage: { inputTokens: 0, outputTokens: 0 },
-      stopReason: "tool_use",
-      timestamp: Date.now(),
-    },
     toolCall: {
       type: "toolCall",
       id: "tc-1",
@@ -153,10 +143,6 @@ function makeBeforeCtx(overrides?: {
       input: overrides?.args ?? {},
     },
     args: overrides?.args ?? {},
-    context: {
-      systemPrompt: "test",
-      messages: [],
-    },
   };
 }
 
@@ -166,16 +152,6 @@ function makeAfterCtx(overrides?: {
   isError?: boolean;
 }): Parameters<ReturnType<typeof createAfterToolCallHook>>[0] {
   return {
-    assistantMessage: {
-      role: "assistant",
-      content: [{ type: "toolCall", id: "tc-1", name: overrides?.toolName ?? "test_tool", input: {} }],
-      api: "test",
-      provider: "test",
-      model: "test",
-      usage: { inputTokens: 0, outputTokens: 0 },
-      stopReason: "tool_use",
-      timestamp: Date.now(),
-    },
     toolCall: {
       type: "toolCall",
       id: "tc-1",
@@ -188,10 +164,6 @@ function makeAfterCtx(overrides?: {
       details: undefined,
     },
     isError: overrides?.isError ?? false,
-    context: {
-      systemPrompt: "test",
-      messages: [],
-    },
   };
 }
 

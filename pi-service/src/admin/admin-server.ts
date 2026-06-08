@@ -10,9 +10,14 @@ export interface DiagnosticsProjector {
   projectOverview(): Promise<DiagnosticsOverview>;
 }
 
+export interface MetricsProjector {
+  projectPrometheus(): Promise<string>;
+}
+
 export interface AdminServerDeps {
   readonly config: AdminConfig;
   readonly diagnostics: DiagnosticsProjector;
+  readonly metrics?: MetricsProjector;
   readonly controls?: RemediationControlService;
 }
 
@@ -26,12 +31,14 @@ interface RouteContext {
 export class AdminServer {
   readonly #config: AdminConfig;
   readonly #diagnostics: DiagnosticsProjector;
+  readonly #metrics: MetricsProjector | null;
   readonly #controls: RemediationControlService | null;
   #server: Server | null = null;
 
   constructor(deps: AdminServerDeps) {
     this.#config = deps.config;
     this.#diagnostics = deps.diagnostics;
+    this.#metrics = deps.metrics ?? null;
     this.#controls = deps.controls ?? null;
   }
 
@@ -93,6 +100,14 @@ export class AdminServer {
     }
     if (method !== "GET") {
       writeJson(res, 404, { error: "not_found" });
+      return;
+    }
+    if (url.pathname === "/admin/metrics") {
+      if (this.#metrics === null) {
+        writeJson(res, 404, { error: "not_found" });
+        return;
+      }
+      writePrometheus(res, 200, await this.#metrics.projectPrometheus());
       return;
     }
     await this.#route({ url, req, res });
@@ -271,6 +286,11 @@ function limitedEvents(overview: DiagnosticsOverview, url: URL) {
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(redactDiagnosticValue(body, null)));
+}
+
+function writePrometheus(res: ServerResponse, status: number, body: string): void {
+  res.writeHead(status, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
+  res.end(body);
 }
 
 function isAddressInfo(address: string | AddressInfo | null | undefined): address is AddressInfo {
