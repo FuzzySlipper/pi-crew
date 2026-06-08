@@ -151,6 +151,20 @@ export {
   type AuditResult,
 } from "./workers/packet-auditor.js";
 export {
+  AgentWorkerExecutor,
+  DefaultAgentWorkerFactory,
+  type AgentWorkerAdapter,
+  type AgentWorkerFactory,
+  type AgentWorkerToolProvider,
+  type AgentWorkerToolProviderInput,
+  type WorkerModelConfig,
+  type WorkerModelConfigSource,
+} from "./workers/agent-worker-executor.js";
+export type {
+  AgentTool,
+  AgentToolResult,
+} from "./workers/guarded-tool-types.js";
+export {
   DiagnosticsService,
   type DiagnosticsServiceDeps,
 } from "./diagnostics/diagnostics-service.js";

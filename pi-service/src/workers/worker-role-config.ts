@@ -43,10 +43,18 @@ export interface RoleToolPolicy {
  * when WorkerRuntime wraps pi-agent-core Agent in a future task.
  */
 export interface WorkerRoleConfig {
+  /** Execution strategy for this role; llmAgent fails closed on missing model/tool config. */
+  readonly executionMode?: "legacyExecutor" | "llmAgent";
   /** Model provider to use when the role overrides profile defaults. */
   readonly modelProvider?: string;
   /** Model name/ID to use when the role overrides profile defaults. */
   readonly modelName?: string;
+  /** Optional OpenAI-compatible base URL for local/no-key model endpoints. */
+  readonly modelBaseUrl?: string;
+  /** Optional role-level sampling temperature. */
+  readonly temperature?: number;
+  /** Optional role-level maximum output tokens. */
+  readonly maxTokens?: number;
   /** System prompt source (profile ID to load prompt from). */
   readonly systemPromptSource?: string;
   /** MCP tool set identifiers for this role. */
@@ -98,15 +106,29 @@ const RoleToolPolicySchema = z.object({
   credentialScope: z.string().min(1).optional(),
 });
 
-const WorkerRoleConfigSchema = z.object({
-  modelProvider: z.string().min(1).optional(),
-  modelName: z.string().min(1).optional(),
-  systemPromptSource: z.string().min(1).optional(),
-  mcpToolSet: z.array(z.string().min(1)).optional(),
-  drainEssentialTools: z.array(z.string().min(1)).optional(),
-  deterministicMode: z.boolean().optional(),
-  toolPolicyDefaults: RoleToolPolicySchema.optional(),
-});
+const WorkerRoleConfigSchema = z
+  .object({
+    executionMode: z.enum(["legacyExecutor", "llmAgent"]).optional(),
+    modelProvider: z.string().min(1).optional(),
+    modelName: z.string().min(1).optional(),
+    modelBaseUrl: z.string().url().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    maxTokens: z.number().int().positive().optional(),
+    systemPromptSource: z.string().min(1).optional(),
+    mcpToolSet: z.array(z.string().min(1)).optional(),
+    drainEssentialTools: z.array(z.string().min(1)).optional(),
+    deterministicMode: z.boolean().optional(),
+    toolPolicyDefaults: RoleToolPolicySchema.optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.executionMode === "llmAgent" && value.deterministicMode === true) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["deterministicMode"],
+        message: "llmAgent execution cannot also enable deterministicMode",
+      });
+    }
+  });
 
 export const WorkerRoleBindingSchema = z.object({
   role: z.string().min(1, "Worker role binding role must not be empty"),

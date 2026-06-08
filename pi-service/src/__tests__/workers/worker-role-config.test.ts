@@ -76,11 +76,30 @@ describe("WorkerRoleBindingSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects llmAgent execution when deterministicMode is also enabled", () => {
+    const result = WorkerRoleBindingSchema.safeParse({
+      role: "coder",
+      profileId: "spawned-coder",
+      config: {
+        executionMode: "llmAgent",
+        deterministicMode: true,
+      },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toContain("cannot also enable deterministicMode");
+  });
+
   it("accepts binding with optional config", () => {
     const result = WorkerRoleBindingSchema.safeParse({
       role: "coder",
       profileId: "spawned-coder",
       config: {
+        executionMode: "llmAgent",
+        modelProvider: "local-openai-compatible",
+        modelName: "Qwen3.6-35B-A3B-MTP-GGUF",
+        modelBaseUrl: "http://192.168.1.23:13305/v1",
+        temperature: 0.2,
+        maxTokens: 4096,
         systemPromptSource: "spawned-coder",
         mcpToolSet: ["file", "terminal"],
         drainEssentialTools: ["health"],
@@ -93,6 +112,8 @@ describe("WorkerRoleBindingSchema", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) {
+      expect(result.data.config?.executionMode).toBe("llmAgent");
+      expect(result.data.config?.modelBaseUrl).toBe("http://192.168.1.23:13305/v1");
       expect(result.data.config?.mcpToolSet).toEqual(["file", "terminal"]);
       expect(result.data.config?.deterministicMode).toBe(false);
       expect(result.data.config?.toolPolicyDefaults?.allowedTools).toEqual([

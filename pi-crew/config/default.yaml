@@ -157,6 +157,13 @@ workers:
       profileId: "packet-auditor"
     - role: "coder"
       profileId: "spawned-coder"
+      # Production LLM worker mode is fail-closed: uncomment all fields together
+      # after Den MCP tools and model endpoint are available to this runtime.
+      # config:
+      #   executionMode: "llmAgent"
+      #   modelProvider: "local-openai-compatible"
+      #   modelName: "Qwen3.6-35B-A3B-MTP-GGUF"
+      #   modelBaseUrl: "http://192.168.1.23:13305/v1"
     - role: "reviewer"
       profileId: "spawned-reviewer"
     - role: "validator"

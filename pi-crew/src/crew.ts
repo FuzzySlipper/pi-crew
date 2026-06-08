@@ -33,6 +33,7 @@ import {
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
   type ChannelBinding,
+  type AgentWorkerExecutor,
 } from "@pi-crew/service";
 
 import { loadCrewConfig, type CrewConfig } from "./config.js";
@@ -53,6 +54,7 @@ import { createDenCompletionPoster } from "./den-completion-poster.js";
 import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
+import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
 import { AgentRuntimeRegistry } from "@pi-crew/service";
 import type { CompletionPoster } from "@pi-crew/tools";
 
@@ -434,6 +436,15 @@ export class Crew {
    */
   get workerRoleMapping(): WorkerRoleMappingConfig {
     return this.#workerRoleMapping;
+  }
+
+  /** Build the production LLM-backed worker executor with live MCP tools. */
+  createAgentWorkerExecutor(): AgentWorkerExecutor {
+    return createCrewAgentWorkerExecutor({
+      mcpClient: this.#mcpClient,
+      toolRegistry: this.#mcpToolRegistry,
+      logger: this.#logger,
+    });
   }
 }
 
