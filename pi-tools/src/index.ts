@@ -43,9 +43,11 @@ export function createToolRegistry(): ToolRegistry {
 
 export {
   type WorkerPolicyInput,
+  type CredentialAccessLevel,
   createWorkerPolicy,
   isPathAllowed,
   isHostAllowed,
+  isCredentialAccessAllowed,
   isIterationBudgetExhausted,
   isIterationBudgetLow,
 } from "./worker-policy.js";

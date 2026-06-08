@@ -9,6 +9,7 @@ import {
   createWorkerPolicy,
   isPathAllowed,
   isHostAllowed,
+  isCredentialAccessAllowed,
   isIterationBudgetExhausted,
   isIterationBudgetLow,
 } from "../worker-policy.js";
@@ -202,6 +203,51 @@ describe("isHostAllowed", () => {
     });
     expect(isHostAllowed(denyLocal, "http://127.0.0.1:8080/status")).toBe(false);
     expect(isHostAllowed(denyLocal, "http://[::1]:8080/status")).toBe(false);
+  });
+});
+
+describe("isCredentialAccessAllowed", () => {
+  it("allows no credential access under none scope", () => {
+    const policy = createWorkerPolicy({ assignmentId: "5", runId: "r5", taskId: "5", role: "coder" });
+
+    expect(isCredentialAccessAllowed(policy, "none")).toBe(true);
+    expect(isCredentialAccessAllowed(policy, "read_only")).toBe(false);
+  });
+
+  it("allows read-only but denies writes under read_only scope", () => {
+    const policy = createWorkerPolicy({
+      assignmentId: "6",
+      runId: "r6",
+      taskId: "6",
+      role: "coder",
+      credentialScope: "read_only",
+    });
+
+    expect(isCredentialAccessAllowed(policy, "read_only")).toBe(true);
+    expect(isCredentialAccessAllowed(policy, "bounded_write")).toBe(false);
+  });
+
+  it("allows bounded writes but denies full credential scope", () => {
+    const policy = createWorkerPolicy({
+      assignmentId: "7",
+      runId: "r7",
+      taskId: "7",
+      role: "coder",
+      credentialScope: "bounded_write",
+    });
+
+    expect(isCredentialAccessAllowed(policy, "read_only")).toBe(true);
+    expect(isCredentialAccessAllowed(policy, "bounded_write")).toBe(true);
+    expect(isCredentialAccessAllowed(policy, "full")).toBe(false);
+  });
+
+  it("fails closed for unknown policy credential scope", () => {
+    const policy = {
+      ...createWorkerPolicy({ assignmentId: "8", runId: "r8", taskId: "8", role: "coder" }),
+      credentialScope: "unknown",
+    } as unknown as ReturnType<typeof createWorkerPolicy>;
+
+    expect(isCredentialAccessAllowed(policy, "none")).toBe(false);
   });
 });
 

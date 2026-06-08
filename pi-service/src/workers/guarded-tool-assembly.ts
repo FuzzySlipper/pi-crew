@@ -24,6 +24,7 @@ import type {
 } from "./guarded-tool-types.js";
 import { checkFilesystemPathPolicy } from "./guarded-path-policy.js";
 import { checkNetworkHostPolicy } from "./guarded-host-policy.js";
+import { checkCredentialPolicy } from "./guarded-credential-policy.js";
 
 // ── ToolExecutor ─────────────────────────────────────────────────
 
@@ -220,6 +221,17 @@ export function createBeforeToolCallHook(
       }
     }
 
+    const credentialCheck = checkCredentialPolicy(policy, callCtx.args);
+    if (!credentialCheck.allowed) {
+      config.logger.warn("GuardedToolAssembly: beforeToolCall denied (credential policy)", {
+        toolName,
+        reason: credentialCheck.reason,
+        ...ctx,
+      });
+      emitPolicyDenial(config, ctx, toolName, credentialCheck.reason, "credential");
+      return Promise.resolve({ block: true, reason: credentialCheck.reason });
+    }
+
     // Tool is allowed — return undefined (no blocking)
     return Promise.resolve(undefined);
   };
@@ -387,6 +399,18 @@ function wrapExecute(
         emitPolicyDenial(config, corrCtx, toolName, hostCheck.reason, "host");
         return buildDenialResult(toolName, hostCheck.reason);
       }
+    }
+
+    const credentialCheck = checkCredentialPolicy(policy, params);
+    if (!credentialCheck.allowed) {
+      config.logger.warn("GuardedToolAssembly: execute denied (wrapper-level credential policy)", {
+        toolName,
+        toolCallId,
+        reason: credentialCheck.reason,
+        ...corrCtx,
+      });
+      emitPolicyDenial(config, corrCtx, toolName, credentialCheck.reason, "credential");
+      return buildDenialResult(toolName, credentialCheck.reason);
     }
 
     // ── Delegate to original execute or executor ───────────

@@ -21,6 +21,15 @@ const DEFAULT_MAX_TOKENS_PER_TURN = 128_000;
 
 // ── Policy input ──────────────────────────────────────────────
 
+export type CredentialAccessLevel = "none" | "read_only" | "bounded_write" | "full";
+
+const CREDENTIAL_RANK: Record<CredentialAccessLevel, number> = {
+  none: 0,
+  read_only: 1,
+  bounded_write: 2,
+  full: 3,
+};
+
 /**
  * Partial policy input used to construct a full {@link WorkerPolicy}.
  *
@@ -202,6 +211,22 @@ function isLoopbackHost(hostname: string): boolean {
     || hostname === "::1"
     || hostname === "0:0:0:0:0:0:0:1"
     || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+// ── Credential check ──────────────────────────────────────────
+
+export function isCredentialAccessAllowed(
+  policy: WorkerPolicy,
+  requestedAccess: CredentialAccessLevel,
+): boolean {
+  if (!isCredentialScope(policy.credentialScope)) {
+    return false;
+  }
+  return CREDENTIAL_RANK[requestedAccess] <= CREDENTIAL_RANK[policy.credentialScope];
+}
+
+function isCredentialScope(value: string): value is CredentialAccessLevel {
+  return value === "none" || value === "read_only" || value === "bounded_write" || value === "full";
 }
 
 // ── Iteration check ───────────────────────────────────────────
