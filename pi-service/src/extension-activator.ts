@@ -37,6 +37,8 @@ export interface ServiceSessionView {
 
 /** Request used by a service extension to create a delegated child session. */
 export interface DelegatedSessionCreateRequest {
+  /** Deterministic child session id allocated before policy derivation. */
+  readonly sessionId?: string;
   /** Existing parent session that owns the child. */
   readonly parentSessionId: string;
   /** Profile used by the child session. */
@@ -169,7 +171,7 @@ export function createServiceExtensionContext(
   };
 }
 
-/** Create a fail-closed placeholder until #2169 wires concrete delegation lifecycle. */
+/** Create a fail-closed placeholder for tests/composition roots without delegation wiring. */
 export function createUnavailableDelegationSessionBridge(): DelegationSessionBridge {
   return {
     getSession() {

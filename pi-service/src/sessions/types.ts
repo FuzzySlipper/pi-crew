@@ -122,6 +122,8 @@ export interface SessionRecord {
  * Configuration passed to `SessionManager.create` / `AgentFactory.createSession`.
  */
 export interface SessionConfig {
+  /** Optional deterministic session id for service-owned lifecycle bridges. */
+  readonly sessionId?: string;
   /** Which profile to instantiate. */
   readonly profileId: string;
   /** Conversational, worker, or delegated child. */

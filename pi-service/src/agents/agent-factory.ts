@@ -56,7 +56,7 @@ export class AgentFactoryImpl implements AgentFactory {
     const now = new Date().toISOString();
 
     const record: SessionRecord = {
-      id: `sess-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`,
+      id: config.sessionId ?? `sess-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`,
       profileId: config.profileId,
       instanceId: instance.id,
       kind: config.kind,
