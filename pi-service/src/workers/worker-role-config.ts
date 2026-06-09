@@ -192,7 +192,7 @@ export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
     profileId: "spawned-coder",
     config: {
       systemPromptSource: "spawned-coder",
-      mcpToolSet: ["filesystem", "terminal", "git", "den"],
+      mcpToolSet: ["filesystem", "terminal", "git", "den", "delegation"],
       drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
     },
   },

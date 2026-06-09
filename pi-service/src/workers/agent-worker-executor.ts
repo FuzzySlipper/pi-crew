@@ -10,6 +10,10 @@ import {
   type KnownProvider,
   type Model,
 } from "@earendil-works/pi-ai";
+import type {
+  DelegationConstraints,
+  EffectiveDelegationRuntime,
+} from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
 import type { AgentLike, SteerableAgent } from "./agent-supervisor.js";
 import type { AgentTool } from "./guarded-tool-types.js";
@@ -20,6 +24,9 @@ import type {
 } from "./worker-runtime.js";
 import type { WorkerRoleConfig } from "./worker-role-config.js";
 import type { WorkerRoleInput } from "./worker-role-assembly.js";
+import type { DelegatedSpawnLifecycle } from "./delegated-spawn-lifecycle.js";
+import { createDelegatedSpawnTool } from "./delegated-spawn-tool.js";
+import { buildWorkerPolicy } from "./worker-policy-builder.js";
 
 export interface WorkerModelConfig {
   readonly provider?: string;
@@ -71,6 +78,9 @@ export interface AgentWorkerExecutorConfig {
   readonly agentFactory?: AgentWorkerFactory;
   readonly modelConfigSource?: WorkerModelConfigSource;
   readonly toolProvider?: AgentWorkerToolProvider;
+  readonly delegatedSpawnLifecycle?: DelegatedSpawnLifecycle;
+  readonly delegatedSpawnConstraints?: DelegationConstraints;
+  readonly delegatedSpawnAllowedRuntimes?: readonly EffectiveDelegationRuntime[];
 }
 
 interface ResolvedWorkerModelConfig {
@@ -106,11 +116,17 @@ export class AgentWorkerExecutor implements WorkerExecutor {
   readonly #agentFactory: AgentWorkerFactory;
   readonly #modelConfigSource: WorkerModelConfigSource | undefined;
   readonly #toolProvider: AgentWorkerToolProvider;
+  readonly #delegatedSpawnLifecycle: DelegatedSpawnLifecycle | undefined;
+  readonly #delegatedSpawnConstraints: DelegationConstraints;
+  readonly #delegatedSpawnAllowedRuntimes: readonly EffectiveDelegationRuntime[] | undefined;
 
   constructor(config: AgentWorkerExecutorConfig = {}) {
     this.#agentFactory = config.agentFactory ?? new DefaultAgentWorkerFactory();
     this.#modelConfigSource = config.modelConfigSource;
     this.#toolProvider = config.toolProvider ?? (() => []);
+    this.#delegatedSpawnLifecycle = config.delegatedSpawnLifecycle;
+    this.#delegatedSpawnConstraints = config.delegatedSpawnConstraints ?? { maxSpawnDepth: 1 };
+    this.#delegatedSpawnAllowedRuntimes = config.delegatedSpawnAllowedRuntimes;
   }
 
   async execute(context: WorkerExecutionContext): Promise<WorkerExecutionResult> {
@@ -136,7 +152,11 @@ export class AgentWorkerExecutor implements WorkerExecutor {
     );
     const model = resolvePiModel(modelConfig);
     const toolSets = assembly.selectMcpToolSets(roleInput);
-    const rawTools = this.#toolProvider({ roleInput, toolSets });
+    const delegatedSpawnTool = this.#createDelegatedSpawnTool(context, roleInput, toolSets, modelConfig);
+    const rawTools = [
+      ...this.#toolProvider({ roleInput, toolSets }),
+      ...(delegatedSpawnTool === undefined ? [] : [delegatedSpawnTool]),
+    ];
     if (rawTools.length === 0) {
       throw new ConfigurationError(
         `LLM Agent worker role "${context.binding.role}" has no tools from selected tool sets [${toolSets.join(", ")}]`,
@@ -246,6 +266,36 @@ export class AgentWorkerExecutor implements WorkerExecutor {
       turnCount: supervisor.turnCount,
       summary: buildSummary(context, modelConfig, supervisor.turnCount),
     };
+  }
+
+  #createDelegatedSpawnTool(
+    context: WorkerExecutionContext,
+    roleInput: WorkerRoleInput,
+    toolSets: readonly string[],
+    modelConfig: ResolvedWorkerModelConfig,
+  ): AgentTool | undefined {
+    if (this.#delegatedSpawnLifecycle === undefined) return undefined;
+    if (!toolSets.some((toolSet) => toolSet.toLowerCase() === "delegation")) return undefined;
+    const parentRuntime = {
+      profileId: roleInput.profileId,
+      provider: modelConfig.provider,
+      model: modelConfig.modelName,
+    } satisfies EffectiveDelegationRuntime;
+    return createDelegatedSpawnTool({
+      lifecycle: this.#delegatedSpawnLifecycle,
+      parentSessionId: context.session.id,
+      parentPolicy: buildWorkerPolicy(context.binding, context.roleConfig),
+      parentDelegationConstraints: context.session.delegationConstraints ?? this.#delegatedSpawnConstraints,
+      parentLineage: context.session.delegation,
+      parentRuntime,
+      allowedRuntimes: this.#delegatedSpawnAllowedRuntimes ?? [parentRuntime],
+      correlation: {
+        assignmentId: context.binding.assignmentId,
+        runId: context.binding.runId,
+        taskId: context.binding.taskId,
+        profileId: roleInput.profileId,
+      },
+    });
   }
 }
 

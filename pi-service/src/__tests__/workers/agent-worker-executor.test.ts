@@ -10,6 +10,7 @@ import type {
   AgentWorkerFactoryInput,
   WorkerModelConfigSource,
 } from "../../workers/agent-worker-executor.js";
+import type { DelegatedSpawnLifecycle } from "../../workers/delegated-spawn-lifecycle.js";
 import { WorkerRuntime } from "../../workers/worker-runtime.js";
 import type { AgentTool } from "../../workers/guarded-tool-types.js";
 import {
@@ -201,6 +202,7 @@ describe("AgentWorkerExecutor", () => {
                 modelProvider: "local-openai-compatible",
                 modelName: "local-model",
                 modelBaseUrl: "http://192.168.1.23:13305/v1",
+                mcpToolSet: ["den", "delegation"],
               },
             }
           : binding,
@@ -223,6 +225,7 @@ describe("AgentWorkerExecutor", () => {
         agentFactory: factory,
         modelConfigSource: makeModelSource(),
         toolProvider: () => [makeCompletionTool(), makeTaskTool()],
+        delegatedSpawnLifecycle: {} as unknown as DelegatedSpawnLifecycle,
       }),
     );
 
@@ -239,6 +242,7 @@ describe("AgentWorkerExecutor", () => {
     expect(factory.agent.state.tools.map((tool) => tool.name)).toContain(
       "post_structured_completion",
     );
+    expect(factory.agent.state.tools.map((tool) => tool.name)).toContain("spawn_subagent");
     expect(packet.status).toBe("completed");
     expect(packet.taskId).toBe("2155");
     expect(packet.turnCount).toBe(1);

@@ -297,7 +297,7 @@ describe("resolveRoleConfig", () => {
     const config = resolveRoleConfig(mapping, "coder");
 
     expect(config?.systemPromptSource).toBe("spawned-coder");
-    expect(config?.mcpToolSet).toEqual(["filesystem", "terminal", "git", "den"]);
+    expect(config?.mcpToolSet).toEqual(["filesystem", "terminal", "git", "den", "delegation"]);
     expect(config?.drainEssentialTools).toEqual([
       "context_status",
       "post_structured_completion",
