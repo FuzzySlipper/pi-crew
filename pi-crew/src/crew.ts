@@ -20,10 +20,12 @@ import {
   RemediationControlService,
   ExtensionActivator,
   createServiceExtensionContext,
-  createUnavailableDelegationSessionBridge,
   InMemoryToolPolicySessionRegistry,
   ToolPolicyExtension,
   AgentRuntimeRegistry,
+  DelegatedSpawnLifecycle,
+  SessionManagerDelegationSessionBridge,
+  SessionMaterializedDelegatedChildRunner,
   SqliteAuditRepository,
   SqliteSessionRepository,
   type GatewayConfig,
@@ -84,8 +86,8 @@ export class Crew {
   readonly #toolPolicyEnforcer: ToolPolicyEnforcer;
   readonly #denCompletionPoster: CompletionPoster;
   readonly #extensionActivator: ExtensionActivator;
+  readonly #delegatedSpawnLifecycle: DelegatedSpawnLifecycle;
 
-  /** Registry of active supervised Agents keyed by runId for steer/followUp routing. */
   readonly #agentRegistry: AgentRuntimeRegistry;
   /** Bridge that routes steer/followUp direct-agent events to active Agents. */
   readonly #steerFollowUpBridge: SteerFollowUpBridge;
@@ -132,17 +134,6 @@ export class Crew {
       hookRegistry,
       toolPolicySessionRegistry: toolPolicySessions,
     });
-    this.#extensionActivator = new ExtensionActivator({
-      extensions: [new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry)],
-      context: createServiceExtensionContext({
-        config: this.#registry.config,
-        logger: this.#registry.logger,
-        eventBus: this.#registry.eventBus,
-        hookRegistry: this.#registry.hookRegistry,
-        delegationSessions: createUnavailableDelegationSessionBridge(),
-      }),
-    });
-
     this.#gateway = new Gateway(
       this.#registry.config,
       this.#registry.logger,
@@ -160,18 +151,7 @@ export class Crew {
       sessionStore,
     });
 
-    // 2. Channel provider (Den Channels adapter)
-    //
-    // Production path: when den.channelsUrl is a non-empty URL, the
-    // protocol determines the adapter:
-    //   ws:// / wss:// → DenWebSocketConnection (legacy WebSocket)
-    //   http:// / https:// → DenHttpDirectAgentConnection (HTTP cursor)
-    // Test/offline path: when channelsUrl is empty, fall back to
-    // SimulatedDenConnection for tests and development.
-    //
-    // HTTP mode fails closed when projectId or memberIdentity are
-    // missing — no silent fallback to simulated.  Cursor persistence
-    // uses the runtime_kv table via a SQLite-backed CursorStore.
+    // 2. Channel provider (Den Channels adapter).
     const cursorStore = createSqliteCursorStore(this.#runtimeDb);
     const denConnection = buildDenConnection(config.den, this.#logger, cursorStore);
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
@@ -252,6 +232,30 @@ export class Crew {
       config.sessions.fallbackProfileId,
       createFallbackChannelBinding(config),
     );
+
+    const delegationBridge = new SessionManagerDelegationSessionBridge({
+      sessionManager: this.#sessionManager,
+      sessionStore,
+      eventBus: this.#eventBus,
+      logger: this.#logger,
+    });
+    this.#delegatedSpawnLifecycle = new DelegatedSpawnLifecycle({
+      hookRegistry: this.#registry.hookRegistry,
+      delegationSessions: delegationBridge,
+      eventBus: this.#eventBus,
+      logger: this.#logger,
+      childRunner: new SessionMaterializedDelegatedChildRunner(),
+    });
+    this.#extensionActivator = new ExtensionActivator({
+      extensions: [new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry)],
+      context: createServiceExtensionContext({
+        config: this.#registry.config,
+        logger: this.#registry.logger,
+        eventBus: this.#registry.eventBus,
+        hookRegistry: this.#registry.hookRegistry,
+        delegationSessions: delegationBridge,
+      }),
+    });
 
     new SessionPresenceBridge(
       this.#eventBus,
@@ -450,6 +454,7 @@ export class Crew {
       mcpClient: this.#mcpClient,
       toolRegistry: this.#mcpToolRegistry,
       logger: this.#logger,
+      delegatedSpawnLifecycle: this.#delegatedSpawnLifecycle,
     });
   }
 }

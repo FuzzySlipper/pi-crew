@@ -174,6 +174,7 @@ export {
   AgentWorkerExecutor,
   DefaultAgentWorkerFactory,
   type AgentWorkerAdapter,
+  type AgentWorkerExecutorConfig,
   type AgentWorkerFactory,
   type AgentWorkerToolProvider,
   type AgentWorkerToolProviderInput,
@@ -194,6 +195,7 @@ export {
   type DelegatedTurnVisibilityInput,
 } from "./workers/delegated-spawn-lifecycle.js";
 export { createDelegatedSpawnTool } from "./workers/delegated-spawn-tool.js";
+export { SessionMaterializedDelegatedChildRunner } from "./workers/session-materialized-delegated-child-runner.js";
 export {
   SessionManagerDelegationSessionBridge,
   type SessionManagerDelegationBridgeConfig,

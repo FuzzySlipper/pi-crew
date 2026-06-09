@@ -6,6 +6,7 @@ import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ToolCallContentBlock } from "@pi-crew/mcp";
 import {
   AgentWorkerExecutor,
+  type DelegatedSpawnLifecycle,
   type AgentWorkerToolProvider,
   type AgentWorkerToolProviderInput,
   type WorkerModelConfig,
@@ -17,6 +18,7 @@ export interface CrewAgentWorkerExecutorDeps {
   readonly mcpClient: MCPClient;
   readonly toolRegistry: McpToolRegistry;
   readonly logger: Logger;
+  readonly delegatedSpawnLifecycle?: DelegatedSpawnLifecycle;
 }
 
 class FilesystemWorkerModelConfigSource implements WorkerModelConfigSource {
@@ -49,6 +51,7 @@ export function createCrewAgentWorkerExecutor(
   return new AgentWorkerExecutor({
     modelConfigSource: new FilesystemWorkerModelConfigSource(deps.logger),
     toolProvider: createCrewAgentWorkerToolProvider(deps),
+    delegatedSpawnLifecycle: deps.delegatedSpawnLifecycle,
   });
 }
 
