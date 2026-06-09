@@ -115,11 +115,9 @@ describe("DelegatedSpawnLifecycle review finding regressions", () => {
     expect(result.value.outcome).toBe("timeout");
     expect(bridge.operations).toContain("kill:child-session-1:timeout");
     expect(bridge.operations).toContain("archive:child-session-1:timeout");
-    expect(eventBus.emitted.map((event) => event.event)).toEqual(expect.arrayContaining([
-      "delegation.timeout",
-      "delegation.killed",
-      "delegation.completed",
-    ]));
+    expect(eventBus.emitted.map((event) => event.event)).toEqual(
+      expect.arrayContaining(["delegation.timeout", "delegation.killed", "delegation.completed"]),
+    );
   });
 
   it("emits killed visibility and cleanup for killed child results", async () => {
@@ -148,11 +146,13 @@ describe("DelegatedSpawnLifecycle review finding regressions", () => {
   });
 });
 
-function createLifecycle(overrides: {
-  readonly bridge?: FakeDelegationBridge;
-  readonly eventBus?: FakeEventBus;
-  readonly runner?: DelegatedChildRunner;
-} = {}): DelegatedSpawnLifecycle {
+function createLifecycle(
+  overrides: {
+    readonly bridge?: FakeDelegationBridge;
+    readonly eventBus?: FakeEventBus;
+    readonly runner?: DelegatedChildRunner;
+  } = {},
+): DelegatedSpawnLifecycle {
   return new DelegatedSpawnLifecycle({
     hookRegistry: new InMemoryHookRegistry(new FakeLogger()),
     delegationSessions: overrides.bridge ?? new FakeDelegationBridge(),
@@ -203,12 +203,14 @@ class FakeDelegationBridge implements DelegationSessionBridge {
     this.operations.push(`create:${request.parentSessionId}:${request.profileId}`);
     this.created.push(request);
     const lineage = readLineage(request.visibility);
-    return Promise.resolve(sessionView({
-      sessionId: lineage?.childSessionId ?? "child-session-1",
-      profileId: request.profileId,
-      parentSessionId: request.parentSessionId,
-      rootSessionId: lineage?.rootSessionId ?? request.parentSessionId,
-    }));
+    return Promise.resolve(
+      sessionView({
+        sessionId: lineage?.childSessionId ?? "child-session-1",
+        profileId: request.profileId,
+        parentSessionId: request.parentSessionId,
+        rootSessionId: lineage?.rootSessionId ?? request.parentSessionId,
+      }),
+    );
   }
 
   listChildSessions(): Promise<readonly ServiceSessionView[]> {
@@ -257,10 +259,13 @@ function sessionView(input: {
     state: "active",
     parentSessionId: input.parentSessionId ?? null,
     rootSessionId: input.rootSessionId ?? input.sessionId,
+    lastActiveAt: "1970-01-01T00:00:01.000Z",
   };
 }
 
-function readLineage(value: Readonly<Record<string, unknown>> | undefined): DelegationLineage | null {
+function readLineage(
+  value: Readonly<Record<string, unknown>> | undefined,
+): DelegationLineage | null {
   const lineage = value?.["lineage"];
   if (typeof lineage !== "object" || lineage === null) return null;
   return lineage as DelegationLineage;

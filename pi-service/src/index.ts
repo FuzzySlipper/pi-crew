@@ -13,11 +13,7 @@ export {
   type LoggingConfig,
   type RuntimeConfig,
 } from "./config.js";
-export {
-  createServiceRegistry,
-  type ServiceRegistry,
-  type CreateRegistryOptions,
-} from "./di.js";
+export { createServiceRegistry, type ServiceRegistry, type CreateRegistryOptions } from "./di.js";
 export {
   ExtensionActivator,
   ExtensionActivationError,
@@ -43,21 +39,12 @@ export {
   type SessionRecord,
   type SessionConfig,
 } from "./sessions/types.js";
-export {
-  type SessionStore,
-  InMemorySessionStore,
-} from "./sessions/session-store.js";
-export {
-  type SessionManager,
-  SessionManagerImpl,
-} from "./sessions/session-manager.js";
+export { type SessionStore, InMemorySessionStore } from "./sessions/session-store.js";
+export { type SessionManager, SessionManagerImpl } from "./sessions/session-manager.js";
 export { SessionPresenceBridge } from "./sessions/session-presence-bridge.js";
 
 // ── Instances ───────────────────────────────────────────────────
-export {
-  type AgentInstance,
-  AgentInstanceImpl,
-} from "./instances/agent-instance.js";
+export { type AgentInstance, AgentInstanceImpl } from "./instances/agent-instance.js";
 export {
   type AgentResponseRequest,
   type AgentResponder,
@@ -77,10 +64,7 @@ export {
   DeterministicToolAgentResponderFactory,
   parseDeterministicArithmeticRequest,
 } from "./instances/deterministic-tool-responder.js";
-export {
-  type InstanceFactory,
-  InstanceFactoryImpl,
-} from "./instances/instance-factory.js";
+export { type InstanceFactory, InstanceFactoryImpl } from "./instances/instance-factory.js";
 export {
   type InstancePool,
   type InstancePoolConfig,
@@ -89,10 +73,7 @@ export {
 } from "./instances/instance-pool.js";
 
 // ── Agents ──────────────────────────────────────────────────────
-export {
-  type AgentFactory,
-  AgentFactoryImpl,
-} from "./agents/agent-factory.js";
+export { type AgentFactory, AgentFactoryImpl } from "./agents/agent-factory.js";
 
 // ── Persistence ──────────────────────────────────────────────────
 export {
@@ -161,15 +142,8 @@ export {
   type AgentToolRef,
   type SteerableAgent,
 } from "./workers/agent-supervisor.js";
-export {
-  AgentRuntimeRegistry,
-  type AgentRuntimeEntry,
-} from "./workers/agent-runtime-registry.js";
-export {
-  PacketAuditor,
-  type AuditFinding,
-  type AuditResult,
-} from "./workers/packet-auditor.js";
+export { AgentRuntimeRegistry, type AgentRuntimeEntry } from "./workers/agent-runtime-registry.js";
+export { PacketAuditor, type AuditFinding, type AuditResult } from "./workers/packet-auditor.js";
 export {
   AgentWorkerExecutor,
   DefaultAgentWorkerFactory,
@@ -181,18 +155,25 @@ export {
   type WorkerModelConfig,
   type WorkerModelConfigSource,
 } from "./workers/agent-worker-executor.js";
-export {
-  DelegatedSpawnLifecycle,
-  type DelegatedChildRunInput,
-  type DelegatedChildRunner,
-  type DelegatedPolicyRequest,
-  type DelegatedSpawnCorrelation,
-  type DelegatedSpawnError,
-  type DelegatedSpawnErrorCode,
-  type DelegatedSpawnInput,
-  type DelegatedSpawnLifecycleConfig,
-  type DelegatedToolVisibilityInput,
-  type DelegatedTurnVisibilityInput,
+export { DelegatedOrphanCleanup } from "./workers/delegated-orphan-cleanup.js";
+export type {
+  DelegatedOrphanCleanupConfig,
+  DelegatedParentCleanupEvidence,
+  DelegatedParentCleanupRequest,
+} from "./workers/delegated-orphan-cleanup.js";
+
+export { DelegatedSpawnLifecycle } from "./workers/delegated-spawn-lifecycle.js";
+export type {
+  DelegatedChildRunInput,
+  DelegatedChildRunner,
+  DelegatedPolicyRequest,
+  DelegatedSpawnCorrelation,
+  DelegatedSpawnError,
+  DelegatedSpawnErrorCode,
+  DelegatedSpawnInput,
+  DelegatedSpawnLifecycleConfig,
+  DelegatedToolVisibilityInput,
+  DelegatedTurnVisibilityInput,
 } from "./workers/delegated-spawn-lifecycle.js";
 export { createDelegatedSpawnTool } from "./workers/delegated-spawn-tool.js";
 export { SessionMaterializedDelegatedChildRunner } from "./workers/session-materialized-delegated-child-runner.js";
@@ -200,10 +181,7 @@ export {
   SessionManagerDelegationSessionBridge,
   type SessionManagerDelegationBridgeConfig,
 } from "./workers/delegation-session-bridge.js";
-export type {
-  AgentTool,
-  AgentToolResult,
-} from "./workers/guarded-tool-types.js";
+export type { AgentTool, AgentToolResult } from "./workers/guarded-tool-types.js";
 export {
   DiagnosticsService,
   type DiagnosticsServiceDeps,

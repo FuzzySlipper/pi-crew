@@ -24,6 +24,7 @@ import {
   ToolPolicyExtension,
   AgentRuntimeRegistry,
   DelegatedSpawnLifecycle,
+  DelegatedOrphanCleanup,
   SessionManagerDelegationSessionBridge,
   SessionMaterializedDelegatedChildRunner,
   SqliteAuditRepository,
@@ -44,7 +45,6 @@ import type { ServerConfig } from "@pi-crew/mcp";
 
 import { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
 import type { AuditEntry } from "@pi-crew/governance";
-
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
 import { loadProfile } from "@pi-crew/profiles";
 
@@ -56,8 +56,6 @@ import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
 import type { CompletionPoster } from "@pi-crew/tools";
-
-// ── Crew ───────────────────────────────────────────────────────
 
 /**
  * Top-level composition that wires all pi-crew modules together.
@@ -176,10 +174,7 @@ export class Crew {
     //     events with intent=steer or intent=follow_up to the correct
     //     active supervised Agent.
     this.#agentRegistry = new AgentRuntimeRegistry();
-    this.#steerFollowUpBridge = new SteerFollowUpBridge(
-      this.#agentRegistry,
-      this.#logger,
-    );
+    this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
     // 4. Instance pool + factory
     const responderFactory = buildRuntimeResponderFactory(config.runtime, this.#eventBus);
@@ -246,6 +241,11 @@ export class Crew {
       logger: this.#logger,
       childRunner: new SessionMaterializedDelegatedChildRunner(),
     });
+    new DelegatedOrphanCleanup({
+      delegationSessions: delegationBridge,
+      eventBus: this.#eventBus,
+      logger: this.#logger,
+    }).activate();
     this.#extensionActivator = new ExtensionActivator({
       extensions: [new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry)],
       context: createServiceExtensionContext({
@@ -257,11 +257,7 @@ export class Crew {
       }),
     });
 
-    new SessionPresenceBridge(
-      this.#eventBus,
-      this.#channelProvider,
-      this.#logger,
-    );
+    new SessionPresenceBridge(this.#eventBus, this.#channelProvider, this.#logger);
 
     // 6. Wire channel provider → steer/followUp bridge → session manager routing
     //    Steer/followUp events with intent metadata are intercepted by the
@@ -436,7 +432,10 @@ export class Crew {
     return this.#agentRegistry;
   }
 
-  get workerRuntimeHooks(): Pick<WorkerRuntimeConfig, "hookRegistry" | "toolPolicySessionRegistry"> {
+  get workerRuntimeHooks(): Pick<
+    WorkerRuntimeConfig,
+    "hookRegistry" | "toolPolicySessionRegistry"
+  > {
     return {
       hookRegistry: this.#registry.hookRegistry,
       toolPolicySessionRegistry: this.#registry.toolPolicySessionRegistry,
@@ -469,7 +468,8 @@ function createFallbackChannelBinding(
     channelId,
     memberIdentity: config.den.channelsMemberIdentity,
     profileIdentity: config.den.channelsProfileIdentity,
-    memberRole: config.den.channelsMemberRole.length === 0 ? undefined : config.den.channelsMemberRole,
+    memberRole:
+      config.den.channelsMemberRole.length === 0 ? undefined : config.den.channelsMemberRole,
     subscriptionIdentity: config.den.channelsSubscriptionIdentity,
     sessionOwnerId: config.den.channelsSessionOwnerId,
   });

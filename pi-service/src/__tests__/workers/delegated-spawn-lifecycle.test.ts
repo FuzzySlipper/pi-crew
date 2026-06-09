@@ -91,18 +91,22 @@ describe("DelegatedSpawnLifecycle", () => {
     expect(bridge.operations).toContain("release:child-session-1:completed");
     expect(bridge.operations).toContain("archive:child-session-1:completed");
 
-    expect(eventBus.emitted.map((event) => event.event)).toEqual(expect.arrayContaining([
-      "delegation.spawned",
-      "delegation.turn_visible",
-      "delegation.tool_visible",
-      "delegation.completed",
-    ]));
-    expect(bridge.visibility.map((event) => event.eventType)).toEqual(expect.arrayContaining([
-      "delegation.spawned",
-      "delegation.turn_visible",
-      "delegation.tool_visible",
-      "delegation.completed",
-    ]));
+    expect(eventBus.emitted.map((event) => event.event)).toEqual(
+      expect.arrayContaining([
+        "delegation.spawned",
+        "delegation.turn_visible",
+        "delegation.tool_visible",
+        "delegation.completed",
+      ]),
+    );
+    expect(bridge.visibility.map((event) => event.eventType)).toEqual(
+      expect.arrayContaining([
+        "delegation.spawned",
+        "delegation.turn_visible",
+        "delegation.tool_visible",
+        "delegation.completed",
+      ]),
+    );
     expect(runner.inputs[0]?.lineage.childSessionId).toBe("child-session-1");
   });
 
@@ -195,10 +199,14 @@ describe("DelegatedSpawnLifecycle", () => {
     expect(concurrentDenied.error.code).toBe("max_concurrent_children_exceeded");
 
     const hookRegistry = new InMemoryHookRegistry(new FakeLogger());
-    hookRegistry.register("before_session_create", () => ({
-      proceed: false,
-      reason: "spawn paused by governance",
-    }), { name: "test-spawn-gate" });
+    hookRegistry.register(
+      "before_session_create",
+      () => ({
+        proceed: false,
+        reason: "spawn paused by governance",
+      }),
+      { name: "test-spawn-gate" },
+    );
     const hookDenied = await createLifecycle({ hookRegistry }).spawn({
       parentSessionId: "parent-session",
       task: "hook denied",
@@ -223,25 +231,33 @@ describe("DelegatedSpawnLifecycle", () => {
       allowedRuntimes: [parentRuntime],
     });
 
-    const result = await tool.execute("tool-call-1", {
-      task: "bad override",
-      modelSelection: alternateRuntime,
-    }, new AbortController().signal);
+    const result = await tool.execute(
+      "tool-call-1",
+      {
+        task: "bad override",
+        modelSelection: alternateRuntime,
+      },
+      new AbortController().signal,
+    );
 
     const content = result.content[0];
     expect(content?.type).toBe("text");
     expect(content?.type === "text" ? content.text : "").toContain("unsupported_model_selection");
     expect(isRecord(result.details) ? result.details["ok"] : null).toBe(false);
-    expect(isRecord(result.details) ? result.details["code"] : null).toBe("unsupported_model_selection");
+    expect(isRecord(result.details) ? result.details["code"] : null).toBe(
+      "unsupported_model_selection",
+    );
   });
 });
 
-function createLifecycle(overrides: {
-  readonly bridge?: FakeDelegationBridge;
-  readonly eventBus?: FakeEventBus;
-  readonly hookRegistry?: InMemoryHookRegistry;
-  readonly runner?: DelegatedChildRunner;
-} = {}): DelegatedSpawnLifecycle {
+function createLifecycle(
+  overrides: {
+    readonly bridge?: FakeDelegationBridge;
+    readonly eventBus?: FakeEventBus;
+    readonly hookRegistry?: InMemoryHookRegistry;
+    readonly runner?: DelegatedChildRunner;
+  } = {},
+): DelegatedSpawnLifecycle {
   return new DelegatedSpawnLifecycle({
     hookRegistry: overrides.hookRegistry ?? new InMemoryHookRegistry(new FakeLogger()),
     delegationSessions: overrides.bridge ?? new FakeDelegationBridge(),
@@ -298,12 +314,14 @@ class FakeDelegationBridge implements DelegationSessionBridge {
     this.operations.push(`create:${request.parentSessionId}:${request.profileId}`);
     this.created.push(request);
     const lineage = readLineage(request.visibility);
-    return Promise.resolve(sessionView({
-      sessionId: lineage?.childSessionId ?? "child-session-1",
-      profileId: request.profileId,
-      parentSessionId: request.parentSessionId,
-      rootSessionId: lineage?.rootSessionId ?? request.parentSessionId,
-    }));
+    return Promise.resolve(
+      sessionView({
+        sessionId: lineage?.childSessionId ?? "child-session-1",
+        profileId: request.profileId,
+        parentSessionId: request.parentSessionId,
+        rootSessionId: lineage?.rootSessionId ?? request.parentSessionId,
+      }),
+    );
   }
 
   listChildSessions(parentSessionId: string): Promise<readonly ServiceSessionView[]> {
@@ -356,10 +374,13 @@ function sessionView(input: {
     state: "active",
     parentSessionId: input.parentSessionId ?? null,
     rootSessionId: input.rootSessionId ?? input.sessionId,
+    lastActiveAt: "1970-01-01T00:00:01.000Z",
   };
 }
 
-function readLineage(value: Readonly<Record<string, unknown>> | undefined): DelegationLineage | null {
+function readLineage(
+  value: Readonly<Record<string, unknown>> | undefined,
+): DelegationLineage | null {
   const lineage = value?.["lineage"];
   if (typeof lineage !== "object" || lineage === null) return null;
   return lineage as DelegationLineage;

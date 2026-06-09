@@ -35,6 +35,8 @@ export interface ServiceSessionView {
   readonly parentSessionId: string | null;
   /** Root session id for delegated lineages. */
   readonly rootSessionId: string;
+  /** Last service activity timestamp for orphan/idle evidence. */
+  readonly lastActiveAt: string;
 }
 
 /** Request used by a service extension to create a delegated child session. */

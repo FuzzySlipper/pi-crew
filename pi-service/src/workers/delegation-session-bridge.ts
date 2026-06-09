@@ -5,7 +5,6 @@ import type {
   DelegationSpawnRequest,
   EventBus,
   ExecutionPolicy,
-  GatewayEvent,
   Logger,
 } from "@pi-crew/core";
 import { createChildDelegationLineage } from "@pi-crew/core";
@@ -29,14 +28,12 @@ export interface SessionManagerDelegationBridgeConfig {
 export class SessionManagerDelegationSessionBridge implements DelegationSessionBridge {
   readonly #sessionManager: SessionManager;
   readonly #sessionStore: SessionStore;
-  readonly #eventBus: EventBus;
   readonly #logger: Logger;
   readonly #policies = new Map<string, ExecutionPolicy>();
 
   constructor(config: SessionManagerDelegationBridgeConfig) {
     this.#sessionManager = config.sessionManager;
     this.#sessionStore = config.sessionStore;
-    this.#eventBus = config.eventBus;
     this.#logger = config.logger;
   }
 
@@ -99,16 +96,10 @@ export class SessionManagerDelegationSessionBridge implements DelegationSessionB
   async killChildSession(childSessionId: string, reason: string): Promise<void> {
     const record = await this.#sessionManager.get(childSessionId);
     if (record !== null && record.delegation !== null) {
-      this.#eventBus.emit({
-        event: "delegation.killed",
-        payload: {
-          childSessionId,
-          lineage: record.delegation,
-          policyId: this.#policies.get(childSessionId)?.policyId ?? "unknown",
-          reason,
-          initiatedBy: "parent",
-        },
-      } satisfies GatewayEvent);
+      await this.#sessionStore.save({
+        ...record,
+        lastActiveAt: new Date().toISOString(),
+      });
     }
     this.#logger.warn("Delegated session killed", { childSessionId, reason });
   }
@@ -136,10 +127,13 @@ function toView(record: SessionRecord): ServiceSessionView {
     state: record.state,
     parentSessionId: record.delegation?.parentSessionId ?? null,
     rootSessionId: record.delegation?.rootSessionId ?? record.id,
+    lastActiveAt: record.lastActiveAt,
   };
 }
 
-function readLineage(value: Readonly<Record<string, unknown>> | undefined): DelegationLineage | undefined {
+function readLineage(
+  value: Readonly<Record<string, unknown>> | undefined,
+): DelegationLineage | undefined {
   const lineage = value?.["lineage"];
   if (typeof lineage !== "object" || lineage === null) return undefined;
   return lineage as DelegationLineage;

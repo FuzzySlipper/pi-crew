@@ -51,18 +51,21 @@ describe("SessionManagerDelegationSessionBridge", () => {
       visibility: { lineage, spawnRequest: { task: "inspect" } },
     });
 
-    expect(child).toEqual(expect.objectContaining({
-      sessionId: "child-1",
-      profileId: "child-profile",
-      kind: "delegated",
-      parentSessionId: "parent",
-      rootSessionId: "parent",
-    }));
+    expect(child).toEqual(
+      expect.objectContaining({
+        sessionId: "child-1",
+        profileId: "child-profile",
+        kind: "delegated",
+        parentSessionId: "parent",
+        rootSessionId: "parent",
+      }),
+    );
     expect(await bridge.countChildSessions("parent")).toBe(1);
     expect(await bridge.getParentExecutionPolicy("child-1")).toEqual(policy);
 
     await bridge.killChildSession("child-1", "test kill");
-    expect(bus.emitted.some((event) => event.event === "delegation.killed")).toBe(true);
+    expect((await store.get("child-1"))?.state).toBe("active");
+    expect(bus.emitted).toHaveLength(0);
     await bridge.releaseChildSession("child-1", "completed");
     expect((await store.get("child-1"))?.state).toBe("idle");
     await bridge.archiveChildSession("child-1", "done");

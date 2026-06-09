@@ -43,6 +43,7 @@ const parentSession: ServiceSessionView = {
   state: "active",
   parentSessionId: null,
   rootSessionId: "parent-session",
+  lastActiveAt: "1970-01-01T00:00:01.000Z",
 };
 
 const childSession: ServiceSessionView = {
@@ -52,6 +53,7 @@ const childSession: ServiceSessionView = {
   state: "active",
   parentSessionId: "parent-session",
   rootSessionId: "parent-session",
+  lastActiveAt: "1970-01-01T00:00:01.000Z",
 };
 
 describe("ExtensionActivator", () => {
@@ -152,7 +154,8 @@ describe("ExtensionActivator", () => {
         });
         const children = await context.delegationSessions.listChildSessions("parent-session");
         const count = await context.delegationSessions.countChildSessions("parent-session");
-        const parentPolicy = await context.delegationSessions.getParentExecutionPolicy("child-session");
+        const parentPolicy =
+          await context.delegationSessions.getParentExecutionPolicy("child-session");
         await context.delegationSessions.releaseChildSession("child-session", "completed");
         await context.delegationSessions.killChildSession("child-session", "timeout");
         await context.delegationSessions.archiveChildSession("child-session", "cleanup");
