@@ -8,6 +8,8 @@
  * @module pi-service/sessions/types
  */
 
+import type { DelegationLineage, DelegationSpawnRequest, SessionKind } from "@pi-crew/core";
+
 // ── Channel binding ─────────────────────────────────────────────
 
 /**
@@ -32,8 +34,7 @@ export type ChannelBinding = string | ChannelBindingRecord;
 
 // ── Session kind ────────────────────────────────────────────────
 
-/** The two session kinds in pi-crew. */
-export type SessionKind = "conversational" | "worker";
+export type { SessionKind };
 
 // ── Session state ───────────────────────────────────────────────
 
@@ -95,8 +96,12 @@ export interface SessionRecord {
   readonly profileId: string;
   /** Instance ID currently bound (null when idle/archived). */
   readonly instanceId: string | null;
-  /** Conversational or worker. */
+  /** Conversational, worker, or delegated child. */
   readonly kind: SessionKind;
+  /** Delegation lineage; null for top-level conversational/worker sessions. */
+  readonly delegation: DelegationLineage | null;
+  /** Original spawn request retained for audit/result routing. */
+  readonly delegationSpawnRequest: DelegationSpawnRequest | null;
   /** When the session was first created (ISO-8601). */
   readonly createdAt: string;
   /** When the session was last active (ISO-8601). */
@@ -119,10 +124,14 @@ export interface SessionRecord {
 export interface SessionConfig {
   /** Which profile to instantiate. */
   readonly profileId: string;
-  /** Conversational or worker. */
+  /** Conversational, worker, or delegated child. */
   readonly kind: SessionKind;
   /** Initial channel bindings (conversational only). */
   readonly channelBindings?: ChannelBinding[];
   /** Den assignment binding (worker only). */
   readonly workerBinding?: WorkerBinding;
+  /** Delegation lineage (delegated sessions only). */
+  readonly delegation?: DelegationLineage;
+  /** Spawn request used to create the child session. */
+  readonly delegationSpawnRequest?: DelegationSpawnRequest;
 }

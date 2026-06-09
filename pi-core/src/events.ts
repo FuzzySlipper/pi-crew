@@ -9,6 +9,12 @@
  */
 
 import type { ChannelMembershipStatus, ChannelSubscriptionStatus } from "./channel-presence.js";
+import type {
+  DelegatedResult,
+  DelegationLineage,
+  DelegationSpawnRequest,
+  EffectiveDelegationRuntime,
+} from "./delegation.js";
 
 // ── Event payloads ──────────────────────────────────────────────
 
@@ -21,10 +27,11 @@ export interface DenWorkerCorrelationPayload {
   readonly profileId?: string;
 }
 
-/** Fired when a new conversational or worker session is created. */
+/** Fired when a new conversational, worker, or delegated session is created. */
 export interface SessionCreatedPayload {
   readonly sessionId: string;
-  readonly kind: "conversational" | "worker";
+  readonly kind: "conversational" | "worker" | "delegated";
+  readonly delegation?: DelegationLineage;
 }
 
 /** Fired when a session is routed to (including fallback-creation visibility). */
@@ -278,6 +285,64 @@ export interface AdminControlCompletedPayload extends AdminControlRequestedPaylo
   readonly localAuditId: number;
 }
 
+/** Shared identity fields for delegation visibility events. */
+export interface DelegationVisibilityPayload extends DenWorkerCorrelationPayload {
+  readonly childSessionId: string;
+  readonly lineage: DelegationLineage;
+  readonly policyId: string;
+  readonly spawnRequestId?: string;
+}
+
+/** Fired when a delegated session is spawned. */
+export interface DelegationSpawnedPayload extends DelegationVisibilityPayload {
+  readonly task: string;
+  readonly spawnRequest?: DelegationSpawnRequest;
+  readonly effectiveRuntime?: EffectiveDelegationRuntime;
+  readonly correlation?: DenWorkerCorrelationPayload;
+}
+
+/** Fired when a delegated child turn becomes visible to the runtime. */
+export interface DelegationTurnVisiblePayload extends DelegationVisibilityPayload {
+  readonly turnNumber: number;
+  readonly phase: "started" | "completed" | "errored";
+  readonly durationMs?: number;
+  readonly error?: string;
+}
+
+/** Fired when a delegated child tool action becomes visible to the runtime. */
+export interface DelegationToolVisiblePayload extends DelegationVisibilityPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly phase: "called" | "completed" | "denied";
+  readonly durationMs?: number;
+  readonly reason?: string;
+}
+
+/** Fired when a delegated session completes or fails. */
+export interface DelegationCompletedPayload {
+  readonly lineage: DelegationLineage;
+  readonly result: DelegatedResult;
+}
+
+/** Fired when a delegated session exceeds its runtime timeout. */
+export interface DelegationTimeoutPayload extends DelegationVisibilityPayload {
+  readonly timeoutMs: number;
+  readonly elapsedMs: number;
+}
+
+/** Fired when a delegated session is killed. */
+export interface DelegationKilledPayload extends DelegationVisibilityPayload {
+  readonly reason: string;
+  readonly initiatedBy: "parent" | "timeout" | "orphan_detected";
+}
+
+/** Fired when a delegated session is detected as orphaned. */
+export interface DelegationOrphanDetectedPayload extends Omit<DelegationVisibilityPayload, "childSessionId"> {
+  readonly orphanSessionId: string;
+  readonly lastKnownParentSessionId: string;
+  readonly idleDurationMs: number;
+}
+
 // ── GatewayEvent union ──────────────────────────────────────────
 
 /**
@@ -312,7 +377,14 @@ export type GatewayEvent =
   | { event: "session.rehydrated"; payload: SessionRehydratedPayload }
   | { event: "session.presence"; payload: SessionPresencePayload }
   | { event: "admin.control.requested"; payload: AdminControlRequestedPayload }
-  | { event: "admin.control.completed"; payload: AdminControlCompletedPayload };
+  | { event: "admin.control.completed"; payload: AdminControlCompletedPayload }
+  | { event: "delegation.spawned"; payload: DelegationSpawnedPayload }
+  | { event: "delegation.turn_visible"; payload: DelegationTurnVisiblePayload }
+  | { event: "delegation.tool_visible"; payload: DelegationToolVisiblePayload }
+  | { event: "delegation.completed"; payload: DelegationCompletedPayload }
+  | { event: "delegation.timeout"; payload: DelegationTimeoutPayload }
+  | { event: "delegation.killed"; payload: DelegationKilledPayload }
+  | { event: "delegation.orphan_detected"; payload: DelegationOrphanDetectedPayload };
 
 /**
  * Helper to extract the payload type for a specific event name.

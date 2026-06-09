@@ -182,6 +182,8 @@ function workerSession(sessionId: string, assignmentId: string, runId: string): 
     profileId: "spawned-coder",
     instanceId: `instance-${sessionId}`,
     kind: "worker",
+    delegation: null,
+    delegationSpawnRequest: null,
     createdAt: now,
     lastActiveAt: now,
     state: "active",

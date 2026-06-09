@@ -60,12 +60,14 @@ export class AgentFactoryImpl implements AgentFactory {
       profileId: config.profileId,
       instanceId: instance.id,
       kind: config.kind,
+      delegation: config.delegation ?? null,
+      delegationSpawnRequest: config.delegationSpawnRequest ?? null,
       createdAt: now,
       lastActiveAt: now,
       state: "active",
       messageCount: 0,
-      channelBindings: config.kind === "worker" ? [] : config.channelBindings ?? [],
-      workerBinding: config.workerBinding ?? null,
+      channelBindings: config.kind === "conversational" ? config.channelBindings ?? [] : [],
+      workerBinding: config.kind === "worker" ? config.workerBinding ?? null : null,
     };
 
     await this.store.save(record);
@@ -75,6 +77,7 @@ export class AgentFactoryImpl implements AgentFactory {
       payload: {
         sessionId: record.id,
         kind: record.kind,
+        ...(record.delegation ? { delegation: record.delegation } : {}),
       },
     });
 

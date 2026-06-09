@@ -9,6 +9,10 @@
  */
 
 import type {
+  DelegationLineage,
+  DelegationSpawnRequest,
+} from "@pi-crew/core";
+import type {
   ChannelBinding,
   ChannelBindingRecord,
   SessionKind,
@@ -26,6 +30,8 @@ export interface SessionRow {
   profile_id: string;
   channel_bindings_json: string;
   worker_binding_json: string | null;
+  delegation_json: string | null;
+  delegation_spawn_request_json: string | null;
   status: SessionState;
   created_at: string;
   last_activity: string;
@@ -184,6 +190,8 @@ export function rowToRecord(row: SessionRow): SessionRecord {
     messageCount: 0,
     channelBindings: parseChannelBindings(row.channel_bindings_json),
     workerBinding: parseWorkerBinding(row.worker_binding_json),
+    delegation: parseDelegationLineage(row.delegation_json),
+    delegationSpawnRequest: parseDelegationSpawnRequest(row.delegation_spawn_request_json),
   };
 }
 
@@ -198,6 +206,10 @@ export function recordToRow(record: SessionRecord): SessionRow {
     channel_bindings_json: JSON.stringify(record.channelBindings),
     worker_binding_json: record.workerBinding
       ? JSON.stringify(record.workerBinding)
+      : null,
+    delegation_json: record.delegation ? JSON.stringify(record.delegation) : null,
+    delegation_spawn_request_json: record.delegationSpawnRequest
+      ? JSON.stringify(record.delegationSpawnRequest)
       : null,
     status: record.state,
     created_at: record.createdAt,
@@ -270,4 +282,51 @@ function parseWorkerBinding(raw: string | null): WorkerBinding | null {
     // Fall through.
   }
   return null;
+}
+
+function parseDelegationLineage(raw: string | null): DelegationLineage | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const candidate = parsed as Record<string, unknown>;
+    if (!isValidLineage(candidate)) return null;
+    return {
+      parentSessionId: candidate.parentSessionId,
+      rootSessionId: candidate.rootSessionId,
+      childSessionId: candidate.childSessionId,
+      depth: candidate.depth,
+      chain: candidate.chain,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseDelegationSpawnRequest(raw: string | null): DelegationSpawnRequest | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const candidate = parsed as Record<string, unknown>;
+    if (typeof candidate.task !== "string") return null;
+    return parsed as DelegationSpawnRequest;
+  } catch {
+    return null;
+  }
+}
+
+function isValidLineage(candidate: Record<string, unknown>): candidate is {
+  readonly parentSessionId: string;
+  readonly rootSessionId: string;
+  readonly childSessionId: string;
+  readonly depth: number;
+  readonly chain: readonly string[];
+} {
+  return typeof candidate.parentSessionId === "string"
+    && typeof candidate.rootSessionId === "string"
+    && typeof candidate.childSessionId === "string"
+    && typeof candidate.depth === "number"
+    && Array.isArray(candidate.chain)
+    && candidate.chain.every((entry) => typeof entry === "string");
 }

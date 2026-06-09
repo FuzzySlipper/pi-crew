@@ -112,20 +112,26 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
       get: this.#db.prepare("SELECT * FROM sessions WHERE id = @id"),
       save: this.#db.prepare(
         `INSERT INTO sessions (id, kind, profile_id, channel_bindings_json,
-           worker_binding_json, status, created_at, last_activity, expires_at)
+           worker_binding_json, delegation_json, delegation_spawn_request_json,
+           status, created_at, last_activity, expires_at)
          VALUES (@id, @kind, @profile_id, @channel_bindings_json,
-                 @worker_binding_json, @status, @created_at, @last_activity, @expires_at)`,
+                 @worker_binding_json, @delegation_json, @delegation_spawn_request_json,
+                 @status, @created_at, @last_activity, @expires_at)`,
       ),
       upsert: this.#db.prepare(
         `INSERT INTO sessions (id, kind, profile_id, channel_bindings_json,
-           worker_binding_json, status, created_at, last_activity, expires_at)
+           worker_binding_json, delegation_json, delegation_spawn_request_json,
+           status, created_at, last_activity, expires_at)
          VALUES (@id, @kind, @profile_id, @channel_bindings_json,
-                 @worker_binding_json, @status, @created_at, @last_activity, @expires_at)
+                 @worker_binding_json, @delegation_json, @delegation_spawn_request_json,
+                 @status, @created_at, @last_activity, @expires_at)
          ON CONFLICT(id) DO UPDATE SET
            kind = excluded.kind,
            profile_id = excluded.profile_id,
            channel_bindings_json = excluded.channel_bindings_json,
            worker_binding_json = excluded.worker_binding_json,
+           delegation_json = excluded.delegation_json,
+           delegation_spawn_request_json = excluded.delegation_spawn_request_json,
            status = excluded.status,
            last_activity = excluded.last_activity,
            expires_at = excluded.expires_at`,

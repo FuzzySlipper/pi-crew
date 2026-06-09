@@ -21,6 +21,8 @@ function makeRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
     messageCount: 0,
     channelBindings: [],
     workerBinding: null,
+    delegation: null,
+    delegationSpawnRequest: null,
     ...overrides,
   };
 }

@@ -33,6 +33,8 @@ function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
     messageCount: 0,
     channelBindings: [],
     workerBinding: null,
+    delegation: null,
+    delegationSpawnRequest: null,
     ...overrides,
   };
 }
@@ -88,7 +90,7 @@ describe("runtime persistence", () => {
   it("opens SQLite in WAL mode and creates only runtime tables", () => {
     const health = db.health();
     expect(health.walEnabled).toBe(true);
-    expect(health.schemaVersion).toBe(1);
+    expect(health.schemaVersion).toBe(2);
     const rows = db.handle.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
     const names = rows.map((row) => row.name);
     expect(names).toContain("sessions");

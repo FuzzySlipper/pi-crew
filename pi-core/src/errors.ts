@@ -183,3 +183,39 @@ export class CompletionRejectedError extends GatewayError {
     this.name = "CompletionRejectedError";
   }
 }
+
+/** Delegation spawn was denied because the depth limit was reached. */
+export class SpawnDepthExceededError extends GatewayError {
+  public readonly code = "SPAWN_DEPTH_EXCEEDED";
+  public readonly statusCode = 403;
+  public readonly retryable = false;
+
+  constructor(currentDepth: number, maxDepth: number) {
+    super(`Spawn depth ${String(currentDepth)} exceeds maximum ${String(maxDepth)}`);
+    this.name = "SpawnDepthExceededError";
+  }
+}
+
+/** Delegation spawn was denied because too many children are active. */
+export class ConcurrentChildrenExceededError extends GatewayError {
+  public readonly code = "CONCURRENT_CHILDREN_EXCEEDED";
+  public readonly statusCode = 429;
+  public readonly retryable = true;
+
+  constructor(current: number, max: number) {
+    super(`Concurrent children ${String(current)} exceeds maximum ${String(max)}`);
+    this.name = "ConcurrentChildrenExceededError";
+  }
+}
+
+/** Delegated child did not complete before its timeout. */
+export class DelegationTimeoutError extends GatewayError {
+  public readonly code = "DELEGATION_TIMEOUT";
+  public readonly statusCode = 504;
+  public readonly retryable = true;
+
+  constructor(childSessionId: string, timeoutMs: number) {
+    super(`Delegated session ${childSessionId} timed out after ${String(timeoutMs)}ms`);
+    this.name = "DelegationTimeoutError";
+  }
+}

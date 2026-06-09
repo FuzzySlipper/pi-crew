@@ -87,6 +87,8 @@ function makeSession(): SessionRecord {
     messageCount: 0,
     channelBindings: [],
     workerBinding: makeBinding(),
+    delegation: null,
+    delegationSpawnRequest: null,
   };
 }
 

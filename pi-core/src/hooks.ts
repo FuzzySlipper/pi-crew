@@ -8,6 +8,7 @@
  */
 
 import type { Logger } from "./logging.js";
+import type { DelegationLineage, DelegationSpawnRequest, SessionKind } from "./delegation.js";
 import type { CompletionPacket } from "./types.js";
 
 // ── Hook result shapes ─────────────────────────────────────────
@@ -99,8 +100,10 @@ export interface AfterMessageSendPayload {
 
 export interface BeforeSessionCreatePayload {
   readonly profileId: string;
-  readonly kind: "conversational" | "worker";
+  readonly kind: SessionKind;
   readonly channelBindings: readonly string[];
+  readonly delegation?: DelegationLineage;
+  readonly delegationSpawnRequest?: DelegationSpawnRequest;
 }
 
 export interface BeforeCompactionPayload extends HookDenCorrelation {

@@ -282,6 +282,8 @@ function sessionRecord(
     profileId: "default",
     instanceId,
     kind,
+    delegation: null,
+    delegationSpawnRequest: null,
     createdAt: "2026-06-08T05:00:00.000Z",
     lastActiveAt: "2026-06-08T05:00:00.000Z",
     state: "active",

@@ -52,6 +52,8 @@ export class FakeSessionManager implements SessionManager {
       messageCount: 0,
       channelBindings: config.channelBindings ?? [],
       workerBinding: config.workerBinding ?? null,
+      delegation: config.delegation ?? null,
+      delegationSpawnRequest: config.delegationSpawnRequest ?? null,
     };
     this.sessionStore.set(id, record);
     this.created.push(record);

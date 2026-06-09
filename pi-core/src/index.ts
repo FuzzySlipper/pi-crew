@@ -40,6 +40,21 @@ export {
   type SandboxContext,
 } from "./security.js";
 
+// ── Delegation foundation ──────────────────────────────────────
+export {
+  createChildDelegationLineage,
+  type CreateChildDelegationLineageInput,
+  type SessionKind,
+  type DelegationLineage,
+  type DelegationConstraints,
+  type DelegationModelSelection,
+  type EffectiveDelegationRuntime,
+  type DelegationSpawnRequest,
+  type DelegatedResult,
+  type DelegatedPolicyDerivation,
+  type DelegationVisibilityIdentity,
+} from "./delegation.js";
+
 // ── Error hierarchy ───────────────────────────────────────────
 export {
   GatewayError,
@@ -52,6 +67,9 @@ export {
   PolicyViolationError,
   ToolDeniedError,
   CompletionRejectedError,
+  SpawnDepthExceededError,
+  ConcurrentChildrenExceededError,
+  DelegationTimeoutError,
 } from "./errors.js";
 
 // ── Logger ────────────────────────────────────────────────────
@@ -87,6 +105,14 @@ export {
   type SessionRehydratedPayload,
   type SessionPresenceBindingPayload,
   type SessionPresencePayload,
+  type DelegationVisibilityPayload,
+  type DelegationSpawnedPayload,
+  type DelegationTurnVisiblePayload,
+  type DelegationToolVisiblePayload,
+  type DelegationCompletedPayload,
+  type DelegationTimeoutPayload,
+  type DelegationKilledPayload,
+  type DelegationOrphanDetectedPayload,
 } from "./events.js";
 
 // ── Hook registry / extensions ───────────────────────────────

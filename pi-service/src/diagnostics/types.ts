@@ -1,7 +1,7 @@
 /** Typed read models for pi-service runtime diagnostics. */
 import type { GatewayEvent } from "@pi-crew/core";
 import type { DenAssignmentStatus } from "../persistence/types.js";
-import type { ChannelBinding, WorkerBinding } from "../sessions/types.js";
+import type { ChannelBinding, SessionKind, WorkerBinding } from "../sessions/types.js";
 
 export type ReachabilityStatus = "ok" | "degraded" | "unreachable";
 
@@ -71,7 +71,7 @@ export interface DiagnosticSessionProjection {
   readonly sessionId: string;
   readonly profileId: string;
   readonly instanceId: string | null;
-  readonly kind: "conversational" | "worker";
+  readonly kind: SessionKind;
   readonly sessionState: "active" | "idle" | "archived";
   readonly messageCount: number;
   readonly channelBindings: readonly ChannelBinding[];
