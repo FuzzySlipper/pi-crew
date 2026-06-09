@@ -16,6 +16,14 @@ export {
   type DenCompletionPosterConfig,
 } from "./den-completion-poster.js";
 export {
+  DenAssignmentRunnerError,
+  createDenAssignmentRunner,
+  type DenAssignmentRunner,
+  type DenAssignmentRunnerConfig,
+  type DenAssignmentRunnerResult,
+  type DenAssignmentRunnerRuntime,
+} from "./den-assignment-runner.js";
+export {
   DenPoolSourceConfigurationError,
   createDenPoolAssignmentConsumer,
   createDenPoolMemberReconciler,

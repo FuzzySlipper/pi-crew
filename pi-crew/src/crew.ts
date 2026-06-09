@@ -1,7 +1,7 @@
 /** pi-crew composition root — wires all modules into a running gateway. */
 
 import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
-import { FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
+import { ConfigurationError, FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
 import type { DenChannelsAdapterConfig } from "@pi-crew/channels/den-channels/den-channels-adapter";
@@ -25,6 +25,7 @@ import {
   AgentRuntimeRegistry,
   DelegatedSpawnLifecycle,
   DelegatedOrphanCleanup,
+  WorkerRuntime,
   SessionManagerDelegationSessionBridge,
   SessionMaterializedDelegatedChildRunner,
   SqliteAuditRepository,
@@ -33,35 +34,42 @@ import {
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
   type WorkerRuntimeConfig,
-  type ChannelBinding,
   type AgentWorkerExecutor,
 } from "@pi-crew/service";
 
 import { loadCrewConfig, type CrewConfig } from "./config.js";
-export { CrewConfigSchema, loadCrewConfig, resolveCrewConfigPath, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
+export {
+  CrewConfigSchema,
+  loadCrewConfig,
+  resolveCrewConfigPath,
+  resolveCrewInstallLayout,
+  type CrewConfig,
+} from "./config.js";
 import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
 
 import { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
-import type { AuditEntry } from "@pi-crew/governance";
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
 import { loadProfile } from "@pi-crew/profiles";
 
 import { buildDenConnection, createSqliteCursorStore } from "./den-connection-factory.js";
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 import { createDenCompletionPoster } from "./den-completion-poster.js";
+import { createDenAssignmentRunner } from "./den-assignment-runner.js";
+import { createDenPoolAssignmentConsumer } from "./den-pool-source.js";
+import type { DenAssignmentRunner } from "./den-assignment-runner.js";
+import type { DenPoolMemberConfig } from "./den-pool-source.js";
 import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
+import {
+  auditEntryToRecord,
+  createFallbackChannelBinding,
+  validateGatewayConfig,
+} from "./crew-helpers.js";
 import type { CompletionPoster } from "@pi-crew/tools";
 
-/**
- * Top-level composition that wires all pi-crew modules together.
- *
- * Owns concrete instantiation of adapters, persistence, and platform
- * connections. Every other module is injected with interfaces.
- */
 export class Crew {
   readonly #config: CrewConfig;
   readonly #gatewayConfig: GatewayConfig;
@@ -86,7 +94,6 @@ export class Crew {
   readonly #delegatedSpawnLifecycle: DelegatedSpawnLifecycle;
 
   readonly #agentRegistry: AgentRuntimeRegistry;
-  /** Bridge that routes steer/followUp direct-agent events to active Agents. */
   readonly #steerFollowUpBridge: SteerFollowUpBridge;
 
   readonly #instancePool: InstancePoolImpl;
@@ -96,16 +103,12 @@ export class Crew {
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
 
-    // DESIGN: The composition root validates configured profile IDs before
-    // runtime routing. Rationale: SessionManager should receive policy, not
-    // own global profile loading or magic fallback identifiers.
+    // DESIGN: Validate configured profile IDs before runtime routing.
+    // Rationale: SessionManager receives policy, not global fallback magic.
     loadProfile(config.sessions.fallbackProfileId, config.profiles.root);
 
-    // DESIGN: The worker role mapping is validated at config-parse time
-    // (duplicate roles rejected, at least one binding required, every
-    // role + profileId must be non-empty). Store it so callers can
-    // inject it into WorkerRuntime instead of relying on a hardcoded
-    // role-to-profile switch.
+    // DESIGN: Worker role mapping is config-parse validated and injected.
+    // Rationale: avoid hardcoded role-to-profile switches in WorkerRuntime.
     this.#workerRoleMapping = config.workers;
 
     // 1. Infrastructure
@@ -456,40 +459,35 @@ export class Crew {
       delegatedSpawnLifecycle: this.#delegatedSpawnLifecycle,
     });
   }
-}
 
-function createFallbackChannelBinding(
-  config: GatewayConfig,
-): ((channelId: string) => ChannelBinding) | null {
-  if (config.den.channelsAllowLegacyDirectPolling) return null;
-  if (config.den.channelsSubscriptionIdentity.length === 0) return null;
-  return (channelId: string): ChannelBinding => ({
-    providerId: "den-channels",
-    channelId,
-    memberIdentity: config.den.channelsMemberIdentity,
-    profileIdentity: config.den.channelsProfileIdentity,
-    memberRole:
-      config.den.channelsMemberRole.length === 0 ? undefined : config.den.channelsMemberRole,
-    subscriptionIdentity: config.den.channelsSubscriptionIdentity,
-    sessionOwnerId: config.den.channelsSessionOwnerId,
-  });
-}
-
-export function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
-  return {
-    timestamp: entry.timestamp,
-    event: entry.event,
-    payload: entry.payload,
-    correlation: entry.correlation,
-  };
-}
-
-function validateGatewayConfig(raw: unknown) {
-  try {
-    loadConfig(raw);
-    return { valid: true, errors: [] };
-  } catch (error: unknown) {
-    return { valid: false, errors: [(error as Error).message] };
+  /** Build the production Den assignment runner for one concrete pool member. */
+  createDenAssignmentRunner(member: DenPoolMemberConfig | undefined): DenAssignmentRunner {
+    if (member === undefined) {
+      throw new ConfigurationError(
+        "Crew requires a configured workerPool member to create a Den assignment runner",
+      );
+    }
+    const workerRuntime = new WorkerRuntime(
+      {
+        workerIdentity: member.workerIdentity,
+        ...this.workerRuntimeHooks,
+        agentRuntimeRegistry: this.#agentRegistry,
+      },
+      this.#workerRoleMapping,
+      this.#sessionManager,
+      this.#instancePool,
+      this.#eventBus,
+      this.#logger,
+      this.#auditRepository,
+      this.#denCompletionPoster,
+    );
+    return createDenAssignmentRunner({
+      assignmentConsumer: createDenPoolAssignmentConsumer({ mcpClient: this.#mcpClient, member }),
+      workerRuntime,
+      executorFactory: () => this.createAgentWorkerExecutor(),
+      mcpClient: this.#mcpClient,
+      workerIdentity: member.workerIdentity,
+    });
   }
 }
 
