@@ -1,12 +1,4 @@
-import type {
-  Logger,
-  EventBus,
-  CompletionPacket,
-  CompletionStatus,
-  GatewayEvent,
-  EventPayload,
-  ContextPressureSnapshot,
-} from "@pi-crew/core";
+import type { Logger, EventBus, CompletionPacket, CompletionStatus, GatewayEvent, EventPayload, ContextPressureSnapshot, HookRegistry } from "@pi-crew/core";
 import type { CompletionPoster, ContextUsageTracker, CheckpointPoster } from "@pi-crew/tools";
 import {
   ContextUsageTrackerImpl,
@@ -35,6 +27,7 @@ import { ReviewerRoleAssembly } from "./role-assembly-reviewer.js";
 import type { TargetPacketRef, WorkerRoleAssembly, WorkerRoleInput } from "./worker-role-assembly.js";
 import type { PacketCompletionReader } from "./packet-auditor-workflow.js";
 import { buildGuardedToolContext } from "./guarded-tool-context-factory.js";
+import type { ToolPolicySessionRegistry } from "./tool-policy-extension.js";
 import { installGuardedAgentRuntime } from "./guarded-agent-installer.js";
 import type {
   AgentTool,
@@ -69,6 +62,7 @@ export interface WorkerExecutionContext {
   getWorkerRoleAssembly(): WorkerRoleAssembly | undefined;
   readonly packetCompletionReader?: PacketCompletionReader;
   readonly completionPoster?: CompletionPoster;
+  disposeGuardedToolContext(): void;
   createGuardedToolHooks(): {
     beforeToolCall(ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined>;
     afterToolCall(ctx: AfterToolCallContext): Promise<AfterToolCallResult | undefined>;
@@ -104,6 +98,8 @@ export interface WorkerExecutionResult {
 export interface WorkerRuntimeConfig {
   /** Identity of this runtime instance. */
   readonly workerIdentity: string;
+  readonly hookRegistry?: HookRegistry;
+  readonly toolPolicySessionRegistry?: ToolPolicySessionRegistry;
   readonly packetCompletionReader?: PacketCompletionReader;
   readonly agentRuntimeRegistry?: AgentRuntimeRegistry;
   readonly checkpointPoster?: CheckpointPoster;
@@ -197,6 +193,7 @@ export class WorkerRuntime {
     idleWatchdog?.touch("released");
     idleWatchdog?.stop();
 
+    context.disposeGuardedToolContext();
     await this.#cleanupSession(session);
 
     const durationMs = Date.now() - startedAt;
@@ -273,6 +270,10 @@ export class WorkerRuntime {
       roleConfig,
       supervisorEventBus,
       this.#logger,
+      {
+        hookRegistry: this.#config.hookRegistry,
+        toolPolicySessionRegistry: this.#config.toolPolicySessionRegistry,
+      },
     );
     const checkpointController = new WorkerCheckpointController({
       binding,
@@ -289,6 +290,9 @@ export class WorkerRuntime {
       drainModeManager,
       packetCompletionReader: this.#config.packetCompletionReader,
       completionPoster: this.#poster,
+      disposeGuardedToolContext: (): void => {
+        guardedToolContext.dispose?.();
+      },
       contextStatus: (): ContextPressureSnapshot =>
         contextStatusTool(
           contextUsageTracker,

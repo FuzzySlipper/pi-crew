@@ -23,6 +23,10 @@ import { Gateway } from "./gateway.js";
 import { AdminServer } from "./admin/admin-server.js";
 import { RuntimeMetricsCollector, renderPrometheusMetrics } from "./diagnostics/runtime-metrics.js";
 import type { DiagnosticsOverview } from "./diagnostics/types.js";
+import {
+  InMemoryToolPolicySessionRegistry,
+  ToolPolicyExtension,
+} from "./workers/tool-policy-extension.js";
 
 // ── Signal handlers ─────────────────────────────────────────────
 
@@ -123,6 +127,7 @@ async function main(): Promise<void> {
   const logger = new FakeLogger();
   const eventBus = new FakeEventBus();
   const hookRegistry = new InMemoryHookRegistry(logger);
+  const toolPolicySessions = new InMemoryToolPolicySessionRegistry();
   const registry = createServiceRegistry({ config, logger, eventBus, hookRegistry });
   const extensionContext = createServiceExtensionContext({
     config: registry.config,
@@ -133,7 +138,10 @@ async function main(): Promise<void> {
   });
   // DESIGN: main is the composition root and owns the concrete extension list.
   // Rationale: lower packages expose contracts; service startup alone decides order.
-  extensionActivator = new ExtensionActivator({ extensions: [], context: extensionContext });
+  extensionActivator = new ExtensionActivator({
+    extensions: [new ToolPolicyExtension(toolPolicySessions)],
+    context: extensionContext,
+  });
   await extensionActivator.activateAll();
   const startedAt = new Date().toISOString();
   const metricsCollector = new RuntimeMetricsCollector(registry.eventBus, { startedAt });
