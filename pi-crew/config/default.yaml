@@ -157,6 +157,18 @@ toolPolicy:
   # Explicitly denied hosts.
   deniedHosts: []
 
+# ── Worker pool capacity source ───────────────────────────────────
+# Concrete Den pool members that this installed pi-crew service owns.
+# The first production lane is deliberately narrow; add roles here only
+# after profile/model/MCP/completion config is valid for that lane.
+workerPool:
+  members:
+    - workerIdentity: "pi-crew-coder-1"
+      profileIdentity: "pi-crew-coder-worker"
+      role: "coder"
+      displayName: "Pi Crew coder lane 1"
+      capabilities: ["typescript", "den", "git"]
+
 # ── Worker role→profile mappings ─────────────────────────────────
 # Maps Den worker roles to profile IDs. WorkerRuntime resolves
 # profileId through this config instead of a hardcoded switch.

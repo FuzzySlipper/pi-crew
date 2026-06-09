@@ -50,9 +50,25 @@ const InstallConfigSchema = z.object({
   root: z.string().min(1).default(DEFAULT_INSTALL_ROOT),
 });
 
-const ProfilesConfigSchema = z.object({
-  root: z.string().min(1).optional(),
-}).default({});
+const ProfilesConfigSchema = z
+  .object({
+    root: z.string().min(1).optional(),
+  })
+  .default({});
+
+const WorkerPoolMemberConfigSchema = z.object({
+  workerIdentity: z.string().min(1),
+  profileIdentity: z.string().min(1),
+  role: z.string().min(1),
+  displayName: z.string().min(1).optional(),
+  capabilities: z.array(z.string().min(1)).default([]),
+});
+
+const WorkerPoolConfigSchema = z
+  .object({
+    members: z.array(WorkerPoolMemberConfigSchema).default([]),
+  })
+  .default({});
 
 export const CrewConfigSchema = z.object({
   install: InstallConfigSchema.default({}),
@@ -66,6 +82,7 @@ export const CrewConfigSchema = z.object({
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
+  workerPool: WorkerPoolConfigSchema,
   workers: WorkerRoleMappingConfigSchema.default({
     bindings: DEFAULT_WORKER_ROLE_BINDINGS,
   }),
@@ -135,7 +152,9 @@ function readConfigFile(yamlPath: string): string {
   try {
     return readFileSync(yamlPath, "utf-8");
   } catch (error: unknown) {
-    throw new ConfigurationError(`Cannot read crew configuration file at ${yamlPath}: ${errorMessage(error)}`);
+    throw new ConfigurationError(
+      `Cannot read crew configuration file at ${yamlPath}: ${errorMessage(error)}`,
+    );
   }
 }
 
@@ -143,21 +162,19 @@ function parseConfigYaml(raw: string, yamlPath: string): unknown {
   try {
     return parseYaml(raw);
   } catch {
-    throw new ConfigurationError(`Malformed crew configuration file at ${yamlPath}: YAML syntax error (details redacted)`);
+    throw new ConfigurationError(
+      `Malformed crew configuration file at ${yamlPath}: YAML syntax error (details redacted)`,
+    );
   }
 }
 
 function validateConfiguredProfilesRoot(profilesRoot: string | undefined): void {
   if (profilesRoot === undefined) return;
   if (!existsSync(profilesRoot)) {
-    throw new ConfigurationError(
-      `Configured profiles root does not exist: ${profilesRoot}`,
-    );
+    throw new ConfigurationError(`Configured profiles root does not exist: ${profilesRoot}`);
   }
   if (!statSync(profilesRoot).isDirectory()) {
-    throw new ConfigurationError(
-      `Configured profiles root is not a directory: ${profilesRoot}`,
-    );
+    throw new ConfigurationError(`Configured profiles root is not a directory: ${profilesRoot}`);
   }
 }
 
