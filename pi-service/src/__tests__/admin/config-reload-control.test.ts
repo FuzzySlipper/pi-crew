@@ -72,6 +72,38 @@ describe("RemediationControlService config reload integration", () => {
     expect(result.warnings).toContain("dry run; targeted extension reload not applied");
   });
 
+  it("denies blocked non-hot-safe reload outcomes without marking applied", async () => {
+    const audit = new FakeAuditRepository();
+    const controls = new RemediationControlService({
+      diagnostics: { projectOverview: () => Promise.resolve(overview()) },
+      auditRepository: audit,
+      eventBus: new FakeEventBus(),
+      validateConfig: () => ({ valid: true, errors: [] }),
+      reloadConfig: () => Promise.resolve({
+        changedKeys: ["den.coreUrl"],
+        affectedExtensionIds: ["den-extension"],
+        nonReloadableKeys: ["den.coreUrl"],
+        reactivatedExtensionIds: [],
+        skippedExtensionIds: ["den-extension"],
+        status: "blocked",
+        warnings: ["non-reloadable config keys changed; restart required"],
+      }),
+    });
+
+    const result = await controls.reloadConfig({
+      operator: "patch",
+      reason: "non-hot-safe config changed",
+      idempotencyKey: "reload-blocked",
+      candidateConfig: { den: { coreUrl: "http://den-alt:3030" } },
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.after).toBeNull();
+    expect(result.denEvidence.status).toBe("config_reload_blocked");
+    expect(result.warnings).toEqual(["non-reloadable config keys changed; restart required"]);
+    expect(audit.rows).toHaveLength(1);
+  });
+
   it("audits fail-closed targeted reload applier failures", async () => {
     const audit = new FakeAuditRepository();
     const controls = new RemediationControlService({

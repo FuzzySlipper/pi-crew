@@ -260,6 +260,15 @@ export class RemediationControlService {
       if (!reloadOutcome.success) {
         return denied(before, "config_reload_failed", [reloadOutcome.message]);
       }
+      if (reloadOutcome.outcome?.status === "blocked") {
+        return denied(
+          before,
+          "config_reload_blocked",
+          reloadOutcome.outcome.warnings.length > 0
+            ? reloadOutcome.outcome.warnings
+            : ["non-reloadable config keys changed; restart required"],
+        );
+      }
       this.#state.lastValidConfigKey = request.idempotencyKey;
       return {
         accepted: true,

@@ -47,6 +47,8 @@ let adminServer: AdminServer | null = null;
 let extensionActivator: ExtensionActivator | null = null;
 let shutdownInitiated = false;
 
+const NON_RELOADABLE_CONFIG_KEYS = ["database", "den", "health", "admin", "logging"];
+
 /**
  * Graceful shutdown on SIGTERM.
  *
@@ -149,6 +151,7 @@ async function main(): Promise<void> {
   extensionActivator = new ExtensionActivator({
     extensions: [new ToolPolicyExtension(registry.toolPolicySessionRegistry)],
     context: extensionContext,
+    nonReloadableConfigKeys: NON_RELOADABLE_CONFIG_KEYS,
   });
   await extensionActivator.activateAll();
   const startedAt = new Date().toISOString();
