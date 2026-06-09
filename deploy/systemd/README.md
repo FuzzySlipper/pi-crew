@@ -2,6 +2,10 @@
 
 This directory contains the user-scoped service unit and runbook for running pi-crew on `den-k8` with repo code in `/home/dev/pi-crew` and pi-crew-owned runtime config/data in `/home/agents/pi-crew`.
 
+## Source of truth
+
+The operator-facing readiness state, live assignment handles, and final pooled-worker closeout live in Den docs, not this repo README. Use Den doc slug `pooled-worker-source-readiness-closeout` for current readiness evidence and treat this file as the user-scoped systemd deployment reference.
+
 ## Scope boundary
 
 - Use `systemctl --user` only.
