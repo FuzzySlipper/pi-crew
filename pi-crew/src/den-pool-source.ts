@@ -36,6 +36,7 @@ export interface DegradedPoolMember {
 export interface DenPoolMemberReconcileResult {
   readonly registered: string[];
   readonly degraded: DegradedPoolMember[];
+  readonly quarantined: string[];
 }
 
 export interface DenPoolMemberReconciler {
@@ -81,6 +82,23 @@ interface RawAssignmentEnvelope {
   readonly run_id: unknown;
   readonly role: unknown;
   readonly worker_identity: unknown;
+}
+
+interface RawPoolMemberEnvelope {
+  readonly worker_identity?: unknown;
+  readonly profile_identity?: unknown;
+  readonly worker_role?: unknown;
+  readonly display_name?: unknown;
+  readonly capabilities?: unknown;
+  readonly status?: unknown;
+  readonly metadata?: unknown;
+}
+
+interface DesiredGroupProjection {
+  readonly profileIdentity: string;
+  readonly groupId: string;
+  readonly owner: string;
+  readonly desiredWorkerIdentities: ReadonlySet<string>;
 }
 
 interface ParsedToolPayload {
@@ -147,7 +165,48 @@ class McpDenPoolMemberReconciler implements DenPoolMemberReconciler {
       registered.push(member.workerIdentity);
     }
 
-    return { registered, degraded };
+    const quarantined = await this.#quarantineStaleGroupMembers();
+    return { registered, degraded, quarantined };
+  }
+
+  async #quarantineStaleGroupMembers(): Promise<string[]> {
+    const groups = desiredGroupProjections(this.#config.members);
+    const quarantined: string[] = [];
+
+    for (const group of groups) {
+      const result = await this.#config.mcpClient.callTool("list_pool_members", {
+        profile_identity: group.profileIdentity,
+        limit: 200,
+        verbose: true,
+      });
+      if (!result.ok) {
+        throw new DenPoolSourceConfigurationError(
+          `Den pool member cleanup read failed for ${group.groupId}: ${result.error ?? "unknown Den MCP error"}`,
+        );
+      }
+
+      for (const member of readPoolMembers(result.content)) {
+        const stale = staleGroupMember(group, member);
+        if (stale === undefined) continue;
+        const quarantine = await this.#config.mcpClient.callTool("upsert_pool_member", {
+          worker_identity: stale.workerIdentity,
+          profile_identity: stale.profileIdentity,
+          worker_role: stale.workerRole,
+          display_name: stale.displayName,
+          capabilities: stale.capabilities,
+          status: "quarantined",
+          metadata: stale.metadata,
+        });
+        if (!quarantine.ok) {
+          throw new DenPoolSourceConfigurationError(
+            `Den pool member quarantine failed for ${stale.workerIdentity}: ${quarantine.error ?? "unknown Den MCP error"}`,
+          );
+        }
+        quarantined.push(stale.workerIdentity);
+      }
+    }
+
+    return quarantined;
   }
 }
 
@@ -214,6 +273,117 @@ function parseToolPayload(content: ReadonlyArray<ToolCallContentBlock>): ParsedT
     throw new DenPoolSourceConfigurationError("Den MCP response was not an object");
   }
   return parsed;
+}
+
+function desiredGroupProjections(
+  members: readonly DenPoolMemberConfig[],
+): readonly DesiredGroupProjection[] {
+  const groups = new Map<string, DesiredGroupProjection>();
+  for (const member of members) {
+    const metadata = member.metadata;
+    const groupId = readMetadataString(metadata, "pool_group") ?? readMetadataString(metadata, "group_id");
+    const owner = readMetadataString(metadata, "owner");
+    if (groupId === undefined || owner === undefined) continue;
+    const key = `${member.profileIdentity}\u0000${groupId}\u0000${owner}`;
+    const existing = groups.get(key);
+    if (existing === undefined) {
+      groups.set(key, {
+        profileIdentity: member.profileIdentity,
+        groupId,
+        owner,
+        desiredWorkerIdentities: new Set([member.workerIdentity]),
+      });
+      continue;
+    }
+    (existing.desiredWorkerIdentities as Set<string>).add(member.workerIdentity);
+  }
+  return [...groups.values()];
+}
+
+function readPoolMembers(content: ReadonlyArray<ToolCallContentBlock>): readonly RawPoolMemberEnvelope[] {
+  const payload = parseToolPayload(content);
+  const data = unwrapJsonString(payload.result ?? payload);
+  if (!isRecord(data)) return [];
+  const members = data["members"];
+  if (!Array.isArray(members)) return [];
+  return members.filter(isRecord).map((member) => ({
+    worker_identity: member["worker_identity"],
+    profile_identity: member["profile_identity"],
+    worker_role: member["worker_role"],
+    display_name: member["display_name"],
+    capabilities: member["capabilities"],
+    status: member["status"],
+    metadata: member["metadata"],
+  }));
+}
+
+function staleGroupMember(
+  group: DesiredGroupProjection,
+  member: RawPoolMemberEnvelope,
+):
+  | {
+      readonly workerIdentity: string;
+      readonly profileIdentity: string;
+      readonly workerRole: string;
+      readonly displayName: string;
+      readonly capabilities: string;
+      readonly metadata: string;
+    }
+  | undefined {
+  const workerIdentity = optionalString(member.worker_identity);
+  const profileIdentity = optionalString(member.profile_identity);
+  const workerRole = optionalString(member.worker_role);
+  const metadata = optionalString(member.metadata);
+  const status = optionalString(member.status);
+  if (
+    workerIdentity === undefined ||
+    profileIdentity === undefined ||
+    workerRole === undefined ||
+    metadata === undefined ||
+    status !== "available"
+  ) {
+    return undefined;
+  }
+  if (profileIdentity !== group.profileIdentity) return undefined;
+  if (group.desiredWorkerIdentities.has(workerIdentity)) return undefined;
+  const parsedMetadata = parseMetadataRecord(metadata);
+  if (parsedMetadata?.["pool_group"] !== group.groupId || parsedMetadata["owner"] !== group.owner) {
+    return undefined;
+  }
+  return {
+    workerIdentity,
+    profileIdentity,
+    workerRole,
+    displayName: optionalString(member.display_name) ?? workerIdentity,
+    capabilities: optionalString(member.capabilities) ?? "[]",
+    metadata,
+  };
+}
+
+function readMetadataString(
+  metadata: Readonly<Record<string, unknown>> | undefined,
+  key: string,
+): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function unwrapJsonString(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+function parseMetadataRecord(metadata: string): Record<string, unknown> | undefined {
+  const parsed = unwrapJsonString(metadata);
+  return isRecord(parsed) ? parsed : undefined;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function readAssignmentEnvelope(data: unknown): RawAssignmentEnvelope {

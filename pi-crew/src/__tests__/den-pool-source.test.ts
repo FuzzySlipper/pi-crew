@@ -160,6 +160,97 @@ describe("Den pool member source", () => {
     );
   });
 
+  it("quarantines stale group-owned members outside desired size by metadata", async () => {
+    const client = fakeClient([
+      ok({ summary: "upserted desired member" }),
+      rawOk({
+        members: [
+          {
+            worker_identity: "pi-crew-reviewer-1",
+            profile_identity: "pi-crew-reviewer-worker",
+            worker_role: "reviewer",
+            display_name: "pi-crew-reviewer lane 1",
+            capabilities: '["review","den","git"]',
+            status: "available",
+            metadata: JSON.stringify({
+              pool_group: "pi-crew-reviewer",
+              owner: "pi-crew",
+              lane_index: 1,
+            }),
+          },
+          {
+            worker_identity: "pi-crew-reviewer-2",
+            profile_identity: "pi-crew-reviewer-worker",
+            worker_role: "reviewer",
+            display_name: "pi-crew-reviewer lane 2",
+            capabilities: '["review","den","git"]',
+            status: "available",
+            metadata: JSON.stringify({
+              pool_group: "pi-crew-reviewer",
+              owner: "pi-crew",
+              lane_index: 2,
+            }),
+          },
+          {
+            worker_identity: "pi-crew-reviewer-manual",
+            profile_identity: "pi-crew-reviewer-worker",
+            worker_role: "reviewer",
+            status: "available",
+            metadata: JSON.stringify({
+              pool_group: "pi-crew-reviewer",
+              owner: "someone-else",
+            }),
+          },
+        ],
+      }),
+      ok({ summary: "quarantined stale member" }),
+    ]);
+    const config = CrewConfigSchema.parse({
+      install: { root: "/home/agents/pi-crew" },
+      den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
+      workerPool: {
+        groups: [
+          {
+            groupId: "pi-crew-reviewer",
+            role: "reviewer",
+            profileIdentity: "pi-crew-reviewer-worker",
+            profileId: "reviewer-worker",
+            desiredSize: 1,
+            identityTemplate: "pi-crew-reviewer-{n}",
+            capabilities: ["review", "den", "git"],
+            labels: { owner: "pi-crew", pool_group: "pi-crew-reviewer" },
+          },
+        ],
+      },
+    });
+
+    const result = await createDenPoolMemberReconciler({
+      mcpClient: client,
+      assignedBy: "pi-crew",
+      members: resolveWorkerPoolMembers(config),
+    }).reconcile();
+
+    const recorded = (client as unknown as FakeMcpClient).calls;
+    expect(result.quarantined).toEqual(["pi-crew-reviewer-2"]);
+    expect(recorded.map((call) => call.name)).toEqual([
+      "upsert_pool_member",
+      "list_pool_members",
+      "upsert_pool_member",
+    ]);
+    expect(recorded[1]?.params).toEqual({
+      profile_identity: "pi-crew-reviewer-worker",
+      limit: 200,
+      verbose: true,
+    });
+    expect(recorded[2]?.params).toMatchObject({
+      worker_identity: "pi-crew-reviewer-2",
+      profile_identity: "pi-crew-reviewer-worker",
+      worker_role: "reviewer",
+      status: "quarantined",
+      metadata: JSON.stringify({ pool_group: "pi-crew-reviewer", owner: "pi-crew", lane_index: 2 }),
+    });
+  });
+
   it("does not register degraded members that lack profile/model/mcp/completion readiness", async () => {
     const client = fakeClient();
     const reconciler = createDenPoolMemberReconciler({
