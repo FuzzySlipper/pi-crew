@@ -24,6 +24,18 @@ export {
   type DenAssignmentRunnerRuntime,
 } from "./den-assignment-runner.js";
 export {
+  createDenAssignmentLoop,
+  type DenAssignmentLoop,
+  type DenAssignmentLoopConfig,
+  type DenAssignmentLoopRunner,
+  type DenAssignmentLoopTickResult,
+} from "./den-assignment-loop.js";
+export {
+  createCrewAssignmentLoops,
+  type CrewAssignmentLoopSource,
+  type CrewAssignmentLoopsConfig,
+} from "./crew-assignment-loops.js";
+export {
   DenPoolSourceConfigurationError,
   createDenPoolAssignmentConsumer,
   createDenPoolMemberReconciler,

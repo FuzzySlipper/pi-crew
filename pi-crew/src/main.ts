@@ -18,6 +18,8 @@
 import { env, argv, exit, stdout } from "node:process";
 import { FakeEventBus } from "@pi-crew/core";
 import { Crew, loadCrewConfig, resolveCrewConfigPath } from "./crew.js";
+import { createCrewAssignmentLoops } from "./crew-assignment-loops.js";
+import type { DenAssignmentLoop } from "./den-assignment-loop.js";
 import { ServiceConsoleLogger, subscribeServiceEventLogs } from "./service-logger.js";
 
 // ── Health smoke ────────────────────────────────────────────────
@@ -42,20 +44,14 @@ async function healthSmoke(host: string, port: number): Promise<boolean> {
       signal: AbortSignal.timeout(3_000),
     });
     if (!response.ok) {
-      console.warn(
-        `Health smoke returned HTTP ${String(response.status)} from ${url}`,
-      );
+      console.warn(`Health smoke returned HTTP ${String(response.status)} from ${url}`);
       return false;
     }
     const body = (await response.json()) as HealthResponse;
-    console.log(
-      `Health smoke OK: status=${body.status}, uptime=${String(body.uptime ?? "n/a")}s`,
-    );
+    console.log(`Health smoke OK: status=${body.status}, uptime=${String(body.uptime ?? "n/a")}s`);
     return body.status === "ok";
   } catch (error: unknown) {
-    console.warn(
-      `Health smoke failed: ${url} — ${(error as Error).message}`,
-    );
+    console.warn(`Health smoke failed: ${url} — ${(error as Error).message}`);
     return false;
   }
 }
@@ -104,28 +100,35 @@ async function main(): Promise<void> {
   const config = loadCrewConfig(configPath);
   const logger = new ServiceConsoleLogger(config.logging);
   const eventBus = new FakeEventBus();
-  const unsubscribeServiceEventLogs = subscribeServiceEventLogs(
-    eventBus,
-    logger,
-  );
+  const unsubscribeServiceEventLogs = subscribeServiceEventLogs(eventBus, logger);
   const crew = new Crew(config, logger, eventBus);
+  let assignmentLoops: DenAssignmentLoop[] = [];
 
   installSignalHandlers(async () => {
+    await Promise.all(assignmentLoops.map((loop) => loop.stop("signal")));
     unsubscribeServiceEventLogs();
     await crew.stop("signal");
   });
 
   await crew.start();
+  assignmentLoops = createCrewAssignmentLoops({
+    crew,
+    members: crew.config.workerPool.members,
+    logger,
+    pollIntervalMs: 2_000,
+  });
+  assignmentLoops.forEach((loop) => {
+    loop.start();
+  });
 
   console.log("pi-crew service started");
+  console.log(`assignment loops started: ${String(assignmentLoops.length)}`);
 
   // Local foreground health smoke
   const { host, port } = crew.gateway.healthConfig;
   const healthy = await healthSmoke(host, port);
   if (!healthy) {
-    console.warn(
-      "Health smoke did not confirm ok status — gateway may still be starting",
-    );
+    console.warn("Health smoke did not confirm ok status — gateway may still be starting");
   }
 
   stdout.write("pi-crew running (Ctrl+C to stop)\n");
