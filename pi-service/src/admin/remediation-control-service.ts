@@ -253,7 +253,13 @@ export class RemediationControlService {
           denEvidence: localEvidence("config_reload_dry_run"),
         };
       }
-      const reloadOutcome = await this.#reloadConfig?.(request.candidateConfig);
+      const reloadOutcome = await runReloadApplier(
+        this.#reloadConfig,
+        request.candidateConfig,
+      );
+      if (!reloadOutcome.success) {
+        return denied(before, "config_reload_failed", [reloadOutcome.message]);
+      }
       this.#state.lastValidConfigKey = request.idempotencyKey;
       return {
         accepted: true,
@@ -261,9 +267,9 @@ export class RemediationControlService {
         after: {
           validationCache: request.idempotencyKey,
           applied: true,
-          ...(reloadOutcome === undefined ? {} : reloadSummary(reloadOutcome)),
+          ...(reloadOutcome.outcome === undefined ? {} : reloadSummary(reloadOutcome.outcome)),
         },
-        warnings: reloadOutcome?.warnings ?? [
+        warnings: reloadOutcome.outcome?.warnings ?? [
           "reload applies only validated hot-safe sections; restart may still be required",
         ],
         denEvidence: localEvidence("config_reload_local_only"),
@@ -427,6 +433,33 @@ function reloadSummary(outcome: ExtensionConfigReloadOutcome): Record<string, un
     skippedExtensionIds: outcome.skippedExtensionIds,
     reloadStatus: outcome.status,
   };
+}
+
+interface ReloadApplierSuccess {
+  readonly success: true;
+  readonly outcome?: ExtensionConfigReloadOutcome;
+}
+
+interface ReloadApplierFailure {
+  readonly success: false;
+  readonly message: string;
+}
+
+type ReloadApplierResult = ReloadApplierSuccess | ReloadApplierFailure;
+
+async function runReloadApplier(
+  applier: ((candidateConfig: unknown) => Promise<ExtensionConfigReloadOutcome>) | undefined,
+  candidateConfig: unknown,
+): Promise<ReloadApplierResult> {
+  try {
+    return { success: true, outcome: await applier?.(candidateConfig) };
+  } catch (cause) {
+    return { success: false, message: errorMessage(cause) };
+  }
+}
+
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : "unknown config reload error";
 }
 
 function hasStaleEvidence(evidenceRefs: readonly string[]): boolean {

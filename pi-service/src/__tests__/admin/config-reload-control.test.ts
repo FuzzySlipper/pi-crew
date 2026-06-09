@@ -71,6 +71,31 @@ describe("RemediationControlService config reload integration", () => {
     expect(result.after).toBeNull();
     expect(result.warnings).toContain("dry run; targeted extension reload not applied");
   });
+
+  it("audits fail-closed targeted reload applier failures", async () => {
+    const audit = new FakeAuditRepository();
+    const controls = new RemediationControlService({
+      diagnostics: { projectOverview: () => Promise.resolve(overview()) },
+      auditRepository: audit,
+      eventBus: new FakeEventBus(),
+      validateConfig: () => ({ valid: true, errors: [] }),
+      reloadConfig: () => Promise.reject(new Error("reactivation failed")),
+      idFactory: () => `ctrl_${String(audit.rows.length + 1)}`,
+    });
+
+    const result = await controls.reloadConfig({
+      operator: "patch",
+      reason: "failure evidence",
+      idempotencyKey: "reload-failure",
+      candidateConfig: { den: { coreUrl: "http://den-srv:3030" } },
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.denEvidence.status).toBe("config_reload_failed");
+    expect(result.warnings).toEqual(["reactivation failed"]);
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0]?.eventType).toBe("admin.control.config_reload");
+  });
 });
 
 class FakeAuditRepository implements AuditRepository {
