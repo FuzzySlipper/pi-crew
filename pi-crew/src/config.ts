@@ -142,8 +142,8 @@ function readConfigFile(yamlPath: string): string {
 function parseConfigYaml(raw: string, yamlPath: string): unknown {
   try {
     return parseYaml(raw);
-  } catch (error: unknown) {
-    throw new ConfigurationError(`Malformed crew configuration file at ${yamlPath}: ${errorMessage(error)}`);
+  } catch {
+    throw new ConfigurationError(`Malformed crew configuration file at ${yamlPath}: YAML syntax error (details redacted)`);
   }
 }
 

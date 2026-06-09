@@ -12,7 +12,8 @@ or starting services. Pass --apply to create/update user-scoped files and option
 start the service.
 
 Environment overrides:
-  PI_CREW_REPO_DIR              Repo checkout path (default: $HOME/pi-crew)
+  PI_CREW_REPO_DIR              Repo checkout path (default: /home/dev/pi-crew)
+  PI_CREW_INSTALL_ROOT          Installed config/data root (default: /home/agents/pi-crew)
   PI_DEN_CORE_URL               Den Core URL (default: http://den-k8plus:3030)
   PI_DEN_CHANNELS_URL           Den Channels HTTP URL (default: http://192.168.1.10:18081)
   PI_DEN_CHANNELS_PROJECT_ID    Direct-agent-events project scope (default: pi-crew)
@@ -54,13 +55,15 @@ for arg in "$@"; do
   esac
 done
 
-repo_dir="${PI_CREW_REPO_DIR:-$HOME/pi-crew}"
+repo_dir="${PI_CREW_REPO_DIR:-/home/dev/pi-crew}"
 unit_source="$repo_dir/deploy/systemd/pi-crew.service"
 unit_dir="$HOME/.config/systemd/user"
 unit_path="$unit_dir/pi-crew.service"
-config_dir="$HOME/.config/pi-crew"
+install_root="${PI_CREW_INSTALL_ROOT:-/home/agents/pi-crew}"
+config_dir="$install_root"
 config_path="$config_dir/config.yaml"
-state_dir="$HOME/.local/state/pi-crew"
+profiles_dir="$install_root/profiles"
+state_dir="$install_root"
 state_db="$state_dir/runtime.db"
 health_host="${PI_CREW_HEALTH_HOST:-127.0.0.1}"
 health_port="${PI_CREW_HEALTH_PORT:-9236}"
@@ -106,6 +109,7 @@ pi-crew user-service deployment plan
   unit source:       $unit_source
   unit path:         $unit_path
   config path:       $config_path
+  profiles dir:      $profiles_dir
   state dir:         $state_dir
   runtime db:        $state_db
   health URL:        http://$health_host:$health_port/
@@ -136,12 +140,16 @@ DRYRUN
   exit 0
 fi
 
-mkdir -p "$unit_dir" "$config_dir" "$state_dir"
-chmod 0700 "$config_dir" "$state_dir"
+mkdir -p "$unit_dir" "$config_dir" "$profiles_dir" "$state_dir"
+chmod 0700 "$config_dir" "$profiles_dir" "$state_dir"
 
 template_unit="$(<"$unit_source")"
 template_unit="${template_unit//Documentation=file:%h\/pi-crew/Documentation=file:$repo_dir}"
+template_unit="${template_unit//Documentation=file:\/home\/dev\/pi-crew/Documentation=file:$repo_dir}"
 template_unit="${template_unit//WorkingDirectory=%h\/pi-crew/WorkingDirectory=$repo_dir}"
+template_unit="${template_unit//WorkingDirectory=\/home\/dev\/pi-crew/WorkingDirectory=$repo_dir}"
+template_unit="${template_unit//PI_CREW_CONFIG=\/home\/agents\/pi-crew\/config.yaml/PI_CREW_CONFIG=$config_path}"
+template_unit="${template_unit//--config \/home\/agents\/pi-crew\/config.yaml/--config $config_path}"
 printf '%s\n' "$template_unit" > "$unit_path"
 chmod 0644 "$unit_path"
 
@@ -151,6 +159,12 @@ if [[ -e "$config_path" && "$force_config" != true ]]; then
 else
   umask 077
   cat > "$config_path" <<CONFIG
+install:
+  root: "$install_root"
+
+profiles:
+  root: "$profiles_dir"
+
 den:
   coreUrl: "$core_url"
   channelsUrl: "$channels_url"
