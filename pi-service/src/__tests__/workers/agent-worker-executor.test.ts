@@ -33,7 +33,9 @@ class FakeWorkerAgent implements AgentWorkerAdapter {
 
   constructor(private readonly callCompletionTool = true) {}
 
-  subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void {
+  subscribe(
+    listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void,
+  ): () => void {
     this.#listeners.push(listener);
     return () => undefined;
   }
@@ -45,7 +47,9 @@ class FakeWorkerAgent implements AgentWorkerAdapter {
       messages,
     });
     if (this.callCompletionTool) {
-      const completionTool = this.state.tools.find((tool) => tool.name === "post_structured_completion");
+      const completionTool = this.state.tools.find(
+        (tool) => tool.name === "post_structured_completion",
+      );
       await completionTool?.execute("completion-call", {}, this.#signal);
     }
   }
@@ -148,7 +152,7 @@ function turnEnd(): AgentEvent {
 function makeModelSource(): WorkerModelConfigSource {
   return {
     getProfileModelConfig(profileId: string) {
-      expect(profileId).toBe("spawned-coder");
+      expect(profileId).toBe("coder-worker");
       return {
         provider: "profile-provider",
         modelName: "profile-model",

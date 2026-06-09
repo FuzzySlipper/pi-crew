@@ -118,7 +118,7 @@ sessions:
   maxPerProfile: 4
 
   # Idle timeout in milliseconds before an instance is eligible for eviction.
-  idleTimeoutMs: 28800000  # 8 hours
+  idleTimeoutMs: 28800000 # 8 hours
 
   # Default profile ID for new conversational sessions created as
   # a visible fallback when no existing session matches the channel.
@@ -164,24 +164,41 @@ toolPolicy:
 workers:
   bindings:
     - role: "packet-auditor"
-      profileId: "packet-auditor"
+      profileId: "packet-auditor-worker"
+      config:
+        executionMode: "llmAgent"
+        systemPromptSource: "packet-auditor-worker"
+        mcpToolSet: ["den"]
     - role: "packet_auditor"
-      profileId: "packet-auditor"
+      profileId: "packet-auditor-worker"
+      config:
+        executionMode: "llmAgent"
+        systemPromptSource: "packet-auditor-worker"
+        mcpToolSet: ["den"]
     - role: "coder"
-      profileId: "spawned-coder"
-      # Production LLM worker mode is fail-closed: uncomment all fields together
-      # after Den MCP tools and model endpoint are available to this runtime.
-      # config:
-      #   executionMode: "llmAgent"
-      #   modelProvider: "local-openai-compatible"
-      #   modelName: "Qwen3.6-35B-A3B-MTP-GGUF"
-      #   modelBaseUrl: "http://192.168.1.23:13305/v1"
+      profileId: "coder-worker"
+      config:
+        executionMode: "llmAgent"
+        systemPromptSource: "coder-worker"
+        mcpToolSet: ["filesystem", "terminal", "git", "den", "delegation"]
     - role: "reviewer"
-      profileId: "spawned-reviewer"
+      profileId: "reviewer-worker"
+      config:
+        executionMode: "llmAgent"
+        systemPromptSource: "reviewer-worker"
+        mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"]
     - role: "validator"
-      profileId: "spawned-validator"
+      profileId: "validator-worker"
+      config:
+        executionMode: "llmAgent"
+        systemPromptSource: "validator-worker"
+        mcpToolSet: ["filesystem_readonly", "terminal", "den"]
     - role: "drift_checker"
-      profileId: "worker-drift_checker"
+      profileId: "drift-checker-worker"
+      config:
+        executionMode: "llmAgent"
+        systemPromptSource: "drift-checker-worker"
+        mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"]
 
 # ── Cron (DEFERRED — not required for this task) ──────────────────
 # cron:

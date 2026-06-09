@@ -1,0 +1,12 @@
+extends: base-worker
+name: "Packet Auditor Worker"
+description: "Audits Den worker packets and workflow evidence for one assignment."
+modelConfig:
+  temperature: 0
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "den"
+    - "context_status"
+    - "post_structured_completion"
+    - "request_checkpoint"

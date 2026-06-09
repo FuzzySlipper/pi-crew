@@ -17,12 +17,7 @@ function makeProfilesRoot(): string {
   return mkdtempSync(join(tmpdir(), "pi-profile-inheritance-"));
 }
 
-function writeDirectoryProfile(
-  root: string,
-  profileId: string,
-  yaml: string,
-  soul: string,
-): void {
+function writeDirectoryProfile(root: string, profileId: string, yaml: string, soul: string): void {
   const profileDir = join(root, profileId);
   mkdirSync(profileDir, { recursive: true });
   writeFileSync(join(profileDir, "profile.yaml"), yaml, "utf-8");
@@ -33,9 +28,7 @@ describe("FilesystemProfileSource", () => {
   // ── green paths ─────────────────────────────────────────────
 
   it("loads a profile from a YAML file with an .md sidecar", () => {
-    const source = new FilesystemProfileSource(
-      join(FIXTURES, "valid"),
-    );
+    const source = new FilesystemProfileSource(join(FIXTURES, "valid"));
     const profiles = source.listProfiles();
     expect(profiles).toHaveLength(1);
 
@@ -94,7 +87,7 @@ describe("FilesystemProfileSource", () => {
     for (const p of profiles) {
       expect(p.toolPolicy).toBeDefined();
       if (p.toolPolicy !== undefined) {
-        expect(p.toolPolicy.mode).toBe("allow_all");
+        expect(["allow_all", "allow_list"]).toContain(p.toolPolicy.mode);
       }
     }
   });
@@ -191,7 +184,7 @@ describe("FilesystemProfileSource", () => {
     writeDirectoryProfile(
       root,
       "coder",
-      ['extends: missing-parent', 'name: "Coder"', 'description: "Coder"', ""].join("\n"),
+      ["extends: missing-parent", 'name: "Coder"', 'description: "Coder"', ""].join("\n"),
       "Coder soul.",
     );
 
@@ -203,13 +196,13 @@ describe("FilesystemProfileSource", () => {
     writeDirectoryProfile(
       root,
       "a",
-      ['extends: b', 'name: "A"', 'description: "A"', ""].join("\n"),
+      ["extends: b", 'name: "A"', 'description: "A"', ""].join("\n"),
       "A soul.",
     );
     writeDirectoryProfile(
       root,
       "b",
-      ['extends: a', 'name: "B"', 'description: "B"', ""].join("\n"),
+      ["extends: a", 'name: "B"', 'description: "B"', ""].join("\n"),
       "B soul.",
     );
 
@@ -232,45 +225,33 @@ describe("FilesystemProfileSource", () => {
   // ── error paths ─────────────────────────────────────────────
 
   it("throws ConfigurationError for nonexistent directory", () => {
-    const source = new FilesystemProfileSource(
-      join(FIXTURES, "nonexistent-dir"),
-    );
+    const source = new FilesystemProfileSource(join(FIXTURES, "nonexistent-dir"));
     expect(() => source.listProfiles()).toThrow(ConfigurationError);
   });
 
   it("throws ConfigurationError when name is missing", () => {
-    const source = new FilesystemProfileSource(
-      join(FIXTURES, "invalid-missing-name"),
-    );
+    const source = new FilesystemProfileSource(join(FIXTURES, "invalid-missing-name"));
     expect(() => source.listProfiles()).toThrow(ConfigurationError);
     try {
       source.listProfiles();
     } catch (e) {
       expect(e).toBeInstanceOf(ConfigurationError);
-      expect((e as ConfigurationError).message).toContain(
-        'missing required field "name"',
-      );
+      expect((e as ConfigurationError).message).toContain('missing required field "name"');
     }
   });
 
   it("throws ConfigurationError when YAML is not an object", () => {
-    const source = new FilesystemProfileSource(
-      join(FIXTURES, "invalid-not-object"),
-    );
+    const source = new FilesystemProfileSource(join(FIXTURES, "invalid-not-object"));
     expect(() => source.listProfiles()).toThrow(ConfigurationError);
   });
 
   it("throws ConfigurationError when skills are malformed", () => {
-    const source = new FilesystemProfileSource(
-      join(FIXTURES, "invalid-bad-skills"),
-    );
+    const source = new FilesystemProfileSource(join(FIXTURES, "invalid-bad-skills"));
     expect(() => source.listProfiles()).toThrow(ConfigurationError);
   });
 
   it("ConfigurationError has typed fields", () => {
-    const source = new FilesystemProfileSource(
-      join(FIXTURES, "invalid-missing-name"),
-    );
+    const source = new FilesystemProfileSource(join(FIXTURES, "invalid-missing-name"));
     try {
       source.listProfiles();
       // Should not reach here.
@@ -287,10 +268,7 @@ describe("FilesystemProfileSource", () => {
 
 describe("loadProfile", () => {
   it("loads a profile by id from a fixtures directory", () => {
-    const profile = loadProfile(
-      "test-agent",
-      join(FIXTURES, "valid"),
-    );
+    const profile = loadProfile("test-agent", join(FIXTURES, "valid"));
     expect(profile.id).toBe("test-agent");
     expect(profile.name).toBe("Test Agent");
     expect(profile.systemPrompt).toContain("You are a test agent");
@@ -306,9 +284,9 @@ describe("loadProfile", () => {
   });
 
   it("throws ConfigurationError when profile id is not found", () => {
-    expect(() =>
-      loadProfile("nonexistent-profile", join(FIXTURES, "valid")),
-    ).toThrow(ConfigurationError);
+    expect(() => loadProfile("nonexistent-profile", join(FIXTURES, "valid"))).toThrow(
+      ConfigurationError,
+    );
 
     try {
       loadProfile("nonexistent-profile", join(FIXTURES, "valid"));

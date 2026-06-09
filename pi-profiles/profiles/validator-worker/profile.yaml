@@ -1,0 +1,14 @@
+extends: base-worker
+name: "Validator Worker"
+description: "Runs deterministic validation commands for one Den assignment."
+modelConfig:
+  temperature: 0
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "filesystem_readonly"
+    - "terminal"
+    - "den"
+    - "context_status"
+    - "post_structured_completion"
+    - "request_checkpoint"

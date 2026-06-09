@@ -23,10 +23,7 @@ import {
   makeRoleMapping,
 } from "./worker-runtime-test-fixtures.js";
 
-type EventListener = (
-  event: AgentEvent,
-  signal: AbortSignal,
-) => Promise<void> | void;
+type EventListener = (event: AgentEvent, signal: AbortSignal) => Promise<void> | void;
 
 class FakeAgent implements AgentLike {
   readonly #listeners: EventListener[] = [];
@@ -328,7 +325,7 @@ describe("WorkerRuntime AgentSupervisor wiring", () => {
     expect(turnStarted[0]?.payload.assignmentId).toBe("101");
     expect(turnStarted[0]?.payload.runId).toBe("piw_test_run");
     expect(turnStarted[0]?.payload.taskId).toBe("2066");
-    expect(turnStarted[0]?.payload.profileId).toBe("spawned-coder");
+    expect(turnStarted[0]?.payload.profileId).toBe("coder-worker");
 
     const toolCalled = bus.emitted.find((event) => event.event === "tool.called");
     expect(toolCalled?.payload.toolName).toBe("read_file");

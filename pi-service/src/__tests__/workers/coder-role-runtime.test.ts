@@ -20,7 +20,7 @@ describe("Coder role assembly runtime wiring", () => {
         const input = context.buildWorkerRoleInput();
 
         expect(assembly?.role).toBe("coder");
-        expect(input.profileId).toBe("spawned-coder");
+        expect(input.profileId).toBe("coder-worker");
         expect(assembly?.selectMcpToolSets(input)).toEqual([
           "filesystem",
           "terminal",
@@ -54,10 +54,7 @@ describe("Coder role assembly runtime wiring", () => {
       makeAcceptingPoster(),
     );
 
-    const packet = await runtime.executeAssignment(
-      makeBinding({ role: "coder" }),
-      executor,
-    );
+    const packet = await runtime.executeAssignment(makeBinding({ role: "coder" }), executor);
 
     expect(packet.status).toBe("completed");
     expect(packet.toolsUsed).toEqual(["role-assembly-coder"]);

@@ -1,0 +1,15 @@
+extends: base-worker
+name: "Reviewer Worker"
+description: "Reviews scoped Den implementation diffs and records structured findings."
+modelConfig:
+  temperature: 0.05
+  maxTokens: 3072
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "filesystem_readonly"
+    - "git_diff_log"
+    - "den"
+    - "context_status"
+    - "post_structured_completion"
+    - "request_checkpoint"

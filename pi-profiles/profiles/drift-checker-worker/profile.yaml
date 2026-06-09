@@ -1,0 +1,14 @@
+extends: base-worker
+name: "Drift Checker Worker"
+description: "Checks implementation scope, stale residue, boundaries, and secrets for one Den assignment."
+modelConfig:
+  temperature: 0
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "filesystem_readonly"
+    - "git_diff_log"
+    - "den"
+    - "context_status"
+    - "post_structured_completion"
+    - "request_checkpoint"

@@ -132,9 +132,7 @@ const WorkerRoleConfigSchema = z
 
 export const WorkerRoleBindingSchema = z.object({
   role: z.string().min(1, "Worker role binding role must not be empty"),
-  profileId: z
-    .string()
-    .min(1, "Worker role binding profileId must not be empty"),
+  profileId: z.string().min(1, "Worker role binding profileId must not be empty"),
   config: WorkerRoleConfigSchema.optional(),
 });
 
@@ -179,34 +177,64 @@ const DEFAULT_DRAIN_ESSENTIAL_TOOLS = [
 export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
   {
     role: "packet-auditor",
-    profileId: "packet-auditor",
-    config: { drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS },
+    profileId: "packet-auditor-worker",
+    config: {
+      executionMode: "llmAgent",
+      systemPromptSource: "packet-auditor-worker",
+      mcpToolSet: ["den"],
+      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
+    },
   },
   {
     role: "packet_auditor",
-    profileId: "packet-auditor",
-    config: { drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS },
+    profileId: "packet-auditor-worker",
+    config: {
+      executionMode: "llmAgent",
+      systemPromptSource: "packet-auditor-worker",
+      mcpToolSet: ["den"],
+      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
+    },
   },
   {
     role: "coder",
-    profileId: "spawned-coder",
+    profileId: "coder-worker",
     config: {
-      systemPromptSource: "spawned-coder",
+      executionMode: "llmAgent",
+      systemPromptSource: "coder-worker",
       mcpToolSet: ["filesystem", "terminal", "git", "den", "delegation"],
       drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
     },
   },
   {
     role: "reviewer",
-    profileId: "spawned-reviewer",
+    profileId: "reviewer-worker",
     config: {
-      systemPromptSource: "spawned-reviewer",
+      executionMode: "llmAgent",
+      systemPromptSource: "reviewer-worker",
       mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"],
       drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
     },
   },
-  { role: "validator", profileId: "spawned-validator" },
-  { role: "drift_checker", profileId: "worker-drift_checker" },
+  {
+    role: "validator",
+    profileId: "validator-worker",
+    config: {
+      executionMode: "llmAgent",
+      systemPromptSource: "validator-worker",
+      mcpToolSet: ["filesystem_readonly", "terminal", "den"],
+      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
+    },
+  },
+  {
+    role: "drift_checker",
+    profileId: "drift-checker-worker",
+    config: {
+      executionMode: "llmAgent",
+      systemPromptSource: "drift-checker-worker",
+      mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"],
+      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
+    },
+  },
 ];
 
 // ── Convenience loader ──────────────────────────────────────────
@@ -220,18 +248,14 @@ export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
  * @param raw - Untrusted config object (e.g. from YAML or JSON).
  * @returns Parsed and validated {@link WorkerRoleMappingConfig}.
  */
-export function loadWorkerRoleMapping(
-  raw: unknown,
-): WorkerRoleMappingConfig {
+export function loadWorkerRoleMapping(raw: unknown): WorkerRoleMappingConfig {
   const result = WorkerRoleMappingConfigSchema.safeParse(raw);
 
   if (!result.success) {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new ConfigurationError(
-      `Invalid worker role mapping configuration:\n${issues}`,
-    );
+    throw new ConfigurationError(`Invalid worker role mapping configuration:\n${issues}`);
   }
 
   return result.data;
@@ -244,10 +268,7 @@ export function loadWorkerRoleMapping(
  * This is the runtime equivalent of startup validation — it catches
  * runtime role strings that weren't in the config.
  */
-export function resolveProfileId(
-  mapping: WorkerRoleMappingConfig,
-  role: string,
-): string {
+export function resolveProfileId(mapping: WorkerRoleMappingConfig, role: string): string {
   const binding = mapping.bindings.find((b) => b.role === role);
   if (binding === undefined) {
     throw new ConfigurationError(

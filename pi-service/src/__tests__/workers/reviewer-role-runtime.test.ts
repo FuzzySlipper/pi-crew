@@ -20,7 +20,7 @@ describe("Reviewer role assembly runtime wiring", () => {
         const input = context.buildWorkerRoleInput();
 
         expect(assembly?.role).toBe("reviewer");
-        expect(input.profileId).toBe("spawned-reviewer");
+        expect(input.profileId).toBe("reviewer-worker");
         expect(assembly?.selectMcpToolSets(input)).toEqual([
           "filesystem_readonly",
           "git_diff_log",
@@ -53,10 +53,7 @@ describe("Reviewer role assembly runtime wiring", () => {
       makeAcceptingPoster(),
     );
 
-    const packet = await runtime.executeAssignment(
-      makeBinding({ role: "reviewer" }),
-      executor,
-    );
+    const packet = await runtime.executeAssignment(makeBinding({ role: "reviewer" }), executor);
 
     expect(packet.status).toBe("completed");
     expect(packet.toolsUsed).toEqual(["role-assembly-reviewer"]);

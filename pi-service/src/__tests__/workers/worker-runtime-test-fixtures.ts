@@ -1,9 +1,6 @@
 /** Test fixtures for WorkerRuntime tests. */
 
-import type {
-  CompletionPacket,
-  CompletionPostResult,
-} from "@pi-crew/core";
+import type { CompletionPacket, CompletionPostResult } from "@pi-crew/core";
 import type { CompletionPoster } from "@pi-crew/tools";
 import type {
   WorkerExecutor,
@@ -14,23 +11,19 @@ import type {
   WorkerRoleBinding,
   WorkerRoleMappingConfig,
 } from "../../workers/worker-role-config.js";
-import type {
-  WorkerBinding,
-  SessionConfig,
-  SessionRecord,
-} from "../../sessions/types.js";
+import type { WorkerBinding, SessionConfig, SessionRecord } from "../../sessions/types.js";
 import type { SessionManager } from "../../sessions/session-manager.js";
 import type { InstancePool } from "../../instances/instance-pool.js";
 import type { AgentInstance } from "../../instances/agent-instance.js";
 import type { AuditRepository, AuditRow } from "../../persistence/types.js";
 
 const DEFAULT_WORKER_BINDINGS: WorkerRoleBinding[] = [
-  { role: "packet-auditor", profileId: "packet-auditor" },
-  { role: "packet_auditor", profileId: "packet-auditor" },
-  { role: "coder", profileId: "spawned-coder" },
-  { role: "reviewer", profileId: "spawned-reviewer" },
-  { role: "validator", profileId: "spawned-validator" },
-  { role: "drift_checker", profileId: "worker-drift_checker" },
+  { role: "packet-auditor", profileId: "packet-auditor-worker" },
+  { role: "packet_auditor", profileId: "packet-auditor-worker" },
+  { role: "coder", profileId: "coder-worker" },
+  { role: "reviewer", profileId: "reviewer-worker" },
+  { role: "validator", profileId: "validator-worker" },
+  { role: "drift_checker", profileId: "drift-checker-worker" },
 ];
 
 export class FakeSessionManager implements SessionManager {
@@ -76,9 +69,7 @@ export class FakeSessionManager implements SessionManager {
 
   get(sessionId: string): Promise<SessionRecord | null> {
     const record = this.sessionStore.get(sessionId);
-    return Promise.resolve(
-      record && record.state !== "archived" ? record : null,
-    );
+    return Promise.resolve(record && record.state !== "archived" ? record : null);
   }
 
   findByChannel(channelId: string): Promise<SessionRecord | null> {
@@ -187,9 +178,7 @@ export function makeFakePool(): InstancePool {
   };
 }
 
-export function makeBinding(
-  overrides?: Partial<WorkerBinding>,
-): WorkerBinding {
+export function makeBinding(overrides?: Partial<WorkerBinding>): WorkerBinding {
   return {
     assignmentId: "101",
     runId: "piw_test_run",
@@ -204,9 +193,7 @@ export function makeRoleMapping(): WorkerRoleMappingConfig {
   return { bindings: [...DEFAULT_WORKER_BINDINGS] };
 }
 
-export function makeTimeoutRoleMapping(
-  timeoutMs: number,
-): WorkerRoleMappingConfig {
+export function makeTimeoutRoleMapping(timeoutMs: number): WorkerRoleMappingConfig {
   return makePolicyRoleMapping({ assignmentTimeoutMs: timeoutMs });
 }
 
@@ -235,17 +222,13 @@ function makePolicyRoleMapping(policy: {
   };
 }
 
-export function makeFastExecutor(
-  result?: Partial<WorkerExecutionResult>,
-): WorkerExecutor {
+export function makeFastExecutor(result?: Partial<WorkerExecutionResult>): WorkerExecutor {
   return {
     execute(context: WorkerExecutionContext): Promise<WorkerExecutionResult> {
       void context;
       return Promise.resolve({
         status: "completed",
-        artifacts: [
-          { type: "test", ref: "r", summary: "fast executor" },
-        ],
+        artifacts: [{ type: "test", ref: "r", summary: "fast executor" }],
         filesTouched: ["test.ts"],
         toolsUsed: ["test-tool"],
         tokensConsumed: 100,

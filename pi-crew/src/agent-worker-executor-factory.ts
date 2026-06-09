@@ -19,13 +19,21 @@ export interface CrewAgentWorkerExecutorDeps {
   readonly toolRegistry: McpToolRegistry;
   readonly logger: Logger;
   readonly profilesRoot?: string;
+  readonly env?: Readonly<Record<string, string | undefined>>;
   readonly delegatedSpawnLifecycle?: DelegatedSpawnLifecycle;
+}
+
+export interface CrewWorkerModelConfigSourceDeps {
+  readonly logger: Logger;
+  readonly profilesRoot?: string;
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 class FilesystemWorkerModelConfigSource implements WorkerModelConfigSource {
   constructor(
     private readonly logger: Logger,
     private readonly profilesRoot?: string,
+    private readonly env: Readonly<Record<string, string | undefined>> = process.env,
   ) {}
 
   getProfileModelConfig(profileId: string): WorkerModelConfig | undefined {
@@ -36,8 +44,10 @@ class FilesystemWorkerModelConfigSource implements WorkerModelConfigSource {
       return {
         provider: config.provider,
         modelName: config.model,
+        modelBaseUrl: config.baseUrl,
         temperature: config.temperature,
         maxTokens: config.maxTokens,
+        apiKey: resolveApiKey(config.apiKeyEnv, this.env),
       };
     } catch (error: unknown) {
       this.logger.warn("Worker profile model config unavailable", {
@@ -49,14 +59,28 @@ class FilesystemWorkerModelConfigSource implements WorkerModelConfigSource {
   }
 }
 
+export function createCrewWorkerModelConfigSource(
+  deps: CrewWorkerModelConfigSourceDeps,
+): WorkerModelConfigSource {
+  return new FilesystemWorkerModelConfigSource(deps.logger, deps.profilesRoot, deps.env);
+}
+
 export function createCrewAgentWorkerExecutor(
   deps: CrewAgentWorkerExecutorDeps,
 ): AgentWorkerExecutor {
   return new AgentWorkerExecutor({
-    modelConfigSource: new FilesystemWorkerModelConfigSource(deps.logger, deps.profilesRoot),
+    modelConfigSource: createCrewWorkerModelConfigSource(deps),
     toolProvider: createCrewAgentWorkerToolProvider(deps),
     delegatedSpawnLifecycle: deps.delegatedSpawnLifecycle,
   });
+}
+
+function resolveApiKey(
+  apiKeyEnv: string | undefined,
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  if (apiKeyEnv === undefined || apiKeyEnv.trim() === "") return undefined;
+  return env[apiKeyEnv];
 }
 
 export function createCrewAgentWorkerToolProvider(
@@ -68,25 +92,28 @@ export function createCrewAgentWorkerToolProvider(
     ...deps.toolRegistry
       .listTools()
       .filter((tool) => toolMatchesSelectedSet(tool.name, toolSets))
-      .map((tool) => ({
-        label: tool.name,
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.inputSchema,
-        execute: async (_toolCallId: string, params: unknown): Promise<AgentToolResult> => {
-          const result = await deps.mcpClient.callTool(tool.name, paramsToRecord(params));
-          if (!result.ok) {
-            return {
-              content: [{ type: "text", text: result.error ?? "MCP tool call failed" }],
-              details: { ok: false, error: result.error },
-            };
-          }
-          return {
-            content: result.content.map(contentBlockToText),
-            details: { ok: true },
-          };
-        },
-      } satisfies AgentTool)),
+      .map(
+        (tool) =>
+          ({
+            label: tool.name,
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.inputSchema,
+            execute: async (_toolCallId: string, params: unknown): Promise<AgentToolResult> => {
+              const result = await deps.mcpClient.callTool(tool.name, paramsToRecord(params));
+              if (!result.ok) {
+                return {
+                  content: [{ type: "text", text: result.error ?? "MCP tool call failed" }],
+                  details: { ok: false, error: result.error },
+                };
+              }
+              return {
+                content: result.content.map(contentBlockToText),
+                details: { ok: true },
+              };
+            },
+          }) satisfies AgentTool,
+      ),
   ];
 }
 
@@ -99,51 +126,48 @@ function createCompletionMarkerTool(
     description:
       "Mark this Den worker assignment as ready for WorkerRuntime to post its structured completion packet.",
     parameters: { type: "object", additionalProperties: true },
-    execute: () => Promise.resolve({
-      content: [
-        {
-          type: "text",
-          text:
-            `Structured completion accepted for run ${roleInput.binding.runId}; ` +
-            "WorkerRuntime will post the canonical Den packet.",
-        },
-      ],
-      details: { ok: true, runId: roleInput.binding.runId },
-      terminate: true,
-    }),
+    execute: () =>
+      Promise.resolve({
+        content: [
+          {
+            type: "text",
+            text:
+              `Structured completion accepted for run ${roleInput.binding.runId}; ` +
+              "WorkerRuntime will post the canonical Den packet.",
+          },
+        ],
+        details: { ok: true, runId: roleInput.binding.runId },
+        terminate: true,
+      }),
   };
 }
 
-function createContextStatusTool(
-  roleInput: AgentWorkerToolProviderInput["roleInput"],
-): AgentTool {
+function createContextStatusTool(roleInput: AgentWorkerToolProviderInput["roleInput"]): AgentTool {
   return {
     label: "Context status",
     name: "context_status",
     description: "Report this worker assignment binding and prompt-packet context.",
     parameters: { type: "object", additionalProperties: true },
-    execute: () => Promise.resolve({
-      content: [
-        {
-          type: "text",
-          text:
-            `role=${roleInput.binding.role} task=${roleInput.binding.taskId} ` +
-            `run=${roleInput.binding.runId} target=${roleInput.targetPacketRef?.runId ?? "none"}`,
+    execute: () =>
+      Promise.resolve({
+        content: [
+          {
+            type: "text",
+            text:
+              `role=${roleInput.binding.role} task=${roleInput.binding.taskId} ` +
+              `run=${roleInput.binding.runId} target=${roleInput.targetPacketRef?.runId ?? "none"}`,
+          },
+        ],
+        details: {
+          role: roleInput.binding.role,
+          binding: roleInput.binding,
+          targetPacketRef: roleInput.targetPacketRef,
         },
-      ],
-      details: {
-        role: roleInput.binding.role,
-        binding: roleInput.binding,
-        targetPacketRef: roleInput.targetPacketRef,
-      },
-    }),
+      }),
   };
 }
 
-function toolMatchesSelectedSet(
-  toolName: string,
-  toolSets: readonly string[],
-): boolean {
+function toolMatchesSelectedSet(toolName: string, toolSets: readonly string[]): boolean {
   const normalized = toolName.toLowerCase();
   return toolSets.some((toolSet) => matchesToolSet(normalized, toolSet));
 }
@@ -158,9 +182,15 @@ function matchesToolSet(toolName: string, toolSet: string): boolean {
     case "filesystem":
       return toolName.includes("file") || toolName.includes("filesystem");
     case "filesystem_readonly":
-      return toolName.includes("read_file") || toolName.includes("get_file") || toolName.includes("list_file");
+      return (
+        toolName.includes("read_file") ||
+        toolName.includes("get_file") ||
+        toolName.includes("list_file")
+      );
     case "terminal":
-      return toolName.includes("terminal") || toolName.includes("shell") || toolName.includes("process");
+      return (
+        toolName.includes("terminal") || toolName.includes("shell") || toolName.includes("process")
+      );
     case "git":
     case "git_diff_log":
       return toolName.includes("git");
@@ -191,12 +221,13 @@ function stripMcpPrefix(toolName: string): string {
 }
 
 function paramsToRecord(params: unknown): Record<string, unknown> {
-  return typeof params === "object" && params !== null
-    ? params as Record<string, unknown>
-    : {};
+  return typeof params === "object" && params !== null ? (params as Record<string, unknown>) : {};
 }
 
-function contentBlockToText(block: ToolCallContentBlock): { readonly type: "text"; readonly text: string } {
+function contentBlockToText(block: ToolCallContentBlock): {
+  readonly type: "text";
+  readonly text: string;
+} {
   if (block.type === "text") {
     return { type: "text", text: block.text };
   }

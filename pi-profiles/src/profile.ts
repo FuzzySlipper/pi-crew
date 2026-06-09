@@ -44,6 +44,12 @@ export interface ModelConfig {
   /** Model identifier (e.g. "gpt-4o", "claude-sonnet-4"). */
   model?: string;
 
+  /** Optional OpenAI-compatible model endpoint URL. */
+  baseUrl?: string;
+
+  /** Environment variable that supplies the provider API key. */
+  apiKeyEnv?: string;
+
   /** Sampling temperature (0–2). */
   temperature?: number;
 

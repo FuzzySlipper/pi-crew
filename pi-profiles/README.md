@@ -25,10 +25,10 @@ profiles/
   base-worker/
     profile.yaml
     soul.md
-  coder/
+  coder-worker/
     profile.yaml
     soul.md
-  reviewer/
+  reviewer-worker/
     profile.yaml
     soul.md
 ```
@@ -38,7 +38,7 @@ profiles/
 A child profile can inherit common config:
 
 ```yaml
-# profiles/coder/profile.yaml
+# profiles/coder-worker/profile.yaml
 extends: base-worker
 name: Coder
 skills:
@@ -50,7 +50,7 @@ modelConfig:
 toolPolicy:
   allow:
     - terminal
-    - file
+    - filesystem
 ```
 
 ## Merge rules

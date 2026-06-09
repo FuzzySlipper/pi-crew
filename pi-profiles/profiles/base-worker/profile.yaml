@@ -1,0 +1,15 @@
+name: "Base Worker"
+description: "Shared defaults for Den-visible pi-crew pooled LLM workers."
+modelConfig:
+  provider: "local-openai-compatible"
+  model: "Qwen3.6-35B-A3B-MTP-GGUF"
+  baseUrl: "http://192.168.1.23:13305/v1"
+  apiKeyEnv: "PI_CREW_LLM_API_KEY"
+  maxTokens: 4096
+  temperature: 0.1
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "context_status"
+    - "post_structured_completion"
+    - "request_checkpoint"

@@ -1,0 +1,16 @@
+extends: base-worker
+name: "Coder Worker"
+description: "Implements scoped Den coding assignments with tests and structured completion."
+modelConfig:
+  temperature: 0.15
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "filesystem"
+    - "terminal"
+    - "git"
+    - "den"
+    - "delegation"
+    - "context_status"
+    - "post_structured_completion"
+    - "request_checkpoint"

@@ -34,10 +34,7 @@ describe("WorkerRuntime idle timeout enforcement", () => {
     const runtime = makeRuntime(makeIdleRoleMapping(20, 1_000));
     const binding = makeBinding({ assignmentId: "207", taskId: "2067" });
 
-    const packet = await runtime.executeAssignment(
-      binding,
-      delayedExecutor(80),
-    );
+    const packet = await runtime.executeAssignment(binding, delayedExecutor(80));
 
     expect(packet.status).toBe("completed");
     const stuck = workerStuckEvents(bus);
@@ -47,7 +44,7 @@ describe("WorkerRuntime idle timeout enforcement", () => {
       assignmentId: 207,
       runId: "piw_test_run",
       taskId: "2067",
-      profileId: "spawned-coder",
+      profileId: "coder-worker",
       role: "coder",
       lastLifecycleState: "executing",
       idleTimeoutMs: 20,
@@ -63,10 +60,7 @@ describe("WorkerRuntime idle timeout enforcement", () => {
   it("refreshes the idle deadline from executor activity events", async () => {
     const runtime = makeRuntime(makeIdleRoleMapping(35, 1_000));
 
-    await runtime.executeAssignment(
-      makeBinding({ taskId: "2067" }),
-      activityExecutor(),
-    );
+    await runtime.executeAssignment(makeBinding({ taskId: "2067" }), activityExecutor());
 
     expect(workerStuckEvents(bus)).toHaveLength(0);
   });

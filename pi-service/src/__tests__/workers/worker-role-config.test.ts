@@ -27,9 +27,7 @@ import {
 
 // ── Valid mapping helpers ──────────────────────────────────────
 
-function makeValidMapping(
-  bindings = DEFAULT_WORKER_ROLE_BINDINGS,
-) {
+function makeValidMapping(bindings = DEFAULT_WORKER_ROLE_BINDINGS) {
   return { bindings };
 }
 
@@ -51,19 +49,19 @@ describe("WorkerRoleBindingSchema", () => {
   it("accepts valid role + profileId", () => {
     const result = WorkerRoleBindingSchema.safeParse({
       role: "coder",
-      profileId: "spawned-coder",
+      profileId: "coder-worker",
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.role).toBe("coder");
-      expect(result.data.profileId).toBe("spawned-coder");
+      expect(result.data.profileId).toBe("coder-worker");
     }
   });
 
   it("rejects empty role string", () => {
     const result = WorkerRoleBindingSchema.safeParse({
       role: "",
-      profileId: "spawned-coder",
+      profileId: "coder-worker",
     });
     expect(result.success).toBe(false);
   });
@@ -79,7 +77,7 @@ describe("WorkerRoleBindingSchema", () => {
   it("rejects llmAgent execution when deterministicMode is also enabled", () => {
     const result = WorkerRoleBindingSchema.safeParse({
       role: "coder",
-      profileId: "spawned-coder",
+      profileId: "coder-worker",
       config: {
         executionMode: "llmAgent",
         deterministicMode: true,
@@ -92,7 +90,7 @@ describe("WorkerRoleBindingSchema", () => {
   it("accepts binding with optional config", () => {
     const result = WorkerRoleBindingSchema.safeParse({
       role: "coder",
-      profileId: "spawned-coder",
+      profileId: "coder-worker",
       config: {
         executionMode: "llmAgent",
         modelProvider: "local-openai-compatible",
@@ -100,7 +98,7 @@ describe("WorkerRoleBindingSchema", () => {
         modelBaseUrl: "http://192.168.1.23:13305/v1",
         temperature: 0.2,
         maxTokens: 4096,
-        systemPromptSource: "spawned-coder",
+        systemPromptSource: "coder-worker",
         mcpToolSet: ["file", "terminal"],
         drainEssentialTools: ["health"],
         deterministicMode: false,
@@ -128,9 +126,7 @@ describe("WorkerRoleBindingSchema", () => {
 
 describe("WorkerRoleMappingConfigSchema", () => {
   it("accepts valid multi-role mapping", () => {
-    const result = WorkerRoleMappingConfigSchema.safeParse(
-      makeValidMapping(),
-    );
+    const result = WorkerRoleMappingConfigSchema.safeParse(makeValidMapping());
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.bindings).toHaveLength(6);
@@ -139,13 +135,11 @@ describe("WorkerRoleMappingConfigSchema", () => {
 
   it("rejects mappings missing required worker roles", () => {
     const result = WorkerRoleMappingConfigSchema.safeParse({
-      bindings: [{ role: "packet-auditor", profileId: "packet-auditor" }],
+      bindings: [{ role: "packet-auditor", profileId: "packet-auditor-worker" }],
     });
     expect(result.success).toBe(false);
     const messages = result.error?.issues.map((i) => i.message) ?? [];
-    expect(messages).toContain(
-      'Missing worker role binding for required role "coder"',
-    );
+    expect(messages).toContain('Missing worker role binding for required role "coder"');
   });
 
   it("rejects empty bindings array", () => {
@@ -161,8 +155,8 @@ describe("WorkerRoleMappingConfigSchema", () => {
   it("rejects duplicate roles", () => {
     const result = WorkerRoleMappingConfigSchema.safeParse({
       bindings: [
-        { role: "coder", profileId: "spawned-coder" },
-        { role: "coder", profileId: "spawned-coder-v2" },
+        { role: "coder", profileId: "coder-worker" },
+        { role: "coder", profileId: "coder-worker-v2" },
       ],
     });
     expect(result.success).toBe(false);
@@ -182,15 +176,13 @@ describe("WorkerRoleMappingConfigSchema", () => {
     });
     expect(result.success).toBe(false);
     // The duplicate error should be on the third binding (index 2)
-    const dupIssue = result.error?.issues.find(
-      (i) => i.path[0] === "bindings" && i.path[1] === 2,
-    );
+    const dupIssue = result.error?.issues.find((i) => i.path[0] === "bindings" && i.path[1] === 2);
     expect(dupIssue).toBeDefined();
   });
 
   it("rejects missing role field", () => {
     const result = WorkerRoleMappingConfigSchema.safeParse({
-      bindings: [{ profileId: "spawned-coder" }],
+      bindings: [{ profileId: "coder-worker" }],
     });
     expect(result.success).toBe(false);
   });
@@ -214,7 +206,7 @@ describe("loadWorkerRoleMapping", () => {
   it("returns parsed mapping for valid input", () => {
     const mapping = loadWorkerRoleMapping(makeValidMapping());
     expect(mapping.bindings).toHaveLength(6);
-    expect(resolveProfileId(mapping, "coder")).toBe("spawned-coder");
+    expect(resolveProfileId(mapping, "coder")).toBe("coder-worker");
   });
 
   it("throws ConfigurationError for duplicate roles", () => {
@@ -229,9 +221,9 @@ describe("loadWorkerRoleMapping", () => {
   });
 
   it("throws ConfigurationError for empty bindings", () => {
-    expect(() =>
-      loadWorkerRoleMapping({ bindings: [] }),
-    ).toThrow("Invalid worker role mapping configuration");
+    expect(() => loadWorkerRoleMapping({ bindings: [] })).toThrow(
+      "Invalid worker role mapping configuration",
+    );
   });
 });
 
@@ -240,34 +232,28 @@ describe("loadWorkerRoleMapping", () => {
 describe("resolveProfileId", () => {
   const mapping = loadWorkerRoleMapping(makeValidMapping());
 
-  it("resolves coder → spawned-coder", () => {
-    expect(resolveProfileId(mapping, "coder")).toBe("spawned-coder");
+  it("resolves coder → coder-worker", () => {
+    expect(resolveProfileId(mapping, "coder")).toBe("coder-worker");
   });
 
-  it("resolves reviewer → spawned-reviewer", () => {
-    expect(resolveProfileId(mapping, "reviewer")).toBe("spawned-reviewer");
+  it("resolves reviewer → reviewer-worker", () => {
+    expect(resolveProfileId(mapping, "reviewer")).toBe("reviewer-worker");
   });
 
-  it("resolves packet-auditor → packet-auditor", () => {
-    expect(resolveProfileId(mapping, "packet-auditor")).toBe(
-      "packet-auditor",
-    );
+  it("resolves packet-auditor → packet-auditor-worker", () => {
+    expect(resolveProfileId(mapping, "packet-auditor")).toBe("packet-auditor-worker");
   });
 
-  it("resolves packet_auditor alias → packet-auditor", () => {
-    expect(resolveProfileId(mapping, "packet_auditor")).toBe(
-      "packet-auditor",
-    );
+  it("resolves packet_auditor alias → packet-auditor-worker", () => {
+    expect(resolveProfileId(mapping, "packet_auditor")).toBe("packet-auditor-worker");
   });
 
-  it("resolves drift_checker → worker-drift_checker", () => {
-    expect(resolveProfileId(mapping, "drift_checker")).toBe(
-      "worker-drift_checker",
-    );
+  it("resolves drift_checker → drift-checker-worker", () => {
+    expect(resolveProfileId(mapping, "drift_checker")).toBe("drift-checker-worker");
   });
 
-  it("resolves validator → spawned-validator", () => {
-    expect(resolveProfileId(mapping, "validator")).toBe("spawned-validator");
+  it("resolves validator → validator-worker", () => {
+    expect(resolveProfileId(mapping, "validator")).toBe("validator-worker");
   });
 
   it("throws for unknown role — no accidental fallback", () => {
@@ -296,7 +282,7 @@ describe("resolveRoleConfig", () => {
     const mapping = loadWorkerRoleMapping(makeValidMapping());
     const config = resolveRoleConfig(mapping, "coder");
 
-    expect(config?.systemPromptSource).toBe("spawned-coder");
+    expect(config?.systemPromptSource).toBe("coder-worker");
     expect(config?.mcpToolSet).toEqual(["filesystem", "terminal", "git", "den", "delegation"]);
     expect(config?.drainEssentialTools).toEqual([
       "context_status",
@@ -309,12 +295,8 @@ describe("resolveRoleConfig", () => {
     const mapping = loadWorkerRoleMapping(makeValidMapping());
     const config = resolveRoleConfig(mapping, "reviewer");
 
-    expect(config?.systemPromptSource).toBe("spawned-reviewer");
-    expect(config?.mcpToolSet).toEqual([
-      "filesystem_readonly",
-      "git_diff_log",
-      "den",
-    ]);
+    expect(config?.systemPromptSource).toBe("reviewer-worker");
+    expect(config?.mcpToolSet).toEqual(["filesystem_readonly", "git_diff_log", "den"]);
     expect(config?.drainEssentialTools).toEqual([
       "context_status",
       "post_structured_completion",
@@ -325,9 +307,7 @@ describe("resolveRoleConfig", () => {
   it("keeps request_checkpoint available in default supervised role drain tools", () => {
     const mapping = loadWorkerRoleMapping(makeValidMapping());
     for (const role of ["packet-auditor", "packet_auditor", "coder", "reviewer"]) {
-      expect(resolveRoleConfig(mapping, role)?.drainEssentialTools).toContain(
-        "request_checkpoint",
-      );
+      expect(resolveRoleConfig(mapping, role)?.drainEssentialTools).toContain("request_checkpoint");
     }
   });
 
@@ -335,11 +315,11 @@ describe("resolveRoleConfig", () => {
     const mapping = loadWorkerRoleMapping(
       withBinding({
         role: "coder",
-        profileId: "spawned-coder",
+        profileId: "coder-worker",
         config: {
           modelProvider: "openrouter",
           modelName: "anthropic/claude-sonnet-4",
-          systemPromptSource: "spawned-coder",
+          systemPromptSource: "coder-worker",
           deterministicMode: false,
         },
       }),
@@ -348,21 +328,24 @@ describe("resolveRoleConfig", () => {
     expect(config).toBeDefined();
     expect(config?.modelProvider).toBe("openrouter");
     expect(config?.modelName).toBe("anthropic/claude-sonnet-4");
-    expect(config?.systemPromptSource).toBe("spawned-coder");
+    expect(config?.systemPromptSource).toBe("coder-worker");
     expect(config?.deterministicMode).toBe(false);
   });
 
-  it("returns undefined for known role without config", () => {
+  it("returns validator defaults from the validated default mapping", () => {
     const mapping = loadWorkerRoleMapping(
       withBinding({
         role: "coder",
-        profileId: "spawned-coder",
+        profileId: "coder-worker",
         config: {
           mcpToolSet: ["file"],
         },
       }),
     );
-    expect(resolveRoleConfig(mapping, "validator")).toBeUndefined();
+    const config = resolveRoleConfig(mapping, "validator");
+    expect(config?.executionMode).toBe("llmAgent");
+    expect(config?.systemPromptSource).toBe("validator-worker");
+    expect(config?.mcpToolSet).toEqual(["filesystem_readonly", "terminal", "den"]);
   });
 
   it("returns undefined for unknown role (no binding at all)", () => {
@@ -377,7 +360,7 @@ describe("Concrete role: packet-auditor with full config", () => {
   it("round-trips full role config for packet-auditor", () => {
     const raw = withBinding({
       role: "packet-auditor",
-      profileId: "packet-auditor",
+      profileId: "packet-auditor-worker",
       config: {
         modelProvider: "local",
         modelName: "packet-auditor-model",
@@ -404,19 +387,15 @@ describe("Concrete role: packet-auditor with full config", () => {
 
     const mapping = loadWorkerRoleMapping(raw);
     const profileId = resolveProfileId(mapping, "packet-auditor");
-    expect(profileId).toBe("packet-auditor");
+    expect(profileId).toBe("packet-auditor-worker");
 
     const config = resolveRoleConfig(mapping, "packet-auditor");
     expect(config).toBeDefined();
     expect(config?.systemPromptSource).toBe("packet-auditor");
     expect(config?.mcpToolSet).toEqual(["den-mcp", "audit-tools"]);
-    expect(config?.drainEssentialTools).toEqual([
-      "post_worker_completion_packet",
-    ]);
+    expect(config?.drainEssentialTools).toEqual(["post_worker_completion_packet"]);
     expect(config?.deterministicMode).toBe(true);
-    expect(config?.toolPolicyDefaults?.allowedTools).toContain(
-      "post_worker_completion_packet",
-    );
+    expect(config?.toolPolicyDefaults?.allowedTools).toContain("post_worker_completion_packet");
     expect(config?.toolPolicyDefaults?.deniedTools).toContain("terminal");
     expect(config?.toolPolicyDefaults?.allowedHosts).toEqual(["192.168.1.10"]);
     expect(config?.toolPolicyDefaults?.workdirRoot).toBe("/work/assignments");
