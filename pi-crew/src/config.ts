@@ -7,7 +7,8 @@
  * @module pi-crew/config
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 import { load as parseYaml } from "js-yaml";
 import { z } from "zod";
 
@@ -17,6 +18,9 @@ import {
   WorkerRoleMappingConfigSchema,
   DEFAULT_WORKER_ROLE_BINDINGS,
 } from "@pi-crew/service";
+
+export const DEFAULT_INSTALL_ROOT = "/home/agents/pi-crew";
+export const DEFAULT_INSTALL_CONFIG_PATH = join(DEFAULT_INSTALL_ROOT, "config.yaml");
 
 // ── Crew-level config schema ───────────────────────────────────
 
@@ -42,7 +46,17 @@ const ToolPolicyDefaultsSchema = z.object({
   deniedHosts: z.array(z.string()).default([]),
 });
 
+const InstallConfigSchema = z.object({
+  root: z.string().min(1).default(DEFAULT_INSTALL_ROOT),
+});
+
+const ProfilesConfigSchema = z.object({
+  root: z.string().min(1).optional(),
+}).default({});
+
 export const CrewConfigSchema = z.object({
+  install: InstallConfigSchema.default({}),
+  profiles: ProfilesConfigSchema,
   admin: GatewayConfigSchema.shape.admin,
   den: GatewayConfigSchema.shape.den,
   database: GatewayConfigSchema.shape.database.default({}),
@@ -59,6 +73,42 @@ export const CrewConfigSchema = z.object({
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;
 
+export interface CrewInstallLayout {
+  readonly root: string;
+  readonly configPath: string;
+  readonly profilesRoot: string;
+}
+
+export interface ResolveCrewConfigPathInput {
+  readonly argv: readonly string[];
+  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly cwd: string;
+}
+
+export function resolveCrewConfigPath(input: ResolveCrewConfigPathInput): string {
+  const envPath = input.env["PI_CREW_CONFIG"];
+  if (envPath !== undefined && envPath.length > 0) {
+    return absolutize(envPath, input.cwd);
+  }
+
+  const configIdx = input.argv.indexOf("--config");
+  const cliPath = input.argv[configIdx + 1];
+  if (configIdx !== -1 && cliPath !== undefined && cliPath.length > 0) {
+    return absolutize(cliPath, input.cwd);
+  }
+
+  return DEFAULT_INSTALL_CONFIG_PATH;
+}
+
+export function resolveCrewInstallLayout(config: CrewConfig): CrewInstallLayout {
+  const root = config.install.root;
+  return {
+    root,
+    configPath: join(root, "config.yaml"),
+    profilesRoot: config.profiles.root ?? join(root, "profiles"),
+  };
+}
+
 /**
  * Load crew-level configuration from a YAML file path.
  *
@@ -66,8 +116,8 @@ export type CrewConfig = z.infer<typeof CrewConfigSchema>;
  * field except `den.coreUrl`, which must be provided.
  */
 export function loadCrewConfig(yamlPath: string): CrewConfig {
-  const raw = readFileSync(yamlPath, "utf-8");
-  const parsed: unknown = parseYaml(raw);
+  const raw = readConfigFile(yamlPath);
+  const parsed = parseConfigYaml(raw, yamlPath);
 
   const result = CrewConfigSchema.safeParse(parsed ?? {});
   if (!result.success) {
@@ -77,5 +127,44 @@ export function loadCrewConfig(yamlPath: string): CrewConfig {
     throw new ConfigurationError(`Invalid crew configuration:\n${issues}`);
   }
 
+  validateConfiguredProfilesRoot(result.data.profiles.root);
   return result.data;
+}
+
+function readConfigFile(yamlPath: string): string {
+  try {
+    return readFileSync(yamlPath, "utf-8");
+  } catch (error: unknown) {
+    throw new ConfigurationError(`Cannot read crew configuration file at ${yamlPath}: ${errorMessage(error)}`);
+  }
+}
+
+function parseConfigYaml(raw: string, yamlPath: string): unknown {
+  try {
+    return parseYaml(raw);
+  } catch (error: unknown) {
+    throw new ConfigurationError(`Malformed crew configuration file at ${yamlPath}: ${errorMessage(error)}`);
+  }
+}
+
+function validateConfiguredProfilesRoot(profilesRoot: string | undefined): void {
+  if (profilesRoot === undefined) return;
+  if (!existsSync(profilesRoot)) {
+    throw new ConfigurationError(
+      `Configured profiles root does not exist: ${profilesRoot}`,
+    );
+  }
+  if (!statSync(profilesRoot).isDirectory()) {
+    throw new ConfigurationError(
+      `Configured profiles root is not a directory: ${profilesRoot}`,
+    );
+  }
+}
+
+function absolutize(path: string, cwd: string): string {
+  return isAbsolute(path) ? path : resolve(cwd, path);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

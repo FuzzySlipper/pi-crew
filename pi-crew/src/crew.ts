@@ -38,8 +38,7 @@ import {
 } from "@pi-crew/service";
 
 import { loadCrewConfig, type CrewConfig } from "./config.js";
-export { CrewConfigSchema, loadCrewConfig, type CrewConfig } from "./config.js";
-
+export { CrewConfigSchema, loadCrewConfig, resolveCrewConfigPath, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
 import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
 
@@ -100,7 +99,7 @@ export class Crew {
     // DESIGN: The composition root validates configured profile IDs before
     // runtime routing. Rationale: SessionManager should receive policy, not
     // own global profile loading or magic fallback identifiers.
-    loadProfile(config.sessions.fallbackProfileId);
+    loadProfile(config.sessions.fallbackProfileId, config.profiles.root);
 
     // DESIGN: The worker role mapping is validated at config-parse time
     // (duplicate roles rejected, at least one binding required, every
@@ -453,6 +452,7 @@ export class Crew {
       mcpClient: this.#mcpClient,
       toolRegistry: this.#mcpToolRegistry,
       logger: this.#logger,
+      profilesRoot: this.#config.profiles.root,
       delegatedSpawnLifecycle: this.#delegatedSpawnLifecycle,
     });
   }

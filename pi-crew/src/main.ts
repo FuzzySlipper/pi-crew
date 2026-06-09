@@ -1,7 +1,8 @@
 /**
  * pi-crew service entrypoint — executable main for long-lived service process.
  *
- * Loads configuration from PI_CREW_CONFIG env var or --config CLI arg,
+ * Loads configuration from PI_CREW_CONFIG env var, --config CLI arg,
+ * or /home/agents/pi-crew/config.yaml by default,
  * bootstraps the Crew composition root, starts the gateway (including the
  * health-check HTTP server), performs a local health smoke check, then
  * blocks on signals until graceful shutdown.
@@ -9,42 +10,15 @@
  * Usage:
  *   PI_CREW_CONFIG=/path/to/config.yaml node dist/main.js
  *   node dist/main.js --config /path/to/config.yaml
+ *   node dist/main.js  # reads /home/agents/pi-crew/config.yaml
  *
  * @module pi-crew/main
  */
 
-import { resolve } from "node:path";
 import { env, argv, exit, stdout } from "node:process";
 import { FakeEventBus } from "@pi-crew/core";
-import { Crew, loadCrewConfig } from "./crew.js";
+import { Crew, loadCrewConfig, resolveCrewConfigPath } from "./crew.js";
 import { ServiceConsoleLogger, subscribeServiceEventLogs } from "./service-logger.js";
-
-// ── Config path resolution ──────────────────────────────────────
-
-/**
- * Resolve the YAML configuration file path.
- *
- * Priority:
- * 1. PI_CREW_CONFIG environment variable
- * 2. --config <path> CLI argument
- * 3. Default: ./config/default.yaml (relative to CWD)
- */
-function resolveConfigPath(): string {
-  const envPath = env["PI_CREW_CONFIG"];
-  if (envPath !== undefined && envPath.length > 0) {
-    return resolve(envPath);
-  }
-
-  const configIdx = argv.indexOf("--config");
-  if (configIdx !== -1 && configIdx + 1 < argv.length) {
-    const cliPath = argv[configIdx + 1];
-    if (cliPath !== undefined && cliPath.length > 0) {
-      return resolve(cliPath);
-    }
-  }
-
-  return resolve("config/default.yaml");
-}
 
 // ── Health smoke ────────────────────────────────────────────────
 
@@ -124,7 +98,7 @@ function installSignalHandlers(stop: ShutdownFn): void {
 // ── Main ────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const configPath = resolveConfigPath();
+  const configPath = resolveCrewConfigPath({ argv, env, cwd: process.cwd() });
   console.log(`pi-crew starting with config: ${configPath}`);
 
   const config = loadCrewConfig(configPath);

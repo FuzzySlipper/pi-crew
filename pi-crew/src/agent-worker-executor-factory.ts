@@ -18,15 +18,19 @@ export interface CrewAgentWorkerExecutorDeps {
   readonly mcpClient: MCPClient;
   readonly toolRegistry: McpToolRegistry;
   readonly logger: Logger;
+  readonly profilesRoot?: string;
   readonly delegatedSpawnLifecycle?: DelegatedSpawnLifecycle;
 }
 
 class FilesystemWorkerModelConfigSource implements WorkerModelConfigSource {
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly profilesRoot?: string,
+  ) {}
 
   getProfileModelConfig(profileId: string): WorkerModelConfig | undefined {
     try {
-      const profile = loadProfile(profileId);
+      const profile = loadProfile(profileId, this.profilesRoot);
       const config = profile.modelConfig;
       if (config === undefined) return undefined;
       return {
@@ -49,7 +53,7 @@ export function createCrewAgentWorkerExecutor(
   deps: CrewAgentWorkerExecutorDeps,
 ): AgentWorkerExecutor {
   return new AgentWorkerExecutor({
-    modelConfigSource: new FilesystemWorkerModelConfigSource(deps.logger),
+    modelConfigSource: new FilesystemWorkerModelConfigSource(deps.logger, deps.profilesRoot),
     toolProvider: createCrewAgentWorkerToolProvider(deps),
     delegatedSpawnLifecycle: deps.delegatedSpawnLifecycle,
   });

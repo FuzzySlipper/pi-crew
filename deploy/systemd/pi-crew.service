@@ -5,16 +5,16 @@
 
 [Unit]
 Description=pi-crew agent crew runtime
-Documentation=file:%h/pi-crew/deploy/systemd/README.md
+Documentation=file:/home/dev/pi-crew/deploy/systemd/README.md
 After=default.target network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/pi-crew
+WorkingDirectory=/home/dev/pi-crew
 Environment=NODE_ENV=production
-Environment=PI_CREW_CONFIG=%h/.config/pi-crew/config.yaml
-ExecStart=/usr/bin/env npm start -w @pi-crew/crew -- --config %h/.config/pi-crew/config.yaml
+Environment=PI_CREW_CONFIG=/home/agents/pi-crew/config.yaml
+ExecStart=/usr/bin/env npm start -w @pi-crew/crew -- --config /home/agents/pi-crew/config.yaml
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=20s
@@ -23,9 +23,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pi-crew
 
-# User-scoped runtime paths expected by config:
-#   Config: %h/.config/pi-crew/config.yaml
-#   State:  %h/.local/state/pi-crew/runtime.db
+# pi-crew-owned runtime paths expected by config:
+#   Config:   /home/agents/pi-crew/config.yaml
+#   Profiles: /home/agents/pi-crew/profiles
+#   State:    /home/agents/pi-crew/runtime.db
 
 [Install]
 WantedBy=default.target

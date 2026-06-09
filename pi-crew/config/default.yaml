@@ -5,6 +5,18 @@
 # Use environment variables (PI_DB_PATH, PI_DEN_CORE_URL, etc.) for
 # secrets and host-specific values.
 
+# ── Installed layout ─────────────────────────────────────────────
+# Production pooled-worker installs use this root. The service reads
+# /home/agents/pi-crew/config.yaml and worker profile definitions from
+# /home/agents/pi-crew/profiles. Development/test runs may still pass an
+# explicit --config path and omit profiles.root to use package defaults.
+install:
+  root: "/home/agents/pi-crew"
+
+# Uncomment in installed config after creating the directory:
+# profiles:
+#   root: "/home/agents/pi-crew/profiles"
+
 # ── Den Core / Channels ───────────────────────────────────────────
 den:
   # REST API base URL for Den Core (required at startup by default).
@@ -83,7 +95,7 @@ mcp:
 database:
   # Absolute path to the SQLite runtime database.
   # Override via PI_DB_PATH env var.
-  path: "/var/lib/pi-crew/runtime.db"
+  path: "/home/agents/pi-crew/runtime.db"
 
   # Enable WAL mode for read concurrency.
   wal: true
