@@ -51,7 +51,11 @@ export class AgentFactoryImpl implements AgentFactory {
   ) {}
 
   async createSession(config: SessionConfig): Promise<SessionRecord> {
-    const instance = await this.pool.acquire(config.profileId);
+    const instance = await this.pool.acquire(
+      config.profileId,
+      config.workerBinding?.role,
+      config.effectiveRuntime,
+    );
 
     const now = new Date().toISOString();
 

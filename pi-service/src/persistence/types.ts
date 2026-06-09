@@ -9,6 +9,8 @@
  */
 
 import type {
+  DelegationConstraints,
+  EffectiveDelegationRuntime,
   DelegationLineage,
   DelegationSpawnRequest,
 } from "@pi-crew/core";
@@ -32,6 +34,8 @@ export interface SessionRow {
   worker_binding_json: string | null;
   delegation_json: string | null;
   delegation_spawn_request_json: string | null;
+  delegation_constraints_json: string | null;
+  effective_runtime_json: string | null;
   status: SessionState;
   created_at: string;
   last_activity: string;
@@ -192,8 +196,8 @@ export function rowToRecord(row: SessionRow): SessionRecord {
     workerBinding: parseWorkerBinding(row.worker_binding_json),
     delegation: parseDelegationLineage(row.delegation_json),
     delegationSpawnRequest: parseDelegationSpawnRequest(row.delegation_spawn_request_json),
-    delegationConstraints: null,
-    effectiveRuntime: null,
+    delegationConstraints: parseDelegationConstraints(row.delegation_constraints_json),
+    effectiveRuntime: parseEffectiveRuntime(row.effective_runtime_json),
   };
 }
 
@@ -212,6 +216,12 @@ export function recordToRow(record: SessionRecord): SessionRow {
     delegation_json: record.delegation ? JSON.stringify(record.delegation) : null,
     delegation_spawn_request_json: record.delegationSpawnRequest
       ? JSON.stringify(record.delegationSpawnRequest)
+      : null,
+    delegation_constraints_json: record.delegationConstraints
+      ? JSON.stringify(record.delegationConstraints)
+      : null,
+    effective_runtime_json: record.effectiveRuntime
+      ? JSON.stringify(record.effectiveRuntime)
       : null,
     status: record.state,
     created_at: record.createdAt,
@@ -313,6 +323,47 @@ function parseDelegationSpawnRequest(raw: string | null): DelegationSpawnRequest
     const candidate = parsed as Record<string, unknown>;
     if (typeof candidate.task !== "string") return null;
     return parsed as DelegationSpawnRequest;
+  } catch {
+    return null;
+  }
+}
+
+function parseDelegationConstraints(raw: string | null): DelegationConstraints | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const candidate = parsed as Record<string, unknown>;
+    if (typeof candidate.maxSpawnDepth !== "number") return null;
+    if (
+      "maxConcurrentChildren" in candidate
+      && typeof candidate.maxConcurrentChildren !== "number"
+    ) return null;
+    return {
+      maxSpawnDepth: candidate.maxSpawnDepth,
+      ...(typeof candidate.maxConcurrentChildren === "number"
+        ? { maxConcurrentChildren: candidate.maxConcurrentChildren }
+        : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseEffectiveRuntime(raw: string | null): EffectiveDelegationRuntime | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const candidate = parsed as Record<string, unknown>;
+    if (typeof candidate.profileId !== "string") return null;
+    if ("provider" in candidate && typeof candidate.provider !== "string") return null;
+    if ("model" in candidate && typeof candidate.model !== "string") return null;
+    return {
+      profileId: candidate.profileId,
+      ...(typeof candidate.provider === "string" ? { provider: candidate.provider } : {}),
+      ...(typeof candidate.model === "string" ? { model: candidate.model } : {}),
+    };
   } catch {
     return null;
   }

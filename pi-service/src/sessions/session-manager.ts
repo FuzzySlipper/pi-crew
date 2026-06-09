@@ -226,7 +226,11 @@ export class SessionManagerImpl implements SessionManager {
         const reason = instanceId === null
           ? "idle_session"
           : "instance_missing";
-        const instance = await this.pool.acquire(record.profileId);
+        const instance = await this.pool.acquire(
+          record.profileId,
+          record.workerBinding?.role,
+          record.effectiveRuntime ?? undefined,
+        );
 
         const now = new Date().toISOString();
         const rehydrated: typeof record = {

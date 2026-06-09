@@ -8,7 +8,7 @@
  * @module pi-service/instances/instance-pool
  */
 
-import { SessionLimitError, type Logger } from "@pi-crew/core";
+import { SessionLimitError, type EffectiveDelegationRuntime, type Logger } from "@pi-crew/core";
 import type { AgentInstance } from "./agent-instance.js";
 import type { InstanceFactory } from "./instance-factory.js";
 
@@ -51,7 +51,11 @@ export interface InstancePool {
    * @returns A fresh, undisposed instance.
    * @throws Error if pool is at capacity.
    */
-  acquire(profileId: string, role?: string): Promise<AgentInstance>;
+  acquire(
+    profileId: string,
+    role?: string,
+    effectiveRuntime?: EffectiveDelegationRuntime,
+  ): Promise<AgentInstance>;
 
   /**
    * Release (dispose) an instance and remove it from the pool.
@@ -114,7 +118,11 @@ export class InstancePoolImpl implements InstancePool {
 
   // ── InstancePool contract ─────────────────────────────────────
 
-  async acquire(profileId: string, role?: string): Promise<AgentInstance> {
+  async acquire(
+    profileId: string,
+    role?: string,
+    effectiveRuntime?: EffectiveDelegationRuntime,
+  ): Promise<AgentInstance> {
     // Enforce max total
     if (this.entries.size >= this.config.maxTotal) {
       throw new SessionLimitError(
@@ -132,7 +140,7 @@ export class InstancePoolImpl implements InstancePool {
       );
     }
 
-    const instance = await this.factory.create(profileId, role);
+    const instance = await this.factory.create(profileId, role, effectiveRuntime);
 
     this.entries.set(instance.id, {
       instance,
@@ -143,6 +151,7 @@ export class InstancePoolImpl implements InstancePool {
     this.logger.debug("Instance acquired", {
       instanceId: instance.id,
       profileId,
+      ...(effectiveRuntime ? { effectiveRuntime } : {}),
       poolSize: this.entries.size,
     });
 

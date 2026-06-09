@@ -29,6 +29,7 @@ import type { Logger } from "@pi-crew/core";
 const MIGRATIONS: Migration[] = [
   { version: 1, name: "001_initial_schema", sql: "" },
   { version: 2, name: "002_delegation_session_columns", sql: "" },
+  { version: 3, name: "003_delegation_runtime_columns", sql: "" },
 ];
 
 // ── RuntimeDb ─────────────────────────────────────────────────────

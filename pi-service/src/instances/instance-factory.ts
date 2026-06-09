@@ -11,7 +11,7 @@
  * @module pi-service/instances/instance-factory
  */
 
-import type { Logger } from "@pi-crew/core";
+import type { EffectiveDelegationRuntime, Logger } from "@pi-crew/core";
 import type { AgentInstance } from "./agent-instance.js";
 import { AgentInstanceImpl } from "./agent-instance.js";
 import type { AgentResponderFactory } from "./agent-responder.js";
@@ -30,7 +30,11 @@ export interface InstanceFactory {
    * @param role — Optional worker role hint.
    * @returns A fresh, undisposed instance.
    */
-  create(profileId: string, role?: string): Promise<AgentInstance>;
+  create(
+    profileId: string,
+    role?: string,
+    effectiveRuntime?: EffectiveDelegationRuntime,
+  ): Promise<AgentInstance>;
 }
 
 // ── InstanceFactoryImpl ─────────────────────────────────────────
@@ -50,7 +54,11 @@ export class InstanceFactoryImpl implements InstanceFactory {
       new EchoAgentResponderFactory(),
   ) {}
 
-  create(profileId: string, role?: string): Promise<AgentInstance> {
+  create(
+    profileId: string,
+    role?: string,
+    effectiveRuntime?: EffectiveDelegationRuntime,
+  ): Promise<AgentInstance> {
     // DESIGN: Keep pi-service instance construction profile-id based until the
     // composition root wires a concrete ProfileSource. Rationale: pi-profiles is
     // standalone global configuration; service unit tests use synthetic profile
@@ -58,11 +66,13 @@ export class InstanceFactoryImpl implements InstanceFactory {
     this.logger.debug("Creating agent instance", {
       profileId,
       role,
+      ...(effectiveRuntime ? { effectiveRuntime } : {}),
     });
 
     const responder = this.responderFactory.createResponder({
       profileId,
       role,
+      ...(effectiveRuntime ? { effectiveRuntime } : {}),
     });
 
     return Promise.resolve(new AgentInstanceImpl(profileId, responder));

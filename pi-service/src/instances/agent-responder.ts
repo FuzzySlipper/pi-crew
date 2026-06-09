@@ -8,7 +8,7 @@
  * @module pi-service/instances/agent-responder
  */
 
-import type { ChannelContent, ChannelMessage } from "@pi-crew/core";
+import type { ChannelContent, ChannelMessage, EffectiveDelegationRuntime } from "@pi-crew/core";
 
 /** Input passed from an agent instance to its response runtime. */
 export interface AgentResponseRequest {
@@ -26,6 +26,8 @@ export interface AgentResponder {
 export interface AgentResponderFactoryContext {
   readonly profileId: string;
   readonly role?: string;
+  /** Session-local runtime selection; does not mutate the source profile. */
+  readonly effectiveRuntime?: EffectiveDelegationRuntime;
 }
 
 /** Creates responder instances for freshly-created agent instances. */

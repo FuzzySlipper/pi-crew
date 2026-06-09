@@ -113,17 +113,21 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
       save: this.#db.prepare(
         `INSERT INTO sessions (id, kind, profile_id, channel_bindings_json,
            worker_binding_json, delegation_json, delegation_spawn_request_json,
+           delegation_constraints_json, effective_runtime_json,
            status, created_at, last_activity, expires_at)
          VALUES (@id, @kind, @profile_id, @channel_bindings_json,
                  @worker_binding_json, @delegation_json, @delegation_spawn_request_json,
+                 @delegation_constraints_json, @effective_runtime_json,
                  @status, @created_at, @last_activity, @expires_at)`,
       ),
       upsert: this.#db.prepare(
         `INSERT INTO sessions (id, kind, profile_id, channel_bindings_json,
            worker_binding_json, delegation_json, delegation_spawn_request_json,
+           delegation_constraints_json, effective_runtime_json,
            status, created_at, last_activity, expires_at)
          VALUES (@id, @kind, @profile_id, @channel_bindings_json,
                  @worker_binding_json, @delegation_json, @delegation_spawn_request_json,
+                 @delegation_constraints_json, @effective_runtime_json,
                  @status, @created_at, @last_activity, @expires_at)
          ON CONFLICT(id) DO UPDATE SET
            kind = excluded.kind,
@@ -132,6 +136,8 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
            worker_binding_json = excluded.worker_binding_json,
            delegation_json = excluded.delegation_json,
            delegation_spawn_request_json = excluded.delegation_spawn_request_json,
+           delegation_constraints_json = excluded.delegation_constraints_json,
+           effective_runtime_json = excluded.effective_runtime_json,
            status = excluded.status,
            last_activity = excluded.last_activity,
            expires_at = excluded.expires_at`,

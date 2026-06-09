@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, unlinkSync } from "node:fs";
-import type { Logger } from "@pi-crew/core";
+import type { DelegationConstraints, EffectiveDelegationRuntime, Logger } from "@pi-crew/core";
 import { RuntimeDb } from "../../persistence/runtime-db.js";
 import { SqliteSessionRepository } from "../../persistence/session-repository.js";
 import { SqliteMessageRepository } from "../../persistence/message-repository.js";
@@ -38,6 +38,17 @@ function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
     ...overrides,
   };
 }
+
+const delegatedRuntime: EffectiveDelegationRuntime = {
+  profileId: "spawned-coder",
+  provider: "local-openai",
+  model: "qwen-coder",
+};
+
+const delegatedConstraints: DelegationConstraints = {
+  maxSpawnDepth: 2,
+  maxConcurrentChildren: 1,
+};
 
 function binding(overrides: Partial<WorkerBinding> = {}): WorkerBinding {
   return {
@@ -90,7 +101,7 @@ describe("runtime persistence", () => {
   it("opens SQLite in WAL mode and creates only runtime tables", () => {
     const health = db.health();
     expect(health.walEnabled).toBe(true);
-    expect(health.schemaVersion).toBe(2);
+    expect(health.schemaVersion).toBe(3);
     const rows = db.handle.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
     const names = rows.map((row) => row.name);
     expect(names).toContain("sessions");
@@ -111,6 +122,36 @@ describe("runtime persistence", () => {
     const reopened = new SqliteSessionRepository(db.handle, logger);
     expect(present(await reopened.findByChannel("den:604")).id).toBe("chat");
     expect(present(await reopened.get("worker")).workerBinding?.runId).toBe("run-1");
+  });
+
+  it("persists delegated runtime and remaining delegation constraints across reopen", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    await sessions.save(session({
+      id: "delegated-child",
+      kind: "delegated",
+      profileId: "spawned-coder",
+      delegation: {
+        parentSessionId: "parent-session",
+        rootSessionId: "root-session",
+        childSessionId: "delegated-child",
+        depth: 1,
+        chain: ["root-session", "delegated-child"],
+      },
+      delegationSpawnRequest: {
+        task: "check a delegated subtask",
+        modelSelection: { provider: "local-openai", model: "qwen-coder" },
+      },
+      delegationConstraints: delegatedConstraints,
+      effectiveRuntime: delegatedRuntime,
+    }));
+    db.close();
+
+    db = new RuntimeDb(config(path), logger);
+    const reopened = new SqliteSessionRepository(db.handle, logger);
+    const record = present(await reopened.get("delegated-child"));
+
+    expect(record.delegationConstraints).toEqual(delegatedConstraints);
+    expect(record.effectiveRuntime).toEqual(delegatedRuntime);
   });
 
   it("persists typed channel bindings and finds them by channel", async () => {

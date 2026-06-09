@@ -5,7 +5,13 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
+import type { EffectiveDelegationRuntime } from "@pi-crew/core";
 import { FakeLogger, FakeEventBus } from "@pi-crew/core";
+import type {
+  AgentResponder,
+  AgentResponderFactory,
+  AgentResponderFactoryContext,
+} from "../../instances/agent-responder.js";
 import { InMemorySessionStore } from "../../sessions/session-store.js";
 import { InstancePoolImpl } from "../../instances/instance-pool.js";
 import { InstanceFactoryImpl } from "../../instances/instance-factory.js";
@@ -135,5 +141,41 @@ describe("AgentFactoryImpl", () => {
       expect(b.instanceId).toBeTruthy();
       expect(a.instanceId).not.toBe(b.instanceId);
     });
+
+    it("acquires an instance with the session-local effective runtime override", async () => {
+      const runtime: EffectiveDelegationRuntime = {
+        profileId: "spawned-coder",
+        provider: "local-openai",
+        model: "qwen-coder",
+      };
+      const responderFactory = new CapturingResponderFactory();
+      const instanceFactory = new InstanceFactoryImpl(logger, responderFactory);
+      const pool = new InstancePoolImpl(
+        instanceFactory,
+        DEFAULT_POOL_CONFIG,
+        logger,
+      );
+      const runtimeAwareFactory = new AgentFactoryImpl(pool, store, eventBus, logger);
+
+      const record = await runtimeAwareFactory.createSession({
+        profileId: "spawned-coder",
+        kind: "delegated",
+        effectiveRuntime: runtime,
+      });
+
+      expect(record.effectiveRuntime).toEqual(runtime);
+      expect(responderFactory.contexts.at(0)?.effectiveRuntime).toEqual(runtime);
+    });
   });
 });
+
+class CapturingResponderFactory implements AgentResponderFactory {
+  readonly contexts: AgentResponderFactoryContext[] = [];
+
+  createResponder(context: AgentResponderFactoryContext): AgentResponder {
+    this.contexts.push(context);
+    return {
+      respond: () => Promise.resolve({ kind: "text", text: "ok" }),
+    };
+  }
+}

@@ -157,7 +157,11 @@ export class RemediationControlService {
         return { accepted: true, before, after: null, warnings: [], denEvidence: localEvidence("dry_run") };
       }
       if (session.instanceId !== null) await this.#instancePool?.release(session.instanceId);
-      const nextInstance = await this.#instancePool?.acquire(session.profileId);
+      const nextInstance = await this.#instancePool?.acquire(
+        session.profileId,
+        session.workerBinding?.role,
+        session.effectiveRuntime ?? undefined,
+      );
       const updated = await this.#sessionStore?.save({
         ...session,
         instanceId: nextInstance?.id ?? null,
