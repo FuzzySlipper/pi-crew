@@ -156,6 +156,7 @@ class McpDenPoolAssignmentConsumer implements DenPoolAssignmentConsumer {
       worker_identity: this.#config.member.workerIdentity,
       state: "ack",
       limit: 1,
+      verbose: true,
     });
 
     if (!result.ok) {

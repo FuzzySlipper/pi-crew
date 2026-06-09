@@ -9,11 +9,7 @@ import { join } from "node:path";
 import { ConfigurationError } from "@pi-crew/core";
 import { describe, expect, it } from "vitest";
 
-import {
-  loadCrewConfig,
-  resolveCrewConfigPath,
-  resolveCrewInstallLayout,
-} from "../config.js";
+import { loadCrewConfig, resolveCrewConfigPath, resolveCrewInstallLayout } from "../config.js";
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "pi-crew-install-layout-"));
@@ -41,7 +37,7 @@ function writeInstalledConfig(root: string): string {
       "profiles:",
       `  root: "${join(root, "profiles")}"`,
       "den:",
-      "  coreUrl: \"http://localhost:3030\"",
+      '  coreUrl: "http://localhost:3030"',
       "  requiredAtStartup: false",
       "",
     ].join("\n"),
@@ -95,7 +91,7 @@ describe("installed config layout", () => {
         "profiles:",
         `  root: "${join(root, "profiles")}"`,
         "den:",
-        "  coreUrl: \"http://localhost:3030\"",
+        '  coreUrl: "http://localhost:3030"',
         "  requiredAtStartup: false",
         "",
       ].join("\n"),
@@ -106,7 +102,8 @@ describe("installed config layout", () => {
   });
 
   it("wraps missing and malformed installed config as configuration errors", () => {
-    expect(() => loadCrewConfig("/home/agents/pi-crew/config.yaml")).toThrow(ConfigurationError);
+    const missingRoot = tempRoot();
+    expect(() => loadCrewConfig(join(missingRoot, "config.yaml"))).toThrow(ConfigurationError);
 
     const root = tempRoot();
     const configPath = join(root, "config.yaml");

@@ -7,9 +7,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { FakeLogger } from "@pi-crew/core";
-import type {
-  CompletionPacket,
-} from "@pi-crew/core";
+import type { CompletionPacket } from "@pi-crew/core";
 import type { MCPClient, ToolCallResult } from "@pi-crew/mcp";
 import { createDenCompletionPoster } from "../den-completion-poster.js";
 
@@ -22,9 +20,7 @@ function makeValidPacket(overrides?: Partial<CompletionPacket>): CompletionPacke
     taskId: "2061",
     status: "completed",
     role: "coder",
-    artifacts: [
-      { type: "pr", ref: "abc123", summary: "Test PR" },
-    ],
+    artifacts: [{ type: "pr", ref: "abc123", summary: "Test PR" }],
     filesTouched: ["src/foo.ts"],
     toolsUsed: ["read_file"],
     tokensConsumed: 1000,
@@ -55,27 +51,23 @@ interface StubMcpClient {
   mcpClient: MCPClient;
 }
 
-function makeStubMcpClient(
-  responses: ToolCallResult[],
-  throws?: Error[],
-): StubMcpClient {
+function makeStubMcpClient(responses: ToolCallResult[], throws?: Error[]): StubMcpClient {
   const calls: Array<{ name: string; params: Record<string, unknown> }> = [];
   let callIndex = 0;
 
-  const mockCallTool = vi.fn<(name: string, params: Record<string, unknown>) => Promise<ToolCallResult>>();
-  mockCallTool.mockImplementation(
-    (name: string, params: Record<string, unknown>) => {
-      calls.push({ name, params });
-      const idx = callIndex;
-      callIndex = callIndex + 1;
+  const mockCallTool =
+    vi.fn<(name: string, params: Record<string, unknown>) => Promise<ToolCallResult>>();
+  mockCallTool.mockImplementation((name: string, params: Record<string, unknown>) => {
+    calls.push({ name, params });
+    const idx = callIndex;
+    callIndex = callIndex + 1;
 
-      if (throws && idx < throws.length && throws[idx]) {
-        return Promise.reject(throws[idx]);
-      }
+    if (throws && idx < throws.length && throws[idx]) {
+      return Promise.reject(throws[idx]);
+    }
 
-      return Promise.resolve(responses[idx] ?? makeOkResult());
-    },
-  );
+    return Promise.resolve(responses[idx] ?? makeOkResult());
+  });
 
   return {
     callToolCalls: calls,
@@ -117,6 +109,30 @@ describe("createDenCompletionPoster", () => {
     }
   });
 
+  it("adds configured repo/test metadata defaults when packet lacks them", async () => {
+    const { mcpClient, callToolCalls } = makeStubMcpClient([makeOkResult()]);
+    const poster = createDenCompletionPoster({
+      mcpClient,
+      projectId: "pi-crew",
+      requestedBy: "test-agent",
+      completionDefaults: {
+        branch: "task/2185-live-smoke-fix",
+        baseCommit: "base-sha",
+        headCommit: "head-sha",
+        testsRun: ["live smoke completed"],
+      },
+    });
+
+    await poster(makeValidPacket());
+
+    expect(callToolCalls[0]?.params).toMatchObject({
+      branch: "task/2185-live-smoke-fix",
+      base_commit: "base-sha",
+      head_commit: "head-sha",
+      tests_run: '["live smoke completed"]',
+    });
+  });
+
   it("maps non-coder worker roles to the canonical Den packet type", async () => {
     const { mcpClient, callToolCalls } = makeStubMcpClient([
       makeOkResult(),
@@ -144,9 +160,7 @@ describe("createDenCompletionPoster", () => {
   });
 
   it("returns accepted:false when Den rejects the packet", async () => {
-    const { mcpClient } = makeStubMcpClient([
-      makeFailResult("Invalid status value"),
-    ]);
+    const { mcpClient } = makeStubMcpClient([makeFailResult("Invalid status value")]);
     const poster = createDenCompletionPoster({
       mcpClient,
       projectId: "pi-crew",
@@ -185,15 +199,13 @@ describe("createDenCompletionPoster", () => {
 
     // Verify warning logs were emitted
     const warnLogs = logger.entries.filter(
-      (e) =>
-        e.message === "DenCompletionPoster: MCP call failed",
+      (e) => e.message === "DenCompletionPoster: MCP call failed",
     );
     expect(warnLogs.length).toBe(3);
 
     // Verify error log after exhaust
     const errorLogs = logger.entries.filter(
-      (e) =>
-        e.message === "DenCompletionPoster: all retries exhausted",
+      (e) => e.message === "DenCompletionPoster: all retries exhausted",
     );
     expect(errorLogs.length).toBe(1);
   });

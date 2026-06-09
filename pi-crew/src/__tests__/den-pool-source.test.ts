@@ -172,7 +172,7 @@ describe("Den pool member source", () => {
     expect((client as unknown as FakeMcpClient).calls).toEqual([
       {
         name: "list_assignments",
-        params: { worker_identity: "pi-crew-coder-1", state: "ack", limit: 1 },
+        params: { worker_identity: "pi-crew-coder-1", state: "ack", limit: 1, verbose: true },
       },
     ]);
   });

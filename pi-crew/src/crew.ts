@@ -65,6 +65,7 @@ import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
 import {
   auditEntryToRecord,
+  completionDefaultsFromEnv,
   createFallbackChannelBinding,
   validateGatewayConfig,
 } from "./crew-helpers.js";
@@ -169,6 +170,7 @@ export class Crew {
       projectId: "pi-crew",
       requestedBy: "pi-crew",
       logger: this.#logger,
+      completionDefaults: completionDefaultsFromEnv(process.env),
     });
 
     // 3c. Agent runtime registry and steer/followUp bridge

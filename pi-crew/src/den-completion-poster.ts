@@ -8,11 +8,7 @@
  * @module pi-crew/den-completion-poster
  */
 
-import type {
-  CompletionPacket,
-  CompletionPostResult,
-  Logger,
-} from "@pi-crew/core";
+import type { CompletionPacket, CompletionPostResult, Logger } from "@pi-crew/core";
 import type { CompletionPoster } from "@pi-crew/tools";
 import type { MCPClient } from "@pi-crew/mcp";
 
@@ -31,6 +27,15 @@ export interface DenCompletionPosterConfig {
 
   /** Optional logger for diagnostic output. */
   readonly logger?: Logger;
+
+  readonly completionDefaults?: DenCompletionDefaults;
+}
+
+export interface DenCompletionDefaults {
+  readonly branch?: string;
+  readonly baseCommit?: string;
+  readonly headCommit?: string;
+  readonly testsRun?: readonly string[];
 }
 
 // ── Retry config ────────────────────────────────────────────────
@@ -61,22 +66,17 @@ const PACKET_TYPE_BY_ROLE: Readonly<Record<string, string>> = {
  * @param config — Configuration for the poster.
  * @returns A CompletionPoster ready for injection into WorkerRuntime.
  */
-export function createDenCompletionPoster(
-  config: DenCompletionPosterConfig,
-): CompletionPoster {
-  const { mcpClient, projectId, requestedBy, logger } = config;
+export function createDenCompletionPoster(config: DenCompletionPosterConfig): CompletionPoster {
+  const { mcpClient, projectId, requestedBy, logger, completionDefaults } = config;
 
   return async (packet: CompletionPacket): Promise<CompletionPostResult> => {
-    const params = buildCompletionParams(packet, projectId, requestedBy);
+    const params = buildCompletionParams(packet, projectId, requestedBy, completionDefaults);
 
     let lastError: string | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const result = await mcpClient.callTool(
-          "post_worker_completion_packet",
-          params,
-        );
+        const result = await mcpClient.callTool("post_worker_completion_packet", params);
 
         if (result.ok) {
           logger?.info("DenCompletionPoster: packet accepted by Den", {
@@ -91,8 +91,7 @@ export function createDenCompletionPoster(
         }
 
         // Den returned an error (tool call succeeded but result was not ok)
-        lastError =
-          result.error ?? "Den MCP tool returned non-ok result";
+        lastError = result.error ?? "Den MCP tool returned non-ok result";
         logger?.warn("DenCompletionPoster: Den rejected packet", {
           assignmentId: packet.assignmentId,
           runId: packet.runId,
@@ -115,10 +114,7 @@ export function createDenCompletionPoster(
         });
 
         if (attempt < MAX_RETRIES) {
-          const delay = Math.min(
-            BASE_DELAY_MS * Math.pow(2, attempt),
-            MAX_DELAY_MS,
-          );
+          const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
           await sleep(delay);
         }
       }
@@ -149,10 +145,11 @@ function buildCompletionParams(
   packet: CompletionPacket,
   projectId: string,
   requestedBy: string,
+  defaults: DenCompletionDefaults | undefined,
 ): Record<string, unknown> {
   const summary = buildSummary(packet);
 
-  return {
+  const params: Record<string, unknown> = {
     project_id: projectId,
     run_id: packet.runId,
     requested_by: requestedBy,
@@ -161,6 +158,11 @@ function buildCompletionParams(
     packet_type: resolvePacketType(packet.role),
     summary,
   };
+  if (defaults?.branch !== undefined) params.branch = defaults.branch;
+  if (defaults?.baseCommit !== undefined) params.base_commit = defaults.baseCommit;
+  if (defaults?.headCommit !== undefined) params.head_commit = defaults.headCommit;
+  if (defaults?.testsRun !== undefined) params.tests_run = JSON.stringify(defaults.testsRun);
+  return params;
 }
 
 function resolvePacketType(role: string): string {
@@ -173,14 +175,10 @@ function resolvePacketType(role: string): string {
 function buildSummary(packet: CompletionPacket): string {
   const parts: string[] = [];
 
-  parts.push(
-    `Assignment ${packet.assignmentId}: ${packet.status} by ${packet.role}`,
-  );
+  parts.push(`Assignment ${packet.assignmentId}: ${packet.status} by ${packet.role}`);
 
   if (packet.artifacts.length > 0) {
-    const artifactDescs = packet.artifacts.map(
-      (a) => `${a.type}: ${a.summary}`,
-    );
+    const artifactDescs = packet.artifacts.map((a) => `${a.type}: ${a.summary}`);
     parts.push(`Artifacts: ${artifactDescs.join("; ")}`);
   }
 
@@ -199,9 +197,7 @@ function buildSummary(packet: CompletionPacket): string {
   }
 
   if (packet.blocker) {
-    parts.push(
-      `Blocker: ${packet.blocker.reason} (requires: ${packet.blocker.requires})`,
-    );
+    parts.push(`Blocker: ${packet.blocker.reason} (requires: ${packet.blocker.requires})`);
   }
 
   return parts.join(" | ");
