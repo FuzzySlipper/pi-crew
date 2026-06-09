@@ -319,8 +319,7 @@ export interface DelegationToolVisiblePayload extends DelegationVisibilityPayloa
 }
 
 /** Fired when a delegated session completes or fails. */
-export interface DelegationCompletedPayload {
-  readonly lineage: DelegationLineage;
+export interface DelegationCompletedPayload extends DelegationVisibilityPayload {
   readonly result: DelegatedResult;
 }
 

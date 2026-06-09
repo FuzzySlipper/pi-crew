@@ -65,6 +65,8 @@ describe("delegation visibility events", () => {
     const completed: GatewayEvent = {
       event: "delegation.completed",
       payload: {
+        assignmentId: "assignment-1",
+        childSessionId: "child-a",
         result: {
           childSessionId: "child-a",
           effectiveRuntime,
@@ -73,6 +75,10 @@ describe("delegation visibility events", () => {
           summary: "finished",
         },
         lineage,
+        policyId: "policy-child-a",
+        profileId: "spawned-coder",
+        runId: "piw-child-a",
+        taskId: "2167",
       },
     };
     const timeout: GatewayEvent = {
@@ -110,6 +116,9 @@ describe("delegation visibility events", () => {
     };
 
     expect(completed.payload.result.outcome).toBe("success");
+    expect(completed.payload.childSessionId).toBe("child-a");
+    expect(completed.payload.runId).toBe("piw-child-a");
+    expect(completed.payload.taskId).toBe("2167");
     expect(timeout.payload.childSessionId).toBe("child-b");
     expect(killed.payload.initiatedBy).toBe("timeout");
     expect(orphan.payload.orphanSessionId).toBe("child-b");
