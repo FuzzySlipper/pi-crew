@@ -134,6 +134,12 @@ export {
   type WorkerExecutionContext,
   type WorkerExecutionResult,
 } from "./workers/worker-runtime.js";
+export {
+  InMemoryToolPolicySessionRegistry,
+  ToolPolicyExtension,
+  type ToolPolicySessionContext,
+  type ToolPolicySessionRegistry,
+} from "./workers/tool-policy-extension.js";
 export { AssignmentTimeoutError } from "./workers/worker-timeout.js";
 export {
   type WorkerRoleBinding,

@@ -89,14 +89,27 @@ export function buildGuardedToolContext(
       afterToolCall: hookBacked === undefined
         ? createAfterToolCallHook(assemblyConfig)
         : async (ctx: AfterToolCallContext): Promise<AfterToolCallResult | undefined> => {
-          const content = await hookBacked.afterToolCall(
+          const modifier = await hookBacked.afterToolCall(
             ctx.result.content,
             ctx.toolCall.name,
             ctx.toolCall.id,
             ctx.args,
             ctx.isError,
           );
-          return content === null ? undefined : { content: coerceToolContent(content) };
+          if (modifier === null) return undefined;
+          if (modifier.errorOverride !== undefined) {
+            logger.warn("after_tool_call errorOverride unsupported by Agent bridge", {
+              toolName: ctx.toolCall.name,
+              toolCallId: ctx.toolCall.id,
+            });
+          }
+          return {
+            content: modifier.contentOverride === undefined
+              ? undefined
+              : coerceToolContent(modifier.contentOverride),
+            isError: modifier.isErrorOverride,
+            terminate: modifier.terminate,
+          };
         },
     }),
     assembleGuardedTools: (

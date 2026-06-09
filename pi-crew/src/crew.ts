@@ -1,13 +1,4 @@
-/**
- * pi-crew composition root — wires all modules into a running gateway.
- *
- * The only file that instantiates concrete adapters (DenChannelsAdapter),
- * persistence backends (RuntimeDb), and platform connections. Every other
- * module depends on interfaces (ChannelProvider, EventBus, Logger) defined
- * in pi-core.
- *
- * @module pi-crew/crew
- */
+/** pi-crew composition root — wires all modules into a running gateway. */
 
 import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
 import { FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
@@ -30,11 +21,15 @@ import {
   ExtensionActivator,
   createServiceExtensionContext,
   createUnavailableDelegationSessionBridge,
+  InMemoryToolPolicySessionRegistry,
+  ToolPolicyExtension,
+  AgentRuntimeRegistry,
   SqliteAuditRepository,
   SqliteSessionRepository,
   type GatewayConfig,
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
+  type WorkerRuntimeConfig,
   type ChannelBinding,
   type AgentWorkerExecutor,
 } from "@pi-crew/service";
@@ -58,7 +53,6 @@ import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
-import { AgentRuntimeRegistry } from "@pi-crew/service";
 import type { CompletionPoster } from "@pi-crew/tools";
 
 // ── Crew ───────────────────────────────────────────────────────
@@ -119,6 +113,7 @@ export class Crew {
     this.#logger = logger ?? new FakeLogger();
     this.#eventBus = eventBus ?? new FakeEventBus();
     const hookRegistry = new InMemoryHookRegistry(this.#logger);
+    const toolPolicySessions = new InMemoryToolPolicySessionRegistry();
 
     // Build the GatewayConfig subset for pi-service
     this.#gatewayConfig = loadConfig({
@@ -135,9 +130,10 @@ export class Crew {
       logger: this.#logger,
       eventBus: this.#eventBus,
       hookRegistry,
+      toolPolicySessionRegistry: toolPolicySessions,
     });
     this.#extensionActivator = new ExtensionActivator({
-      extensions: [],
+      extensions: [new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry)],
       context: createServiceExtensionContext({
         config: this.#registry.config,
         logger: this.#registry.logger,
@@ -432,16 +428,15 @@ export class Crew {
     return this.#toolPolicyEnforcer;
   }
 
-  /**
-   * Registry of active supervised Agents.
-   *
-   * WorkerRuntime instances register their Agent on start and
-   * unregister on end.  The steer/followUp bridge queries this
-   * registry to route mid-assignment interaction from Den Channels
-   * direct-agent events.
-   */
   get agentRegistry(): AgentRuntimeRegistry {
     return this.#agentRegistry;
+  }
+
+  get workerRuntimeHooks(): Pick<WorkerRuntimeConfig, "hookRegistry" | "toolPolicySessionRegistry"> {
+    return {
+      hookRegistry: this.#registry.hookRegistry,
+      toolPolicySessionRegistry: this.#registry.toolPolicySessionRegistry,
+    };
   }
 
   /** Validated worker role mapping for injecting into WorkerRuntime. */

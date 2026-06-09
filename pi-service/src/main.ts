@@ -128,7 +128,13 @@ async function main(): Promise<void> {
   const eventBus = new FakeEventBus();
   const hookRegistry = new InMemoryHookRegistry(logger);
   const toolPolicySessions = new InMemoryToolPolicySessionRegistry();
-  const registry = createServiceRegistry({ config, logger, eventBus, hookRegistry });
+  const registry = createServiceRegistry({
+    config,
+    logger,
+    eventBus,
+    hookRegistry,
+    toolPolicySessionRegistry: toolPolicySessions,
+  });
   const extensionContext = createServiceExtensionContext({
     config: registry.config,
     logger: registry.logger,
@@ -139,7 +145,7 @@ async function main(): Promise<void> {
   // DESIGN: main is the composition root and owns the concrete extension list.
   // Rationale: lower packages expose contracts; service startup alone decides order.
   extensionActivator = new ExtensionActivator({
-    extensions: [new ToolPolicyExtension(toolPolicySessions)],
+    extensions: [new ToolPolicyExtension(registry.toolPolicySessionRegistry)],
     context: extensionContext,
   });
   await extensionActivator.activateAll();

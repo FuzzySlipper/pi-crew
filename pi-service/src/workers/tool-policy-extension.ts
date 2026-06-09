@@ -3,6 +3,7 @@ import type {
   ExecutionPolicy,
   GatewayEvent,
   HookRegistry,
+  AfterToolCallModifier,
   WorkerPolicy,
 } from "@pi-crew/core";
 import {
@@ -143,7 +144,7 @@ export function createHookBackedToolPolicyHooks(options: {
     toolCallId: string,
     args: unknown,
     isError: boolean,
-  ): Promise<readonly unknown[] | null>;
+  ): Promise<AfterToolCallModifier | null>;
 } {
   return {
     beforeToolCall: async (toolName, toolCallId, args) => {
@@ -171,9 +172,16 @@ export function createHookBackedToolPolicyHooks(options: {
         taskId: options.session.binding.taskId,
         profileId: options.session.profileId,
       });
-      return result.contentOverride ?? null;
+      return hasAfterToolCallModifier(result) ? result : null;
     },
   };
+}
+
+function hasAfterToolCallModifier(result: AfterToolCallModifier): boolean {
+  return result.contentOverride !== undefined
+    || result.isErrorOverride !== undefined
+    || result.errorOverride !== undefined
+    || result.terminate !== undefined;
 }
 
 function firstDenial(

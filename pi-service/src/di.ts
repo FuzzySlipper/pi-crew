@@ -13,6 +13,7 @@
 
 import type { Logger, EventBus, HookRegistry } from "@pi-crew/core";
 import type { GatewayConfig } from "./config.js";
+import type { ToolPolicySessionRegistry } from "./workers/tool-policy-extension.js";
 
 // ── Service registry ────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ export interface ServiceRegistry {
 
   /** Typed hook registry for service extension interception. */
   readonly hookRegistry: HookRegistry;
+  readonly toolPolicySessionRegistry: ToolPolicySessionRegistry;
 }
 
 // ── Factory ─────────────────────────────────────────────────────
@@ -51,6 +53,7 @@ export interface CreateRegistryOptions {
   eventBus: EventBus;
   /** Type-safe hook registry implementation. */
   hookRegistry: HookRegistry;
+  toolPolicySessionRegistry: ToolPolicySessionRegistry;
 }
 
 /**
@@ -68,5 +71,6 @@ export function createServiceRegistry(
     logger: options.logger,
     eventBus: options.eventBus,
     hookRegistry: options.hookRegistry,
+    toolPolicySessionRegistry: options.toolPolicySessionRegistry,
   };
 }

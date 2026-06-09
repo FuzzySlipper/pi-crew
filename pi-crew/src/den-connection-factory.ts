@@ -151,14 +151,15 @@ function validateHttpConfig(den: DenConfig): void {
     );
   }
   if (den.channelsAllowLegacyDirectPolling) return;
-  const missing = [
+  const requiredFields: ReadonlyArray<readonly [string, string]> = [
     ["channelsSubscriptionChannelId", den.channelsSubscriptionChannelId],
     ["channelsProfileIdentity", den.channelsProfileIdentity],
     ["channelsAgentInstanceId", den.channelsAgentInstanceId],
     ["channelsSessionOwnerId", den.channelsSessionOwnerId],
     ["channelsSessionId", den.channelsSessionId],
     ["channelsSubscriptionIdentity", den.channelsSubscriptionIdentity],
-  ].find((entry) => entry[1].length === 0)?.[0];
+  ];
+  const missing = requiredFields.find((entry) => entry[1].length === 0)?.[0];
   if (missing !== undefined) {
     throw new ConfigurationError(
       `den.${missing} is required for HTTP Channels v8 subscription registration`,

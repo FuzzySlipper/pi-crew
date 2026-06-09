@@ -1,11 +1,4 @@
-/**
- * Integration tests for the Crew composition root.
- *
- * Covers: bootstrap wiring, message routing, session lifecycle,
- * governance breadcrumbs, audit log capture, and graceful shutdown.
- *
- * @module pi-crew/__tests__/crew
- */
+/** Integration tests for the Crew composition root. */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -23,19 +16,22 @@ import {
   type CrewConfig,
 } from "../crew.js";
 
-// ── Test helpers ──────────────────────────────────────────────
-
 let nextHealthPort = 19_236;
 
-function makeTestCrewConfig(overrides?: Partial<CrewConfig>): CrewConfig {
+type CrewConfigOverrides = Omit<Partial<CrewConfig>, "den" | "sessions"> & {
+  readonly den?: Partial<CrewConfig["den"]>; readonly sessions?: Partial<CrewConfig["sessions"]>;
+};
+function makeTestCrewConfig(overrides?: CrewConfigOverrides): CrewConfig {
   const parsed = CrewConfigSchema.safeParse({
     database: { path: makeTempDbPath(), wal: true },
     health: { host: "127.0.0.1", port: nextHealthPort++ },
     den: {
       coreUrl: "http://localhost:3030",
       requiredAtStartup: false,
+      ...overrides?.den,
     },
-    ...overrides,
+    ...omitNestedOverrides(overrides),
+    ...(overrides?.sessions === undefined ? {} : { sessions: overrides.sessions }),
   });
   if (!parsed.success) {
     throw new Error(
@@ -43,6 +39,14 @@ function makeTestCrewConfig(overrides?: Partial<CrewConfig>): CrewConfig {
     );
   }
   return parsed.data;
+}
+
+function omitNestedOverrides(overrides: CrewConfigOverrides | undefined): Omit<CrewConfigOverrides, "den" | "sessions"> {
+  if (overrides === undefined) return {};
+  const rest: Record<string, unknown> = { ...overrides };
+  delete rest["den"];
+  delete rest["sessions"];
+  return rest;
 }
 
 function makeTempDbPath(): string {
@@ -110,6 +114,8 @@ describe("Crew composition root", () => {
     expect(crew.breadcrumbManager).toBeDefined();
     expect(crew.auditLogger).toBeDefined();
     expect(crew.toolPolicyEnforcer).toBeDefined();
+    expect(crew.workerRuntimeHooks.hookRegistry).toBeDefined();
+    expect(crew.workerRuntimeHooks.toolPolicySessionRegistry).toBeDefined();
   });
 
   it("logs assembly info at construction", () => {
@@ -473,8 +479,8 @@ describe("loadCrewConfig", () => {
 // ── Bootstrap via YAML file ────────────────────────────────────
 
 describe("bootstrap from YAML", () => {
-  it("loads config from default.yaml with channels settings", () => {
-    const config = loadCrewConfig("pi-crew/config/default.yaml");
+  it("loads config from YAML with channels settings", () => {
+    const config = loadCrewConfig(writeTempConfigYaml());
     expect(config).toBeDefined();
     expect(config.den.coreUrl).toBeDefined();
     expect(typeof config.den.coreUrl).toBe("string");

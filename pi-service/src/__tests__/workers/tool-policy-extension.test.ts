@@ -195,6 +195,26 @@ describe("ToolPolicyExtension hook migration", () => {
     await harness.extension.deactivate();
   });
 
+  it("preserves non-content after_tool_call modifier fields", async () => {
+    const harness = makeExtensionHarness();
+    const guardedContext = makeGuardedContext(harness);
+    harness.hookRegistry.register("after_tool_call", () => ({
+      isErrorOverride: true,
+      terminate: true,
+    }), { name: "test.after-tool-modifier", priority: 20 });
+    const result = await guardedContext.createGuardedToolHooks().afterToolCall({
+      toolCall: { type: "toolCall", id: "call-safe", name: "safe_tool", input: {} },
+      args: {},
+      result: { content: [{ type: "text", text: "ok" }], details: undefined },
+      isError: false,
+    });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.terminate).toBe(true);
+    guardedContext.dispose?.();
+    await harness.extension.deactivate();
+  });
+
   it("wires HookRegistry policy through the WorkerRuntime Agent supervisor path", async () => {
     const harness = makeExtensionHarness();
     const runtime = new WorkerRuntime(

@@ -7,6 +7,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -23,14 +24,21 @@ function makeTempDbPath(): string {
   return join(mkdtempSync(join(tmpdir(), "pi-crew-den-test-")), "runtime.db");
 }
 
-function makeTestCrewConfig(overrides?: Partial<CrewConfig>): CrewConfig {
+type CrewConfigOverrides = Omit<Partial<CrewConfig>, "den" | "sessions"> & {
+  readonly den?: Partial<CrewConfig["den"]>;
+  readonly sessions?: Partial<CrewConfig["sessions"]>;
+};
+
+function makeTestCrewConfig(overrides?: CrewConfigOverrides): CrewConfig {
   const parsed = CrewConfigSchema.safeParse({
     database: { path: makeTempDbPath(), wal: true },
     den: {
       coreUrl: "http://localhost:3030",
       requiredAtStartup: false,
+      ...overrides?.den,
     },
-    ...overrides,
+    ...omitNestedOverrides(overrides),
+    ...(overrides?.sessions === undefined ? {} : { sessions: overrides.sessions }),
   });
   if (!parsed.success) {
     throw new Error(
@@ -38,6 +46,16 @@ function makeTestCrewConfig(overrides?: Partial<CrewConfig>): CrewConfig {
     );
   }
   return parsed.data;
+}
+
+function omitNestedOverrides(
+  overrides: CrewConfigOverrides | undefined,
+): Omit<CrewConfigOverrides, "den" | "sessions"> {
+  if (overrides === undefined) return {};
+  const rest: Record<string, unknown> = { ...overrides };
+  delete rest["den"];
+  delete rest["sessions"];
+  return rest;
 }
 
 describe("Den Channels production connection config", () => {
@@ -280,7 +298,7 @@ describe("Den Channels production connection config", () => {
   });
 
   it("loads default.yaml with live Channels settings", () => {
-    const config = loadCrewConfig("pi-crew/config/default.yaml");
+    const config = loadCrewConfig(fileURLToPath(new URL("../../config/default.yaml", import.meta.url)));
 
     expect(config.den.coreUrl).toBe("http://192.168.1.10:18080/den-core-api");
     expect(config.mcp.endpoint).toBe("http://192.168.1.10:5199/mcp");
