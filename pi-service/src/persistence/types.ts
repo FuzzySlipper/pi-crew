@@ -192,6 +192,8 @@ export function rowToRecord(row: SessionRow): SessionRecord {
     workerBinding: parseWorkerBinding(row.worker_binding_json),
     delegation: parseDelegationLineage(row.delegation_json),
     delegationSpawnRequest: parseDelegationSpawnRequest(row.delegation_spawn_request_json),
+    delegationConstraints: null,
+    effectiveRuntime: null,
   };
 }
 

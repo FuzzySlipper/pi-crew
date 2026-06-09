@@ -20,10 +20,10 @@ import type {
 } from "../../extension-activator.js";
 import {
   DelegatedSpawnLifecycle,
-  createDelegatedSpawnTool,
   type DelegatedChildRunInput,
   type DelegatedChildRunner,
 } from "../../workers/delegated-spawn-lifecycle.js";
+import { createDelegatedSpawnTool } from "../../workers/delegated-spawn-tool.js";
 
 const parentPolicy = createExecutionPolicy({
   policyId: "policy-parent",

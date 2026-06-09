@@ -57,6 +57,8 @@ export class SessionManagerDelegationSessionBridge implements DelegationSessionB
       kind: "delegated",
       delegation: lineage ?? fallbackLineage(request.parentSessionId, sessionId),
       delegationSpawnRequest: spawnRequest ?? { task: "delegated child task" },
+      delegationConstraints: request.delegationConstraints,
+      effectiveRuntime: request.effectiveRuntime,
     });
     this.#policies.set(record.id, request.policy);
     this.#logger.info("Delegated session created", {

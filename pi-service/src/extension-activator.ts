@@ -10,6 +10,8 @@
  */
 
 import type {
+  DelegationConstraints,
+  EffectiveDelegationRuntime,
   EventBus,
   ExecutionPolicy,
   ExtensionContext,
@@ -45,6 +47,10 @@ export interface DelegatedSessionCreateRequest {
   readonly profileId: string;
   /** Child execution policy derived from the parent policy. */
   readonly policy: ExecutionPolicy;
+  /** Child runtime selected by the lifecycle after fail-closed validation. */
+  readonly effectiveRuntime?: EffectiveDelegationRuntime;
+  /** Child's remaining delegation budget for descendants. */
+  readonly delegationConstraints?: DelegationConstraints;
   /** Optional Den/runtime visibility metadata emitted with the spawn. */
   readonly visibility?: Readonly<Record<string, unknown>>;
 }

@@ -182,7 +182,6 @@ export {
 } from "./workers/agent-worker-executor.js";
 export {
   DelegatedSpawnLifecycle,
-  createDelegatedSpawnTool,
   type DelegatedChildRunInput,
   type DelegatedChildRunner,
   type DelegatedPolicyRequest,
@@ -194,6 +193,7 @@ export {
   type DelegatedToolVisibilityInput,
   type DelegatedTurnVisibilityInput,
 } from "./workers/delegated-spawn-lifecycle.js";
+export { createDelegatedSpawnTool } from "./workers/delegated-spawn-tool.js";
 export {
   SessionManagerDelegationSessionBridge,
   type SessionManagerDelegationBridgeConfig,

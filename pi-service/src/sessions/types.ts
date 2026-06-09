@@ -8,7 +8,13 @@
  * @module pi-service/sessions/types
  */
 
-import type { DelegationLineage, DelegationSpawnRequest, SessionKind } from "@pi-crew/core";
+import type {
+  DelegationConstraints,
+  DelegationLineage,
+  DelegationSpawnRequest,
+  EffectiveDelegationRuntime,
+  SessionKind,
+} from "@pi-crew/core";
 
 // ── Channel binding ─────────────────────────────────────────────
 
@@ -102,6 +108,10 @@ export interface SessionRecord {
   readonly delegation: DelegationLineage | null;
   /** Original spawn request retained for audit/result routing. */
   readonly delegationSpawnRequest: DelegationSpawnRequest | null;
+  /** Remaining delegation budget inherited by this session's descendants. */
+  readonly delegationConstraints?: DelegationConstraints | null;
+  /** Effective runtime selected for this session, including model/provider overrides. */
+  readonly effectiveRuntime?: EffectiveDelegationRuntime | null;
   /** When the session was first created (ISO-8601). */
   readonly createdAt: string;
   /** When the session was last active (ISO-8601). */
@@ -136,4 +146,8 @@ export interface SessionConfig {
   readonly delegation?: DelegationLineage;
   /** Spawn request used to create the child session. */
   readonly delegationSpawnRequest?: DelegationSpawnRequest;
+  /** Remaining delegation budget for this delegated session. */
+  readonly delegationConstraints?: DelegationConstraints;
+  /** Effective runtime selected for this session. */
+  readonly effectiveRuntime?: EffectiveDelegationRuntime;
 }

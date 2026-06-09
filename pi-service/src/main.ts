@@ -17,16 +17,21 @@ import { createServiceRegistry } from "./di.js";
 import {
   ExtensionActivator,
   createServiceExtensionContext,
-  createUnavailableDelegationSessionBridge,
 } from "./extension-activator.js";
 import { Gateway } from "./gateway.js";
 import { AdminServer } from "./admin/admin-server.js";
 import { RuntimeMetricsCollector, renderPrometheusMetrics } from "./diagnostics/runtime-metrics.js";
 import type { DiagnosticsOverview } from "./diagnostics/types.js";
+import { AgentFactoryImpl } from "./agents/agent-factory.js";
+import { InstanceFactoryImpl } from "./instances/instance-factory.js";
+import { DEFAULT_POOL_CONFIG, InstancePoolImpl } from "./instances/instance-pool.js";
+import { InMemorySessionStore } from "./sessions/session-store.js";
+import { SessionManagerImpl } from "./sessions/session-manager.js";
 import {
   InMemoryToolPolicySessionRegistry,
   ToolPolicyExtension,
 } from "./workers/tool-policy-extension.js";
+import { SessionManagerDelegationSessionBridge } from "./workers/delegation-session-bridge.js";
 
 // ── Signal handlers ─────────────────────────────────────────────
 
@@ -128,6 +133,27 @@ async function main(): Promise<void> {
   const eventBus = new FakeEventBus();
   const hookRegistry = new InMemoryHookRegistry(logger);
   const toolPolicySessions = new InMemoryToolPolicySessionRegistry();
+  const sessionStore = new InMemorySessionStore();
+  const instancePool = new InstancePoolImpl(
+    new InstanceFactoryImpl(logger),
+    DEFAULT_POOL_CONFIG,
+    logger,
+  );
+  const agentFactory = new AgentFactoryImpl(instancePool, sessionStore, eventBus, logger);
+  const sessionManager = new SessionManagerImpl(
+    sessionStore,
+    agentFactory,
+    instancePool,
+    eventBus,
+    logger,
+    "default",
+  );
+  const delegationBridge = new SessionManagerDelegationSessionBridge({
+    sessionManager,
+    sessionStore,
+    eventBus,
+    logger,
+  });
   const registry = createServiceRegistry({
     config,
     logger,
@@ -140,7 +166,7 @@ async function main(): Promise<void> {
     logger: registry.logger,
     eventBus: registry.eventBus,
     hookRegistry: registry.hookRegistry,
-    delegationSessions: createUnavailableDelegationSessionBridge(),
+    delegationSessions: delegationBridge,
   });
   // DESIGN: main is the composition root and owns the concrete extension list.
   // Rationale: lower packages expose contracts; service startup alone decides order.

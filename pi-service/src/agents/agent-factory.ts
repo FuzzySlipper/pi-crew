@@ -62,6 +62,8 @@ export class AgentFactoryImpl implements AgentFactory {
       kind: config.kind,
       delegation: config.delegation ?? null,
       delegationSpawnRequest: config.delegationSpawnRequest ?? null,
+      delegationConstraints: config.delegationConstraints ?? null,
+      effectiveRuntime: config.effectiveRuntime ?? null,
       createdAt: now,
       lastActiveAt: now,
       state: "active",
