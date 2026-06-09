@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { FakeEventBus, FakeLogger } from "@pi-crew/core";
-import { createWorkerPolicy } from "../worker-policy.js";
+import { createWorkerPolicy } from "../execution-policy.js";
 import { DrainModeManager } from "../drain-mode.js";
 import { ContextUsageTrackerImpl } from "../context-status.js";
 

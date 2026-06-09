@@ -1,6 +1,6 @@
 /**
  * ToolPolicyEnforcer — enforces allowlist/denylist tool filtering
- * per worker session.
+ * per execution session.
  *
  * Every tool call passes through this enforcer before execution.
  * Denied tools cannot be called even if present in the registry.
@@ -9,7 +9,7 @@
  */
 
 import type {
-  WorkerPolicy,
+  ExecutionPolicy,
   EventBus,
   Logger,
 } from "@pi-crew/core";
@@ -30,7 +30,7 @@ export interface ToolFilterResult {
 // ── ToolPolicyEnforcer ────────────────────────────────────────
 
 /**
- * Enforces per-session tool restrictions based on {@link WorkerPolicy}.
+ * Enforces per-session tool restrictions based on {@link ExecutionPolicy}.
  *
  * - Checks denylist first (explicitly denied tools).
  * - Checks allowlist second (if non-empty, only listed tools pass).
@@ -45,13 +45,13 @@ export class ToolPolicyEnforcer {
   /**
    * Check whether a tool is allowed for the given session policy.
    *
-   * @param policy — The worker policy for the current session.
+   * @param policy — The execution policy for the current session.
    * @param toolName — The tool name being requested.
    * @param sessionId — The session requesting the tool.
    * @returns A {@link ToolFilterResult} indicating whether the tool is allowed.
    */
   checkTool(
-    policy: WorkerPolicy,
+    policy: ExecutionPolicy,
     toolName: string,
     sessionId: string,
   ): ToolFilterResult {
@@ -61,7 +61,8 @@ export class ToolPolicyEnforcer {
       this.logger.warn("ToolPolicyEnforcer: tool denied (denylist)", {
         toolName,
         sessionId,
-        assignmentId: policy.assignmentId,
+        assignmentId: getWorkerAssignmentId(policy),
+        policyId: policy.policyId,
       });
       this.emitDenied(policy, toolName, sessionId, reason);
       return { allowed: false, reason };
@@ -76,7 +77,8 @@ export class ToolPolicyEnforcer {
       this.logger.warn("ToolPolicyEnforcer: tool denied (allowlist)", {
         toolName,
         sessionId,
-        assignmentId: policy.assignmentId,
+        assignmentId: getWorkerAssignmentId(policy),
+        policyId: policy.policyId,
       });
       this.emitDenied(policy, toolName, sessionId, reason);
       return { allowed: false, reason };
@@ -96,7 +98,7 @@ export class ToolPolicyEnforcer {
    * @throws {ToolDeniedError} when the tool is not allowed.
    */
   requireTool(
-    policy: WorkerPolicy,
+    policy: ExecutionPolicy,
     toolName: string,
     sessionId: string,
   ): void {
@@ -112,7 +114,7 @@ export class ToolPolicyEnforcer {
    * @returns The subset of tool names that pass the policy check.
    */
   filterToolNames(
-    policy: WorkerPolicy,
+    policy: ExecutionPolicy,
     toolNames: string[],
     sessionId: string,
   ): string[] {
@@ -128,7 +130,7 @@ export class ToolPolicyEnforcer {
   // ── Event emission ────────────────────────────────────────
 
   private emitDenied(
-    policy: WorkerPolicy,
+    policy: ExecutionPolicy,
     toolName: string,
     sessionId: string,
     reason: string,
@@ -139,7 +141,8 @@ export class ToolPolicyEnforcer {
         toolName,
         sessionId,
         reason,
-        assignmentId: policy.assignmentId,
+        policyId: policy.policyId,
+        assignmentId: getWorkerAssignmentId(policy),
         runId: undefined,
         taskId: undefined,
       },
@@ -152,13 +155,14 @@ export class ToolPolicyEnforcer {
         checkKind: "tool",
         allowed: false,
         detail: reason,
-        assignmentId: policy.assignmentId,
+        policyId: policy.policyId,
+        assignmentId: getWorkerAssignmentId(policy),
       },
     });
   }
 
   private emitEnforced(
-    policy: WorkerPolicy,
+    policy: ExecutionPolicy,
     sessionId: string,
     checkKind: "tool",
     allowed: boolean,
@@ -171,8 +175,16 @@ export class ToolPolicyEnforcer {
         checkKind,
         allowed,
         detail,
-        assignmentId: policy.assignmentId,
+        policyId: policy.policyId,
+        assignmentId: getWorkerAssignmentId(policy),
       },
     });
   }
+}
+
+function getWorkerAssignmentId(policy: ExecutionPolicy): string | undefined {
+  if ("assignmentId" in policy && typeof policy.assignmentId === "string") {
+    return policy.assignmentId;
+  }
+  return undefined;
 }

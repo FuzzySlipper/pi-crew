@@ -14,6 +14,7 @@ import type { ChannelMembershipStatus, ChannelSubscriptionStatus } from "./chann
 
 /** Optional Den worker correlation carried by runtime-originated events. */
 export interface DenWorkerCorrelationPayload {
+  readonly policyId?: string;
   readonly assignmentId?: string;
   readonly runId?: string;
   readonly taskId?: string;
@@ -173,7 +174,8 @@ export interface ToolDeniedPayload {
   readonly toolName: string;
   readonly sessionId: string;
   readonly reason: string;
-  /** Den correlation IDs. */
+  /** Policy and optional Den correlation IDs. */
+  readonly policyId?: string;
   readonly assignmentId?: string;
   readonly runId?: string;
   readonly taskId?: string;
@@ -183,7 +185,8 @@ export interface ToolDeniedPayload {
 export interface DrainActivatedPayload {
   readonly sessionId: string;
   readonly reason: "iteration_budget" | "context_limit" | "timeout" | "policy";
-  /** Den correlation IDs. */
+  /** Policy and optional Den correlation IDs. */
+  readonly policyId?: string;
   readonly assignmentId?: string;
   readonly runId?: string;
   readonly taskId?: string;
@@ -192,7 +195,8 @@ export interface DrainActivatedPayload {
 /** Fired when drain mode is deactivated (e.g., fresh session start). */
 export interface DrainDeactivatedPayload {
   readonly sessionId: string;
-  /** Den correlation IDs. */
+  /** Policy and optional Den correlation IDs. */
+  readonly policyId?: string;
   readonly assignmentId?: string;
   readonly runId?: string;
 }
@@ -203,7 +207,8 @@ export interface PolicyEnforcedPayload {
   readonly checkKind: "path" | "tool" | "host" | "timeout" | "credential";
   readonly allowed: boolean;
   readonly detail: string;
-  /** Den correlation IDs. */
+  /** Policy and optional Den correlation IDs. */
+  readonly policyId?: string;
   readonly assignmentId?: string;
   readonly runId?: string;
   readonly taskId?: string;

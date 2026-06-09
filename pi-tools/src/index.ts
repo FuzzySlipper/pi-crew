@@ -39,11 +39,12 @@ export function createToolRegistry(): ToolRegistry {
   };
 }
 
-// ── Worker policy ─────────────────────────────────────────────
-
+// ── Execution policy ──────────────────────────────────────────
 export {
+  type ExecutionPolicyInput,
   type WorkerPolicyInput,
   type CredentialAccessLevel,
+  createExecutionPolicy,
   createWorkerPolicy,
   isPathAllowed,
   isHostAllowed,
@@ -53,7 +54,7 @@ export {
   trimTrailingSeparator,
   isIterationBudgetExhausted,
   isIterationBudgetLow,
-} from "./worker-policy.js";
+} from "./execution-policy.js";
 
 // ── Tool policy enforcer ──────────────────────────────────────
 

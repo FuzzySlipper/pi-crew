@@ -6,13 +6,14 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import {
+  createExecutionPolicy,
   createWorkerPolicy,
   isPathAllowed,
   isHostAllowed,
   isCredentialAccessAllowed,
   isIterationBudgetExhausted,
   isIterationBudgetLow,
-} from "../worker-policy.js";
+} from "../execution-policy.js";
 
 describe("createWorkerPolicy", () => {
   const minimalInput = {
@@ -26,8 +27,10 @@ describe("createWorkerPolicy", () => {
     const policy = createWorkerPolicy(minimalInput);
 
     expect(policy.assignmentId).toBe("42");
+    expect(policy.policyId).toBe("42");
     expect(policy.role).toBe("coder");
     expect(policy.workdir).toBe("/tmp/pi-worker");
+    expect(policy.rootPath).toBe("/tmp/pi-worker");
     expect(policy.allowedTools).toEqual([]);
     expect(policy.deniedTools).toEqual([]);
     expect(policy.allowedPaths).toEqual([]);
@@ -71,6 +74,46 @@ describe("createWorkerPolicy", () => {
     expect(policy.credentialScope).toBe("bounded_write");
     expect(policy.releaseOnCompletion).toBe(false);
     expect(policy.cleanupWorkdir).toBe(false);
+  });
+});
+
+describe("createExecutionPolicy", () => {
+  it("creates a plain non-worker policy without assignment metadata", () => {
+    const policy = createExecutionPolicy({
+      policyId: "session-1",
+      rootPath: "/opt/session",
+      allowedTools: ["read_file"],
+      allowedHosts: ["api.example.com"],
+      credentialScope: "read_only",
+    });
+
+    expect(policy.policyId).toBe("session-1");
+    expect(policy.rootPath).toBe("/opt/session");
+    expect("assignmentId" in policy).toBe(false);
+    expect("role" in policy).toBe(false);
+    expect(policy.allowedTools).toEqual(["read_file"]);
+    expect(policy.allowedHosts).toEqual(["api.example.com"]);
+    expect(policy.credentialScope).toBe("read_only");
+  });
+
+  it("supports generic policy helpers without worker metadata", () => {
+    const policy = createExecutionPolicy({
+      policyId: "session-2",
+      rootPath: "/opt/session",
+      allowedPaths: ["/opt/session/src"],
+      deniedHosts: ["evil.com"],
+      maxIterations: 10,
+      credentialScope: "bounded_write",
+    });
+
+    expect(isPathAllowed(policy, "/opt/session/src/main.ts")).toBe(true);
+    expect(isPathAllowed(policy, "/opt/session/private/key.pem")).toBe(false);
+    expect(isHostAllowed(policy, "safe.example.com")).toBe(true);
+    expect(isHostAllowed(policy, "evil.com")).toBe(false);
+    expect(isCredentialAccessAllowed(policy, "read_only")).toBe(true);
+    expect(isCredentialAccessAllowed(policy, "full")).toBe(false);
+    expect(isIterationBudgetExhausted(policy, 10)).toBe(true);
+    expect(isIterationBudgetLow(policy, 8)).toBe(true);
   });
 });
 

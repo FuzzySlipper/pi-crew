@@ -30,6 +30,16 @@ export {
   err,
 } from "./types.js";
 
+// ── Security policy ───────────────────────────────────────────
+export {
+  type ExecutionPolicy,
+  type CredentialAccessLevel,
+  type PolicyCheckResult,
+  type SandboxLevel,
+  type SandboxBackend,
+  type SandboxContext,
+} from "./security.js";
+
 // ── Error hierarchy ───────────────────────────────────────────
 export {
   GatewayError,

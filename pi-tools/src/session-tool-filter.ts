@@ -8,7 +8,7 @@
  * @module pi-tools/session-tool-filter
  */
 
-import type { WorkerPolicy, EventBus, Logger } from "@pi-crew/core";
+import type { ExecutionPolicy, EventBus, Logger } from "@pi-crew/core";
 import { ToolPolicyEnforcer } from "./tool-policy-enforcer.js";
 import type { DrainModeManager } from "./drain-mode.js";
 
@@ -49,7 +49,7 @@ export class SessionToolFilter {
    * @returns The filtered list of allowed tool names.
    */
   filter(
-    policy: WorkerPolicy,
+    policy: ExecutionPolicy,
     sessionId: string,
     toolNames: string[],
     drainManager: DrainModeManager | null,
@@ -71,7 +71,7 @@ export class SessionToolFilter {
    * @returns `true` if the tool is allowed and survives drain.
    */
   isAllowed(
-    policy: WorkerPolicy,
+    policy: ExecutionPolicy,
     sessionId: string,
     toolName: string,
     drainManager: DrainModeManager | null,

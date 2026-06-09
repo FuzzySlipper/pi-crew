@@ -7,6 +7,8 @@
  * @module pi-core/types
  */
 
+import type { ExecutionPolicy } from "./security.js";
+
 // ── Result ─────────────────────────────────────────────────────
 
 /**
@@ -72,56 +74,18 @@ export function err<E, T = never>(error: E): Result<T, E> {
 // ── Worker policy ──────────────────────────────────────────────
 
 /**
- * Bounded policy for a worker assignment.
+ * Worker-specific metadata layered on generic execution constraints.
  *
- * Enforced by the runtime — not by agent judgment. Applied at
- * instance creation and enforced at tool-execution time.
+ * The execution constraints live on {@link ExecutionPolicy}. WorkerPolicy
+ * adds Den assignment identity and worker lifecycle controls.
  */
-export interface WorkerPolicy {
-  /** Den assignment ID. */
+export interface WorkerPolicy extends ExecutionPolicy {
+  /** Den assignment ID. Maps to policyId for worker sessions. */
   readonly assignmentId: string;
   /** Worker role. */
   readonly role: string;
-
-  // Filesystem
-  /** Isolated workdir for this assignment. */
+  /** Isolated workdir for this assignment. Mirrors rootPath for compatibility. */
   readonly workdir: string;
-  /** Paths the worker can read/write. */
-  readonly allowedPaths: string[];
-  /** Explicitly denied paths (overrides allowedPaths). */
-  readonly denyPaths: string[];
-
-  // Tools
-  /** Tool allowlist (empty = all allowed, subject to denylist). */
-  readonly allowedTools: string[];
-  /** Explicitly denied tool names (overrides allowlist). */
-  readonly deniedTools: string[];
-
-  // Network
-  /** Domains/IPs the worker can reach (empty = all allowed). */
-  readonly allowedHosts: string[];
-  /** Explicitly denied hosts. */
-  readonly deniedHosts: string[];
-
-  // Time
-  /** Hard timeout for the entire assignment (ms). */
-  readonly maxDurationMs: number;
-  /** Per-turn timeout (ms). */
-  readonly maxTurnDurationMs: number;
-  /** Max time between activity before considered stuck (ms). */
-  readonly idleTimeoutMs: number;
-
-  // Budget
-  /** Max tool-calling loop iterations. */
-  readonly maxIterations: number;
-  /** Soft cap for context usage per turn. */
-  readonly maxTokensPerTurn: number;
-
-  // Credentials
-  /** Credential scope for this worker. */
-  readonly credentialScope: "none" | "read_only" | "bounded_write" | "full";
-
-  // Eviction
   /** Always true for workers. */
   readonly releaseOnCompletion: boolean;
   /** Delete workdir after release. */

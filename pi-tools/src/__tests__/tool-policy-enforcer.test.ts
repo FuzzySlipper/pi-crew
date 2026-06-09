@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { FakeEventBus, FakeLogger, ToolDeniedError } from "@pi-crew/core";
-import { createWorkerPolicy } from "../worker-policy.js";
+import { createExecutionPolicy, createWorkerPolicy } from "../execution-policy.js";
 import { ToolPolicyEnforcer } from "../tool-policy-enforcer.js";
 
 describe("ToolPolicyEnforcer", () => {
@@ -32,6 +32,25 @@ describe("ToolPolicyEnforcer", () => {
       const result = enforcer.checkTool(policy, "read_file", "sess-1");
       expect(result.allowed).toBe(true);
       expect(result.reason).toBe("");
+    });
+
+    it("supports a non-worker execution policy", () => {
+      const policy = createExecutionPolicy({
+        policyId: "session-policy-1",
+        rootPath: "/tmp/session",
+        allowedTools: ["read_file"],
+      });
+
+      const result = enforcer.checkTool(policy, "read_file", "sess-1");
+      expect(result.allowed).toBe(true);
+
+      const denied = enforcer.checkTool(policy, "terminal", "sess-1");
+      expect(denied.allowed).toBe(false);
+      const enforced = eventBus.emitted.filter((e) => e.event === "policy.enforced");
+      expect(enforced[0]?.payload).toMatchObject({
+        policyId: "session-policy-1",
+        assignmentId: undefined,
+      });
     });
 
     it("denies tools in the denylist", () => {

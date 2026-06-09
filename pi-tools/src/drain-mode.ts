@@ -9,7 +9,7 @@
  */
 
 import type {
-  WorkerPolicy,
+  ExecutionPolicy,
   DrainModeState,
   EventBus,
   Logger,
@@ -38,7 +38,7 @@ export class DrainModeManager {
     private readonly eventBus: EventBus,
     private readonly logger: Logger,
     private readonly sessionId: string,
-    private readonly policy: WorkerPolicy,
+    private readonly policy: ExecutionPolicy,
   ) {}
 
   // ── State access ──────────────────────────────────────────
@@ -142,7 +142,8 @@ export class DrainModeManager {
     this.logger.warn("DrainModeManager: drain activated", {
       sessionId: this.sessionId,
       reason,
-      assignmentId: this.policy.assignmentId,
+      assignmentId: getWorkerAssignmentId(this.policy),
+      policyId: this.policy.policyId,
     });
 
     this.eventBus.emit({
@@ -150,7 +151,8 @@ export class DrainModeManager {
       payload: {
         sessionId: this.sessionId,
         reason,
-        assignmentId: this.policy.assignmentId,
+        assignmentId: getWorkerAssignmentId(this.policy),
+        policyId: this.policy.policyId,
         runId: undefined,
         taskId: undefined,
       },
@@ -177,7 +179,8 @@ export class DrainModeManager {
       event: "drain.deactivated",
       payload: {
         sessionId: this.sessionId,
-        assignmentId: this.policy.assignmentId,
+        assignmentId: getWorkerAssignmentId(this.policy),
+        policyId: this.policy.policyId,
         runId: undefined,
       },
     });
@@ -239,4 +242,11 @@ export class DrainModeManager {
     }
     return false;
   }
+}
+
+function getWorkerAssignmentId(policy: ExecutionPolicy): string | undefined {
+  if ("assignmentId" in policy && typeof policy.assignmentId === "string") {
+    return policy.assignmentId;
+  }
+  return undefined;
 }
