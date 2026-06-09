@@ -10,7 +10,7 @@
  */
 
 import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
-import { FakeLogger, FakeEventBus } from "@pi-crew/core";
+import { FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
 import type { DenChannelsAdapterConfig } from "@pi-crew/channels/den-channels/den-channels-adapter";
@@ -27,6 +27,9 @@ import {
   RuntimeDb,
   AdminServer,
   RemediationControlService,
+  ExtensionActivator,
+  createServiceExtensionContext,
+  createUnavailableDelegationSessionBridge,
   SqliteAuditRepository,
   SqliteSessionRepository,
   type GatewayConfig,
@@ -86,6 +89,7 @@ export class Crew {
   readonly #auditLogger: AuditLogger;
   readonly #toolPolicyEnforcer: ToolPolicyEnforcer;
   readonly #denCompletionPoster: CompletionPoster;
+  readonly #extensionActivator: ExtensionActivator;
 
   /** Registry of active supervised Agents keyed by runId for steer/followUp routing. */
   readonly #agentRegistry: AgentRuntimeRegistry;
@@ -114,6 +118,7 @@ export class Crew {
     // 1. Infrastructure
     this.#logger = logger ?? new FakeLogger();
     this.#eventBus = eventBus ?? new FakeEventBus();
+    const hookRegistry = new InMemoryHookRegistry(this.#logger);
 
     // Build the GatewayConfig subset for pi-service
     this.#gatewayConfig = loadConfig({
@@ -129,6 +134,17 @@ export class Crew {
       config: this.#gatewayConfig,
       logger: this.#logger,
       eventBus: this.#eventBus,
+      hookRegistry,
+    });
+    this.#extensionActivator = new ExtensionActivator({
+      extensions: [],
+      context: createServiceExtensionContext({
+        config: this.#registry.config,
+        logger: this.#registry.logger,
+        eventBus: this.#registry.eventBus,
+        hookRegistry: this.#registry.hookRegistry,
+        delegationSessions: createUnavailableDelegationSessionBridge(),
+      }),
     });
 
     this.#gateway = new Gateway(
@@ -293,8 +309,8 @@ export class Crew {
     if (this.#started) return;
 
     this.#logger.info("Crew starting");
+    await this.#extensionActivator.activateAll();
 
-    // Connect the channel provider
     await this.#channelProvider.connect();
 
     // Connect MCP client and discover tools
@@ -316,7 +332,6 @@ export class Crew {
       });
     }
 
-    // Start the gateway (health check, etc.)
     await this.#gateway.start();
     await this.#adminServer?.start();
 
@@ -332,6 +347,7 @@ export class Crew {
     }
 
     this.#logger.info("Crew stopping", { reason });
+    await this.#extensionActivator.deactivateAll();
 
     // Dispose governance
     this.#breadcrumbManager.dispose();
@@ -428,12 +444,7 @@ export class Crew {
     return this.#agentRegistry;
   }
 
-  /**
-   * The validated worker role mapping for injecting into WorkerRuntime.
-   *
-   * Replaces the v1 hardcoded role-to-profile switch. Validated at
-   * config-parse time (no duplicate roles, at least one binding).
-   */
+  /** Validated worker role mapping for injecting into WorkerRuntime. */
   get workerRoleMapping(): WorkerRoleMappingConfig {
     return this.#workerRoleMapping;
   }
@@ -483,13 +494,6 @@ function validateGatewayConfig(raw: unknown) {
 }
 
 // ── Convenience: bootstrap from YAML path ───────────────────────
-
-/**
- * Bootstrap the gateway from a YAML configuration file.
- *
- * This is the primary entry point for production use. For integration
- * testing, construct {@link Crew} directly with a {@link CrewConfig}.
- */
 export function bootstrap(yamlPath: string): Crew {
   const config = loadCrewConfig(yamlPath);
   return new Crew(config);

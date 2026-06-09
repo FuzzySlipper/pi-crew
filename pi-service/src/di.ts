@@ -11,7 +11,7 @@
  * @module pi-service/di
  */
 
-import type { Logger, EventBus } from "@pi-crew/core";
+import type { Logger, EventBus, HookRegistry } from "@pi-crew/core";
 import type { GatewayConfig } from "./config.js";
 
 // ── Service registry ────────────────────────────────────────────
@@ -32,6 +32,9 @@ export interface ServiceRegistry {
 
   /** Typed event bus for decoupled module communication. */
   readonly eventBus: EventBus;
+
+  /** Typed hook registry for service extension interception. */
+  readonly hookRegistry: HookRegistry;
 }
 
 // ── Factory ─────────────────────────────────────────────────────
@@ -46,6 +49,8 @@ export interface CreateRegistryOptions {
   logger: Logger;
   /** Type-safe event bus implementation. */
   eventBus: EventBus;
+  /** Type-safe hook registry implementation. */
+  hookRegistry: HookRegistry;
 }
 
 /**
@@ -62,5 +67,6 @@ export function createServiceRegistry(
     config: options.config,
     logger: options.logger,
     eventBus: options.eventBus,
+    hookRegistry: options.hookRegistry,
   };
 }

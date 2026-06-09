@@ -11,10 +11,14 @@
  * @module pi-service/main
  */
 
-import { FakeLogger } from "@pi-crew/core";
-import { FakeEventBus } from "@pi-crew/core";
+import { FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 import { loadConfig } from "./config.js";
 import { createServiceRegistry } from "./di.js";
+import {
+  ExtensionActivator,
+  createServiceExtensionContext,
+  createUnavailableDelegationSessionBridge,
+} from "./extension-activator.js";
 import { Gateway } from "./gateway.js";
 import { AdminServer } from "./admin/admin-server.js";
 import { RuntimeMetricsCollector, renderPrometheusMetrics } from "./diagnostics/runtime-metrics.js";
@@ -24,6 +28,7 @@ import type { DiagnosticsOverview } from "./diagnostics/types.js";
 
 let gateway: Gateway | null = null;
 let adminServer: AdminServer | null = null;
+let extensionActivator: ExtensionActivator | null = null;
 let shutdownInitiated = false;
 
 /**
@@ -45,6 +50,10 @@ async function onSigterm(): Promise<void> {
 
   if (gateway?.isRunning) {
     await gateway.stop("SIGTERM");
+  }
+
+  if (extensionActivator !== null) {
+    await extensionActivator.deactivateAll();
   }
 
   console.log("Shutdown complete");
@@ -113,7 +122,19 @@ async function main(): Promise<void> {
   // 2. Wire dependency injection
   const logger = new FakeLogger();
   const eventBus = new FakeEventBus();
-  const registry = createServiceRegistry({ config, logger, eventBus });
+  const hookRegistry = new InMemoryHookRegistry(logger);
+  const registry = createServiceRegistry({ config, logger, eventBus, hookRegistry });
+  const extensionContext = createServiceExtensionContext({
+    config: registry.config,
+    logger: registry.logger,
+    eventBus: registry.eventBus,
+    hookRegistry: registry.hookRegistry,
+    delegationSessions: createUnavailableDelegationSessionBridge(),
+  });
+  // DESIGN: main is the composition root and owns the concrete extension list.
+  // Rationale: lower packages expose contracts; service startup alone decides order.
+  extensionActivator = new ExtensionActivator({ extensions: [], context: extensionContext });
+  await extensionActivator.activateAll();
   const startedAt = new Date().toISOString();
   const metricsCollector = new RuntimeMetricsCollector(registry.eventBus, { startedAt });
 

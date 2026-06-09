@@ -18,6 +18,20 @@ export {
   type ServiceRegistry,
   type CreateRegistryOptions,
 } from "./di.js";
+export {
+  ExtensionActivator,
+  ExtensionActivationError,
+  ExtensionDeactivationError,
+  DelegationBridgeUnavailableError,
+  createServiceExtensionContext,
+  createUnavailableDelegationSessionBridge,
+  type DelegatedSessionCreateRequest,
+  type DelegationSessionBridge,
+  type DelegationVisibilityEvent,
+  type ServiceExtension,
+  type ServiceExtensionContext,
+  type ServiceSessionView,
+} from "./extension-activator.js";
 
 // ── Sessions ────────────────────────────────────────────────────
 export {
