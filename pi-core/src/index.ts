@@ -89,6 +89,47 @@ export {
   type SessionPresencePayload,
 } from "./events.js";
 
+// ── Hook registry / extensions ───────────────────────────────
+export {
+  InMemoryHookRegistry,
+  type HookRegistry,
+  type HookCatalog,
+  type HookName,
+  type HookKind,
+  type HookPayload,
+  type HookReturn,
+  type HookHandler,
+  type HookRegistrationOptions,
+  type GateResult,
+  type ModifierResult,
+  type ObserverResult,
+  type HookDenCorrelation,
+  type BeforeToolCallPayload,
+  type AfterToolCallPayload,
+  type AfterToolCallResultSnapshot,
+  type AfterToolCallModifier,
+  type BeforeAgentStartPayload,
+  type BeforeAgentStartModifier,
+  type AfterAgentStartPayload,
+  type BeforeMessageSendPayload,
+  type AfterMessageSendPayload,
+  type BeforeSessionCreatePayload,
+  type BeforeCompactionPayload,
+  type AfterCompactionPayload,
+  type BeforeCompletionPostPayload,
+  type BeforeCompletionPostModifier,
+  type BeforeDrainActivatePayload,
+  type AgentContextInjectPayload,
+  type AgentContextInjectModifier,
+  type MessageContentSnapshot,
+} from "./hooks.js";
+
+export {
+  type Extension,
+  type ExtensionContext,
+  type ExtensionConfigInterest,
+} from "./extension.js";
+
 // ── Repository ────────────────────────────────────────────────
 export { type Repository } from "./repository.js";
 
