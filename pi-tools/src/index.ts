@@ -56,6 +56,15 @@ export {
   isIterationBudgetLow,
 } from "./execution-policy.js";
 
+// ── Policy scanner ────────────────────────────────────────────
+export {
+  isHostAllowedByPolicy,
+  scanCredentials,
+  scanHosts,
+  scanPaths,
+  scanToolName,
+} from "./policy-scanner.js";
+
 // ── Tool policy enforcer ──────────────────────────────────────
 
 export {

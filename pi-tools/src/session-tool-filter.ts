@@ -42,7 +42,7 @@ export class SessionToolFilter {
    * 1. Policy allowlist/denylist (via {@link ToolPolicyEnforcer})
    * 2. Drain-mode filtering (if drain is active)
    *
-   * @param policy — The worker policy for this session.
+   * @param policy — The execution policy for this session.
    * @param sessionId — The session identifier.
    * @param toolNames — All tool names available in the registry.
    * @param drainManager — Optional drain-mode manager (null if not applicable).

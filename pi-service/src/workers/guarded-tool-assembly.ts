@@ -12,6 +12,12 @@
  */
 
 import type { EventBus, Logger, WorkerPolicy } from "@pi-crew/core";
+import {
+  scanCredentials,
+  scanHosts,
+  scanPaths,
+  scanToolName,
+} from "@pi-crew/tools";
 import type { WorkerBinding } from "../sessions/types.js";
 import type {
   AgentTool,
@@ -22,9 +28,6 @@ import type {
   AfterToolCallContext,
   TextContent,
 } from "./guarded-tool-types.js";
-import { checkFilesystemPathPolicy } from "./guarded-path-policy.js";
-import { checkNetworkHostPolicy } from "./guarded-host-policy.js";
-import { checkCredentialPolicy } from "./guarded-credential-policy.js";
 
 // ── ToolExecutor ─────────────────────────────────────────────────
 
@@ -73,31 +76,6 @@ interface DenialCorrelation {
   readonly taskId: string;
   readonly sessionId: string;
   readonly profileId: string;
-}
-
-// ── Policy check helpers ────────────────────────────────────────
-
-/**
- * Check whether a tool name is allowed by the policy.
- */
-function isToolAllowed(policy: WorkerPolicy, toolName: string): { allowed: boolean; reason: string } {
-  // Denylist takes absolute precedence
-  if (policy.deniedTools.includes(toolName)) {
-    return {
-      allowed: false,
-      reason: `Tool "${toolName}" is explicitly denied by worker policy`,
-    };
-  }
-
-  // If allowlist is non-empty, only listed tools pass
-  if (policy.allowedTools.length > 0 && !policy.allowedTools.includes(toolName)) {
-    return {
-      allowed: false,
-      reason: `Tool "${toolName}" is not in the worker policy allowlist`,
-    };
-  }
-
-  return { allowed: true, reason: "" };
 }
 
 // ── Denial evidence emission ────────────────────────────────────
@@ -182,7 +160,7 @@ export function createBeforeToolCallHook(
     const toolName = callCtx.toolCall.name;
 
     // ── Tool name policy check ──────────────────────────────
-    const toolCheck = isToolAllowed(policy, toolName);
+    const toolCheck = scanToolName(policy, toolName);
     if (!toolCheck.allowed) {
       config.logger.warn("GuardedToolAssembly: beforeToolCall denied (tool policy)", {
         toolName,
@@ -195,7 +173,7 @@ export function createBeforeToolCallHook(
 
     // ── Path policy check ───────────────────────────────────
     if (policy.allowedPaths.length > 0 || policy.denyPaths.length > 0) {
-      const pathCheck = checkFilesystemPathPolicy(policy, callCtx.args);
+      const pathCheck = scanPaths(policy, callCtx.args);
       if (!pathCheck.allowed) {
         config.logger.warn("GuardedToolAssembly: beforeToolCall denied (path policy)", {
           toolName,
@@ -209,7 +187,7 @@ export function createBeforeToolCallHook(
 
     // ── Host policy check ───────────────────────────────────
     if (policy.allowedHosts.length > 0 || policy.deniedHosts.length > 0) {
-      const hostCheck = checkNetworkHostPolicy(policy, callCtx.args);
+      const hostCheck = scanHosts(policy, callCtx.args);
       if (!hostCheck.allowed) {
         config.logger.warn("GuardedToolAssembly: beforeToolCall denied (host policy)", {
           toolName,
@@ -221,7 +199,7 @@ export function createBeforeToolCallHook(
       }
     }
 
-    const credentialCheck = checkCredentialPolicy(policy, callCtx.args);
+    const credentialCheck = scanCredentials(policy, callCtx.args);
     if (!credentialCheck.allowed) {
       config.logger.warn("GuardedToolAssembly: beforeToolCall denied (credential policy)", {
         toolName,
@@ -359,7 +337,7 @@ function wrapExecute(
     onUpdate?: (result: AgentToolResult) => void,
   ): Promise<AgentToolResult> => {
     // ── Dispatch-time policy re-check ──────────────────────
-    const toolCheck = isToolAllowed(policy, toolName);
+    const toolCheck = scanToolName(policy, toolName);
     if (!toolCheck.allowed) {
       config.logger.warn("GuardedToolAssembly: execute denied (wrapper-level tool policy)", {
         toolName,
@@ -373,7 +351,7 @@ function wrapExecute(
 
     // ── Path re-check at dispatch time ─────────────────────
     if (policy.allowedPaths.length > 0 || policy.denyPaths.length > 0) {
-      const pathCheck = checkFilesystemPathPolicy(policy, params);
+      const pathCheck = scanPaths(policy, params);
       if (!pathCheck.allowed) {
         config.logger.warn("GuardedToolAssembly: execute denied (wrapper-level path policy)", {
           toolName,
@@ -388,7 +366,7 @@ function wrapExecute(
 
     // ── Host re-check at dispatch time ─────────────────────
     if (policy.allowedHosts.length > 0 || policy.deniedHosts.length > 0) {
-      const hostCheck = checkNetworkHostPolicy(policy, params);
+      const hostCheck = scanHosts(policy, params);
       if (!hostCheck.allowed) {
         config.logger.warn("GuardedToolAssembly: execute denied (wrapper-level host policy)", {
           toolName,
@@ -401,7 +379,7 @@ function wrapExecute(
       }
     }
 
-    const credentialCheck = checkCredentialPolicy(policy, params);
+    const credentialCheck = scanCredentials(policy, params);
     if (!credentialCheck.allowed) {
       config.logger.warn("GuardedToolAssembly: execute denied (wrapper-level credential policy)", {
         toolName,
