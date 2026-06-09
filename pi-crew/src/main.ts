@@ -20,7 +20,9 @@ import { FakeEventBus } from "@pi-crew/core";
 import { Crew, loadCrewConfig, resolveCrewConfigPath } from "./crew.js";
 import { createCrewAssignmentLoops } from "./crew-assignment-loops.js";
 import type { DenAssignmentLoop } from "./den-assignment-loop.js";
+import { createDenPoolMemberReconciler } from "./den-pool-source.js";
 import { ServiceConsoleLogger, subscribeServiceEventLogs } from "./service-logger.js";
+import { resolveWorkerPoolMembers } from "./worker-pool-groups.js";
 
 // ── Health smoke ────────────────────────────────────────────────
 
@@ -111,9 +113,18 @@ async function main(): Promise<void> {
   });
 
   await crew.start();
+  const workerPoolMembers = resolveWorkerPoolMembers(crew.config);
+  const reconcileResult = await createDenPoolMemberReconciler({
+    mcpClient: crew.mcpClient,
+    assignedBy: "pi-crew",
+    members: workerPoolMembers,
+  }).reconcile();
+  if (reconcileResult.degraded.length > 0) {
+    logger.warn("worker_pool.reconcile_degraded", { degraded: reconcileResult.degraded });
+  }
   assignmentLoops = createCrewAssignmentLoops({
     crew,
-    members: crew.config.workerPool.members,
+    members: workerPoolMembers,
     logger,
     pollIntervalMs: 2_000,
   });

@@ -64,9 +64,22 @@ const WorkerPoolMemberConfigSchema = z.object({
   capabilities: z.array(z.string().min(1)).default([]),
 });
 
+const WorkerPoolGroupConfigSchema = z.object({
+  groupId: z.string().min(1),
+  role: z.string().min(1),
+  profileIdentity: z.string().min(1),
+  profileId: z.string().min(1),
+  desiredSize: z.number().int().nonnegative(),
+  identityTemplate: z.string().min(1).includes("{n}"),
+  displayNameTemplate: z.string().min(1).optional(),
+  capabilities: z.array(z.string().min(1)).default([]),
+  labels: z.record(z.string(), z.string()).default({}),
+});
+
 const WorkerPoolConfigSchema = z
   .object({
     members: z.array(WorkerPoolMemberConfigSchema).default([]),
+    groups: z.array(WorkerPoolGroupConfigSchema).default([]),
   })
   .default({});
 

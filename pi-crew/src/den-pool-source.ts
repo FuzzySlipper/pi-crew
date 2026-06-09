@@ -17,6 +17,8 @@ export interface DenPoolMemberConfig {
   readonly role: string;
   readonly displayName?: string;
   readonly capabilities?: readonly string[];
+  readonly profileId?: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
   readonly readiness?: DenPoolMemberReadiness;
 }
 
@@ -122,14 +124,19 @@ class McpDenPoolMemberReconciler implements DenPoolMemberReconciler {
         continue;
       }
 
-      const result = await this.#config.mcpClient.callTool("upsert_pool_member", {
+      const params: Record<string, unknown> = {
         worker_identity: member.workerIdentity,
         profile_identity: member.profileIdentity,
         worker_role: member.role,
         display_name: member.displayName ?? member.workerIdentity,
         capabilities: JSON.stringify(member.capabilities ?? []),
         status: "available",
-      });
+      };
+      if (member.metadata !== undefined) {
+        params["metadata"] = JSON.stringify(member.metadata);
+      }
+
+      const result = await this.#config.mcpClient.callTool("upsert_pool_member", params);
 
       if (!result.ok) {
         throw new DenPoolSourceConfigurationError(

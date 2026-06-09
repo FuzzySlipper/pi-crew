@@ -6,6 +6,7 @@ import {
   createDenPoolMemberReconciler,
 } from "../den-pool-source.js";
 import { CrewConfigSchema } from "../config.js";
+import { resolveWorkerPoolMembers } from "../worker-pool-groups.js";
 
 interface RecordedCall {
   readonly name: string;
@@ -112,6 +113,51 @@ describe("Den pool member source", () => {
         },
       },
     ]);
+  });
+
+  it("registers group-expanded members with selector-safe metadata", async () => {
+    const client = fakeClient();
+    const config = CrewConfigSchema.parse({
+      install: { root: "/home/agents/pi-crew" },
+      den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
+      workerPool: {
+        groups: [
+          {
+            groupId: "pi-crew-reviewer",
+            role: "reviewer",
+            profileIdentity: "pi-crew-reviewer-worker",
+            profileId: "reviewer-worker",
+            desiredSize: 1,
+            identityTemplate: "pi-crew-reviewer-{n}",
+            capabilities: ["review", "den", "git"],
+            labels: { owner: "pi-crew", pool_group: "pi-crew-reviewer" },
+          },
+        ],
+      },
+    });
+    const members = resolveWorkerPoolMembers(config);
+
+    await createDenPoolMemberReconciler({
+      mcpClient: client,
+      assignedBy: "pi-crew",
+      members,
+    }).reconcile();
+
+    const recorded = (client as unknown as FakeMcpClient).calls;
+    expect(recorded[0]?.params["metadata"]).toBe(
+      JSON.stringify({
+        install_root: "/home/agents/pi-crew",
+        profile_id: "reviewer-worker",
+        execution_mode: "llmAgent",
+        pool_group: "pi-crew-reviewer",
+        group_id: "pi-crew-reviewer",
+        desired_size: 1,
+        lane_index: 1,
+        identity_template: "pi-crew-reviewer-{n}",
+        owner: "pi-crew",
+        labels: { owner: "pi-crew", pool_group: "pi-crew-reviewer" },
+      }),
+    );
   });
 
   it("does not register degraded members that lack profile/model/mcp/completion readiness", async () => {

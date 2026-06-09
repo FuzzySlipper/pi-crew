@@ -36,6 +36,14 @@ export {
   type CrewAssignmentLoopsConfig,
 } from "./crew-assignment-loops.js";
 export {
+  buildGroupOwnedPoolMemberSelector,
+  resolveWorkerPoolMembers,
+  type GroupOwnedPoolMemberCandidate,
+  type GroupOwnedPoolMemberSelector,
+  type GroupOwnedPoolMemberSelectorConfig,
+  type WorkerPoolGroupConfig,
+} from "./worker-pool-groups.js";
+export {
   DenPoolSourceConfigurationError,
   createDenPoolAssignmentConsumer,
   createDenPoolMemberReconciler,
