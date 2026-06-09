@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   FilesystemProfileSource,
@@ -10,6 +12,22 @@ import { ConfigurationError } from "@pi-crew/core";
 import type { Profile } from "../profile.js";
 
 const FIXTURES = join(__dirname, "fixtures");
+
+function makeProfilesRoot(): string {
+  return mkdtempSync(join(tmpdir(), "pi-profile-inheritance-"));
+}
+
+function writeDirectoryProfile(
+  root: string,
+  profileId: string,
+  yaml: string,
+  soul: string,
+): void {
+  const profileDir = join(root, profileId);
+  mkdirSync(profileDir, { recursive: true });
+  writeFileSync(join(profileDir, "profile.yaml"), yaml, "utf-8");
+  writeFileSync(join(profileDir, "soul.md"), soul, "utf-8");
+}
 
 describe("FilesystemProfileSource", () => {
   // ── green paths ─────────────────────────────────────────────
@@ -79,6 +97,136 @@ describe("FilesystemProfileSource", () => {
         expect(p.toolPolicy.mode).toBe("allow_all");
       }
     }
+  });
+
+  it("resolves directory profile inheritance with object merge, array replacement, and soul.md composition", () => {
+    const root = makeProfilesRoot();
+    writeDirectoryProfile(
+      root,
+      "base-worker",
+      [
+        'name: "Base Worker"',
+        'description: "Shared worker config"',
+        "skills:",
+        "  - name: base-skill",
+        '    description: "base"',
+        '    version: "1.0.0"',
+        "modelConfig:",
+        '  provider: "local"',
+        '  model: "base-model"',
+        "  temperature: 0.1",
+        "toolPolicy:",
+        "  mode: allow_list",
+        "  allow:",
+        '    - "base-tool"',
+        "",
+      ].join("\n"),
+      "Base worker soul.",
+    );
+    writeDirectoryProfile(
+      root,
+      "coder",
+      [
+        "extends: base-worker",
+        'name: "Coder"',
+        "skills:",
+        "  - name: coder-skill",
+        '    description: "coder"',
+        '    version: "2.0.0"',
+        "modelConfig:",
+        "  temperature: 0.2",
+        "toolPolicy:",
+        "  allow:",
+        '    - "coder-tool"',
+        "",
+      ].join("\n"),
+      "Coder soul.",
+    );
+    writeDirectoryProfile(
+      root,
+      "reviewer",
+      [
+        "extends: base-worker",
+        'name: "Reviewer"',
+        "skills:",
+        "  - name: reviewer-skill",
+        '    description: "reviewer"',
+        '    version: "3.0.0"',
+        "toolPolicy:",
+        "  allow:",
+        '    - "reviewer-tool"',
+        "",
+      ].join("\n"),
+      "Reviewer soul.",
+    );
+
+    const coder = loadProfile("coder", root);
+    const reviewer = loadProfile("reviewer", root);
+
+    expect(coder.description).toBe("Shared worker config");
+    expect(coder.modelConfig).toEqual({
+      provider: "local",
+      model: "base-model",
+      temperature: 0.2,
+    });
+    expect(coder.skills.map((skill) => skill.name)).toEqual(["coder-skill"]);
+    expect(coder.toolPolicy).toEqual({ mode: "allow_list", allow: ["coder-tool"] });
+    expect(coder.systemPrompt).toContain("Base worker soul.");
+    expect(coder.systemPrompt).toContain("Coder soul.");
+    expect(coder.systemPrompt).toContain("Inherited prompt: base-worker");
+    expect(coder.systemPrompt).toContain("Profile prompt: coder");
+    expect(reviewer.description).toBe("Shared worker config");
+    expect(reviewer.modelConfig).toEqual({
+      provider: "local",
+      model: "base-model",
+      temperature: 0.1,
+    });
+    expect(reviewer.skills.map((skill) => skill.name)).toEqual(["reviewer-skill"]);
+    expect(reviewer.toolPolicy).toEqual({ mode: "allow_list", allow: ["reviewer-tool"] });
+    expect(reviewer.systemPrompt).toContain("Reviewer soul.");
+  });
+
+  it("fails closed when an inherited parent is missing", () => {
+    const root = makeProfilesRoot();
+    writeDirectoryProfile(
+      root,
+      "coder",
+      ['extends: missing-parent', 'name: "Coder"', 'description: "Coder"', ""].join("\n"),
+      "Coder soul.",
+    );
+
+    expect(() => loadProfile("coder", root)).toThrow(/missing parent/);
+  });
+
+  it("fails closed when profile inheritance has a cycle", () => {
+    const root = makeProfilesRoot();
+    writeDirectoryProfile(
+      root,
+      "a",
+      ['extends: b', 'name: "A"', 'description: "A"', ""].join("\n"),
+      "A soul.",
+    );
+    writeDirectoryProfile(
+      root,
+      "b",
+      ['extends: a', 'name: "B"', 'description: "B"', ""].join("\n"),
+      "B soul.",
+    );
+
+    expect(() => loadProfiles(root)).toThrow(/cycle/);
+  });
+
+  it("fails closed when a directory profile is missing soul.md", () => {
+    const root = makeProfilesRoot();
+    const profileDir = join(root, "coder");
+    mkdirSync(profileDir, { recursive: true });
+    writeFileSync(
+      join(profileDir, "profile.yaml"),
+      ['name: "Coder"', 'description: "Coder"', ""].join("\n"),
+      "utf-8",
+    );
+
+    expect(() => loadProfile("coder", root)).toThrow(/soul.md/);
   });
 
   // ── error paths ─────────────────────────────────────────────
