@@ -11,8 +11,13 @@
  * @module pi-service/main
  */
 
-import { FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
-import { loadConfig } from "./config.js";
+import {
+  ConfigurationError,
+  FakeEventBus,
+  FakeLogger,
+  InMemoryHookRegistry,
+} from "@pi-crew/core";
+import { loadConfig, type GatewayConfig } from "./config.js";
 import { createServiceRegistry } from "./di.js";
 import {
   ExtensionActivator,
@@ -32,6 +37,8 @@ import {
   ToolPolicyExtension,
 } from "./workers/tool-policy-extension.js";
 import { SessionManagerDelegationSessionBridge } from "./workers/delegation-session-bridge.js";
+import { RemediationControlService } from "./admin/remediation-control-service.js";
+import type { AuditEventInput, AuditRepository, AuditRow } from "./persistence/types.js";
 
 // ── Signal handlers ─────────────────────────────────────────────
 
@@ -72,11 +79,11 @@ async function onSigterm(): Promise<void> {
 /**
  * Reload configuration on SIGHUP.
  *
- * In this skeleton the handler acknowledges the signal and logs it.
- * Full config hot-reload will be implemented in a later task.
+ * Reloads only affected extensions. Non-reloadable changes fail closed and
+ * require a full service restart.
  */
 function onSighup(): void {
-  console.log("Received SIGHUP — config reload requested (not yet implemented)");
+  void reloadExtensionsFromEnvironment("SIGHUP");
 }
 
 // ── Bootstrap ───────────────────────────────────────────────────
@@ -89,38 +96,7 @@ async function main(): Promise<void> {
   try {
     // In a real deployment this would read from a file or env.
     // For the skeleton, we use a minimal inline default.
-    config = loadConfig({
-      database: {
-        path: process.env["PI_DB_PATH"] ?? "/var/lib/pi-crew/runtime.db",
-        wal: true,
-      },
-      den: {
-        coreUrl: process.env["PI_DEN_CORE_URL"] ?? "http://den-srv:3030",
-        requiredAtStartup:
-          process.env["PI_DEN_REQUIRED_AT_STARTUP"]?.toLowerCase() !== "false",
-      },
-      health: {
-        port: Number(process.env["PI_HEALTH_PORT"] ?? 9236),
-        host: process.env["PI_HEALTH_HOST"] ?? "127.0.0.1",
-      },
-      admin: {
-        enabled: process.env["PI_ADMIN_ENABLED"]?.toLowerCase() === "true",
-        port: Number(process.env["PI_ADMIN_PORT"] ?? 9237),
-        host: process.env["PI_ADMIN_HOST"] ?? "127.0.0.1",
-        bearerToken: process.env["PI_ADMIN_BEARER_TOKEN"] ?? "",
-        allowLanBind: process.env["PI_ADMIN_ALLOW_LAN_BIND"]?.toLowerCase() === "true",
-      },
-      logging: {
-        level:
-          (process.env["PI_LOG_LEVEL"] as
-            | "debug"
-            | "info"
-            | "warn"
-            | "error"
-            | undefined) ?? "info",
-        json: false,
-      },
-    });
+    config = loadRuntimeConfigFromEnvironment();
   } catch (err) {
     console.error("FATAL: Configuration error:", (err as Error).message);
     process.exit(1);
@@ -185,6 +161,24 @@ async function main(): Promise<void> {
 
   if (config.admin.enabled) {
     const diagnostics = { projectOverview: () => Promise.resolve(emptyDiagnosticsOverview(startedAt)) };
+    const controls = new RemediationControlService({
+      diagnostics,
+      auditRepository: new InMemoryAuditRepository(),
+      eventBus: registry.eventBus,
+      validateConfig: validateReloadConfig,
+      reloadConfig: async (candidateConfig: unknown) => {
+        const nextConfig = loadConfig(candidateConfig);
+        return extensionActivator?.reloadConfig(nextConfig) ?? {
+          changedKeys: [],
+          affectedExtensionIds: [],
+          nonReloadableKeys: [],
+          reactivatedExtensionIds: [],
+          skippedExtensionIds: [],
+          status: "unchanged",
+          warnings: ["extension activator unavailable"],
+        };
+      },
+    });
     adminServer = new AdminServer({
       config: config.admin,
       diagnostics,
@@ -192,6 +186,7 @@ async function main(): Promise<void> {
         projectPrometheus: async () =>
           renderPrometheusMetrics(metricsCollector.snapshot(), await diagnostics.projectOverview()),
       },
+      controls,
     });
     await adminServer.start();
     console.log(
@@ -211,6 +206,86 @@ async function main(): Promise<void> {
     void onSigterm();
   });
   process.on("SIGHUP", onSighup);
+}
+
+function loadRuntimeConfigFromEnvironment(): GatewayConfig {
+  return loadConfig({
+    database: {
+      path: process.env["PI_DB_PATH"] ?? "/var/lib/pi-crew/runtime.db",
+      wal: true,
+    },
+    den: {
+      coreUrl: process.env["PI_DEN_CORE_URL"] ?? "http://den-srv:3030",
+      requiredAtStartup:
+        process.env["PI_DEN_REQUIRED_AT_STARTUP"]?.toLowerCase() !== "false",
+    },
+    health: {
+      port: Number(process.env["PI_HEALTH_PORT"] ?? 9236),
+      host: process.env["PI_HEALTH_HOST"] ?? "127.0.0.1",
+    },
+    admin: {
+      enabled: process.env["PI_ADMIN_ENABLED"]?.toLowerCase() === "true",
+      port: Number(process.env["PI_ADMIN_PORT"] ?? 9237),
+      host: process.env["PI_ADMIN_HOST"] ?? "127.0.0.1",
+      bearerToken: process.env["PI_ADMIN_BEARER_TOKEN"] ?? "",
+      allowLanBind: process.env["PI_ADMIN_ALLOW_LAN_BIND"]?.toLowerCase() === "true",
+    },
+    logging: {
+      level:
+        (process.env["PI_LOG_LEVEL"] as
+          | "debug"
+          | "info"
+          | "warn"
+          | "error"
+          | undefined) ?? "info",
+      json: false,
+    },
+  });
+}
+
+function validateReloadConfig(raw: unknown) {
+  try {
+    loadConfig(raw);
+    return { valid: true, errors: [] };
+  } catch (cause) {
+    if (cause instanceof ConfigurationError) return { valid: false, errors: [cause.message] };
+    return { valid: false, errors: ["unknown config validation error"] };
+  }
+}
+
+async function reloadExtensionsFromEnvironment(reason: string): Promise<void> {
+  const activator = extensionActivator;
+  if (activator === null) {
+    console.warn(`Received ${reason} — extension activator unavailable`);
+    return;
+  }
+  try {
+    const outcome = await activator.reloadConfig(loadRuntimeConfigFromEnvironment());
+    console.log(`Received ${reason} — extension config reload ${outcome.status}`);
+  } catch (cause) {
+    console.error(`Received ${reason} — extension config reload failed`, cause);
+  }
+}
+
+class InMemoryAuditRepository implements AuditRepository {
+  readonly #rows: AuditEventInput[] = [];
+
+  write(input: AuditEventInput): Promise<number> {
+    this.#rows.push(input);
+    return Promise.resolve(this.#rows.length);
+  }
+
+  getPending(): Promise<AuditRow[]> {
+    return Promise.resolve([]);
+  }
+
+  markFlushed(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  pruneOlderThan(): Promise<number> {
+    return Promise.resolve(0);
+  }
 }
 
 function emptyDiagnosticsOverview(startedAt: string): DiagnosticsOverview {

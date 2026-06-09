@@ -1,6 +1,7 @@
 /** Guarded local remediation controls for the admin HTTP surface. */
 import type { EventBus } from "@pi-crew/core";
 import type { DiagnosticsProjector } from "./admin-server.js";
+import type { ExtensionConfigReloadOutcome } from "../extension-activator.js";
 import type { InstancePool } from "../instances/instance-pool.js";
 import type { AuditEventInput, AuditRepository, DenAssignmentReader } from "../persistence/types.js";
 import type { SessionStore } from "../sessions/session-store.js";
@@ -73,6 +74,7 @@ export interface RemediationDeps {
   readonly denAssignmentReader?: DenAssignmentReader;
   readonly evidencePoster?: RemediationEvidencePoster;
   readonly validateConfig?: (raw: unknown) => ConfigValidationResult;
+  readonly reloadConfig?: (candidateConfig: unknown) => Promise<ExtensionConfigReloadOutcome>;
   readonly clock?: () => string;
   readonly idFactory?: () => string;
 }
@@ -96,6 +98,7 @@ export class RemediationControlService {
   readonly #denAssignmentReader?: DenAssignmentReader;
   readonly #evidencePoster?: RemediationEvidencePoster;
   readonly #validateConfig?: (raw: unknown) => ConfigValidationResult;
+  readonly #reloadConfig?: (candidateConfig: unknown) => Promise<ExtensionConfigReloadOutcome>;
   readonly #clock: () => string;
   readonly #idFactory: () => string;
   readonly #state: ControlState = { drainMode: "inactive", lastValidConfigKey: null };
@@ -110,6 +113,7 @@ export class RemediationControlService {
     this.#denAssignmentReader = deps.denAssignmentReader;
     this.#evidencePoster = deps.evidencePoster;
     this.#validateConfig = deps.validateConfig;
+    this.#reloadConfig = deps.reloadConfig;
     this.#clock = deps.clock ?? (() => new Date().toISOString());
     this.#idFactory = deps.idFactory ?? (() => `ctrl_${crypto.randomUUID()}`);
   }
@@ -233,19 +237,35 @@ export class RemediationControlService {
   }
 
   async reloadConfig(request: RemediationRequest): Promise<RemediationResult> {
-    return this.#run("config_reload", request, () => {
+    return this.#run("config_reload", request, async () => {
       const before = { validationCache: this.#state.lastValidConfigKey };
       const validation = this.#validateConfig?.(request.candidateConfig) ?? {
         valid: false,
         errors: ["config validator unavailable"],
       };
       if (!validation.valid) return denied(before, "config_invalid", validation.errors);
-      if (!request.dryRun) this.#state.lastValidConfigKey = request.idempotencyKey;
+      if (request.dryRun) {
+        return {
+          accepted: true,
+          before,
+          after: null,
+          warnings: ["dry run; targeted extension reload not applied"],
+          denEvidence: localEvidence("config_reload_dry_run"),
+        };
+      }
+      const reloadOutcome = await this.#reloadConfig?.(request.candidateConfig);
+      this.#state.lastValidConfigKey = request.idempotencyKey;
       return {
         accepted: true,
         before,
-        after: request.dryRun ? null : { validationCache: request.idempotencyKey, applied: true },
-        warnings: ["reload applies only validated hot-safe sections; restart may still be required"],
+        after: {
+          validationCache: request.idempotencyKey,
+          applied: true,
+          ...(reloadOutcome === undefined ? {} : reloadSummary(reloadOutcome)),
+        },
+        warnings: reloadOutcome?.warnings ?? [
+          "reload applies only validated hot-safe sections; restart may still be required",
+        ],
         denEvidence: localEvidence("config_reload_local_only"),
       };
     });
@@ -397,6 +417,16 @@ function stableFingerprint(action: RemediationAction, request: RemediationReques
 
 function localEvidence(status: string): DenEvidence {
   return { posted: false, messageId: null, notificationId: null, status };
+}
+
+function reloadSummary(outcome: ExtensionConfigReloadOutcome): Record<string, unknown> {
+  return {
+    changedKeys: outcome.changedKeys,
+    affectedExtensionIds: outcome.affectedExtensionIds,
+    reactivatedExtensionIds: outcome.reactivatedExtensionIds,
+    skippedExtensionIds: outcome.skippedExtensionIds,
+    reloadStatus: outcome.status,
+  };
 }
 
 function hasStaleEvidence(evidenceRefs: readonly string[]): boolean {

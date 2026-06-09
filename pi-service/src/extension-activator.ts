@@ -14,6 +14,7 @@ import type {
   EffectiveDelegationRuntime,
   EventBus,
   ExecutionPolicy,
+  ExtensionConfigInterest,
   ExtensionContext,
   HookRegistry,
   Logger,
@@ -109,6 +110,8 @@ export interface ServiceExtension {
   readonly id: string;
   /** Optional diagnostics description. */
   readonly description?: string;
+  /** Dot-path config keys this extension consumes and can reload for. */
+  readonly configInterests?: ReadonlySet<string>;
   /** Register hooks/subscriptions/resources. */
   activate(context: ServiceExtensionContext): Promise<void>;
   /** Unregister hooks/subscriptions/resources. */
@@ -121,6 +124,23 @@ export interface ExtensionActivatorOptions {
   readonly extensions: readonly ServiceExtension[];
   /** Shared service extension context. */
   readonly context: ServiceExtensionContext;
+  /** Config keys that require restart instead of targeted reload. */
+  readonly nonReloadableConfigKeys?: readonly string[];
+}
+
+/** Config diff with affected reload-capable extension ids. */
+export interface ExtensionConfigDiff {
+  readonly changedKeys: readonly string[];
+  readonly affectedExtensionIds: readonly string[];
+  readonly nonReloadableKeys: readonly string[];
+}
+
+/** Result of a targeted extension config reload attempt. */
+export interface ExtensionConfigReloadOutcome extends ExtensionConfigDiff {
+  readonly reactivatedExtensionIds: readonly string[];
+  readonly skippedExtensionIds: readonly string[];
+  readonly status: "unchanged" | "reloaded" | "blocked";
+  readonly warnings: readonly string[];
 }
 
 /** Options for creating a service extension context. */
@@ -156,7 +176,18 @@ export class ExtensionDeactivationError extends Error {
   }
 }
 
-/** Error thrown by the fail-closed unavailable delegation bridge. */
+/** Error thrown when targeted config reload cannot safely reactivate an extension. */
+export class ExtensionConfigReloadError extends Error {
+  readonly code = "EXTENSION_CONFIG_RELOAD_ERROR";
+  readonly extensionId: string;
+
+  constructor(extensionId: string, cause: unknown) {
+    super(`Extension config reload failed: ${extensionId}`, { cause });
+    this.name = "ExtensionConfigReloadError";
+    this.extensionId = extensionId;
+  }
+}
+
 export class DelegationBridgeUnavailableError extends Error {
   readonly code = "DELEGATION_BRIDGE_UNAVAILABLE";
 
@@ -177,6 +208,31 @@ export function createServiceExtensionContext(
     logger: options.logger,
     delegationSessions: options.delegationSessions,
   };
+}
+
+
+/** Compute changed leaf config keys and extension ids affected by those keys. */
+export function computeExtensionConfigDiff(
+  previous: GatewayConfig,
+  next: GatewayConfig,
+  interests: readonly (ExtensionConfigInterest & { readonly reloadable?: boolean })[],
+  nonReloadableConfigKeys: readonly string[] = [],
+): ExtensionConfigDiff {
+  const changedKeys = sortedChangedLeafKeys(previous, next);
+  const affected = interests
+    .filter((interest) =>
+      changedKeys.some((changedKey) =>
+        [...interest.configKeys].some((interestKey) =>
+          configKeyMatches(interestKey, changedKey),
+        ),
+      ),
+    )
+    .map((interest) => interest.extensionId)
+    .sort();
+  const nonReloadableKeys = changedKeys.filter((changedKey) =>
+    nonReloadableConfigKeys.some((blockedKey) => configKeyMatches(blockedKey, changedKey)),
+  );
+  return { changedKeys, affectedExtensionIds: affected, nonReloadableKeys };
 }
 
 /** Create a fail-closed placeholder for tests/composition roots without delegation wiring. */
@@ -215,12 +271,14 @@ export function createUnavailableDelegationSessionBridge(): DelegationSessionBri
 /** Ordered service extension lifecycle manager. */
 export class ExtensionActivator {
   readonly #extensions: readonly ServiceExtension[];
-  readonly #context: ServiceExtensionContext;
+  readonly #nonReloadableConfigKeys: readonly string[];
+  #context: ServiceExtensionContext;
   readonly #activated: ServiceExtension[] = [];
 
   constructor(options: ExtensionActivatorOptions) {
     this.#extensions = options.extensions;
     this.#context = options.context;
+    this.#nonReloadableConfigKeys = options.nonReloadableConfigKeys ?? [];
   }
 
   /** Activate all configured extensions in composition-root order. */
@@ -247,6 +305,69 @@ export class ExtensionActivator {
     }
   }
 
+
+  /** Reload config by deactivating/reactivating only affected extensions. */
+  async reloadConfig(nextConfig: GatewayConfig): Promise<ExtensionConfigReloadOutcome> {
+    const previousContext = this.#context;
+    const nextContext: ServiceExtensionContext = { ...previousContext, config: nextConfig };
+    const diff = computeExtensionConfigDiff(
+      previousContext.config,
+      nextConfig,
+      this.#extensions.map((extension) => ({
+        extensionId: extension.id,
+        configKeys: extension.configInterests ?? new Set<string>(),
+        reloadable: true,
+      })),
+      this.#nonReloadableConfigKeys,
+    );
+    const allExtensionIds = this.#extensions.map((extension) => extension.id);
+    if (diff.changedKeys.length === 0) {
+      return {
+        ...diff,
+        reactivatedExtensionIds: [],
+        skippedExtensionIds: allExtensionIds,
+        status: "unchanged",
+        warnings: [],
+      };
+    }
+    if (diff.nonReloadableKeys.length > 0) {
+      this.#context.logger.warn("extension.config_reload.blocked", {
+        changedKeys: diff.changedKeys,
+        nonReloadableKeys: diff.nonReloadableKeys,
+      });
+      return {
+        ...diff,
+        reactivatedExtensionIds: [],
+        skippedExtensionIds: allExtensionIds,
+        status: "blocked",
+        warnings: ["non-reloadable config keys changed; restart required"],
+      };
+    }
+
+    const affected = new Set(diff.affectedExtensionIds);
+    const reactivated: string[] = [];
+    for (const extension of this.#extensions) {
+      if (!affected.has(extension.id)) continue;
+      await this.reloadOne(extension, previousContext, nextContext);
+      reactivated.push(extension.id);
+    }
+    this.#context = nextContext;
+    const skipped = allExtensionIds.filter((extensionId) => !affected.has(extensionId));
+    this.#context.logger.info("extension.config_reload.completed", {
+      changedKeys: diff.changedKeys,
+      affectedExtensionIds: diff.affectedExtensionIds,
+      reactivatedExtensionIds: reactivated,
+      skippedExtensionIds: skipped,
+    });
+    return {
+      ...diff,
+      reactivatedExtensionIds: reactivated,
+      skippedExtensionIds: skipped,
+      status: "reloaded",
+      warnings: [],
+    };
+  }
+
   private async deactivateActivatedAfterFailure(): Promise<void> {
     while (this.#activated.length > 0) {
       const extension = this.#activated.pop();
@@ -271,4 +392,60 @@ export class ExtensionActivator {
       throw new ExtensionDeactivationError(extension.id, cause);
     }
   }
+
+  private async reloadOne(
+    extension: ServiceExtension,
+    previousContext: ServiceExtensionContext,
+    nextContext: ServiceExtensionContext,
+  ): Promise<void> {
+    const activatedIndex = this.#activated.indexOf(extension);
+    if (activatedIndex === -1) return;
+    this.#activated.splice(activatedIndex, 1);
+    await this.deactivateOne(extension);
+    try {
+      nextContext.logger.info("extension.reactivating", { extensionId: extension.id });
+      await extension.activate(nextContext);
+      this.#activated.splice(activatedIndex, 0, extension);
+      nextContext.logger.info("extension.reactivated", { extensionId: extension.id });
+    } catch (cause) {
+      previousContext.logger.error("extension.reactivation_failed", {
+        extensionId: extension.id,
+        cause,
+      });
+      await extension.activate(previousContext);
+      this.#activated.splice(activatedIndex, 0, extension);
+      throw new ExtensionConfigReloadError(extension.id, cause);
+    }
+  }
+}
+
+function sortedChangedLeafKeys(previous: unknown, next: unknown): string[] {
+  const keys = new Set<string>();
+  collectChangedKeys(previous, next, [], keys);
+  return [...keys].filter((key) => key.length > 0).sort();
+}
+
+function collectChangedKeys(
+  previous: unknown,
+  next: unknown,
+  path: readonly string[],
+  keys: Set<string>,
+): void {
+  if (Object.is(previous, next)) return;
+  if (!isPlainRecord(previous) || !isPlainRecord(next)) {
+    keys.add(path.join("."));
+    return;
+  }
+  const childKeys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  for (const childKey of childKeys) {
+    collectChangedKeys(previous[childKey], next[childKey], [...path, childKey], keys);
+  }
+}
+
+function configKeyMatches(interestKey: string, changedKey: string): boolean {
+  return changedKey === interestKey || changedKey.startsWith(`${interestKey}.`);
+}
+
+function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

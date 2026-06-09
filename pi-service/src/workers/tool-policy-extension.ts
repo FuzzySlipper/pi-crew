@@ -64,6 +64,7 @@ const CREDENTIAL_PATTERNS = [
 export class ToolPolicyExtension implements ServiceExtension {
   readonly id = "tool-policy";
   readonly description = "Registers tool policy before/after hooks for worker sessions.";
+  readonly configInterests = new Set(["runtime"]);
   readonly #registry: ToolPolicySessionRegistry;
   readonly #unsubscribers: Array<() => void> = [];
 
