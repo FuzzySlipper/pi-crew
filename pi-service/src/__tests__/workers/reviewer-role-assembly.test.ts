@@ -82,6 +82,7 @@ describe("ReviewerRoleAssembly", () => {
     expect(message).toBeDefined();
     if (message === undefined) throw new Error("expected a message");
     expect(message.role).toBe("user");
+    if (message.role !== "user") throw new Error("expected user message");
     expect(typeof message.content).toBe("string");
     if (typeof message.content !== "string") throw new Error("expected text content");
     expect(message.content).toContain("reviewer_context_packet");

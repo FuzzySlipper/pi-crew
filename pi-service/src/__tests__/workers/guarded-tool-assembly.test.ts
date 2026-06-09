@@ -39,7 +39,9 @@ function makeBinding(overrides?: Partial<WorkerBinding>): WorkerBinding {
 }
 
 function makePolicy(overrides?: Partial<WorkerPolicy>): WorkerPolicy {
-  return {
+  const base = {
+    policyId: "711",
+    rootPath: "/tmp/pi-worker",
     assignmentId: "711",
     role: "coder",
     workdir: "/tmp/pi-worker",
@@ -54,11 +56,12 @@ function makePolicy(overrides?: Partial<WorkerPolicy>): WorkerPolicy {
     idleTimeoutMs: 10 * 60 * 1000,
     maxIterations: 50,
     maxTokensPerTurn: 128_000,
-    credentialScope: "none",
+    credentialScope: "none" as const,
     releaseOnCompletion: true,
     cleanupWorkdir: true,
     ...overrides,
   };
+  return base;
 }
 
 function makeConfig(

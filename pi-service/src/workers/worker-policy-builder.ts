@@ -17,10 +17,13 @@ export function buildWorkerPolicy(
   roleConfig?: WorkerRoleConfig,
 ): WorkerPolicy {
   const defaults = roleConfig?.toolPolicyDefaults;
+  const workdir = defaults?.workdirRoot ?? "/tmp";
   return {
+    policyId: binding.assignmentId,
+    rootPath: workdir,
     assignmentId: binding.assignmentId,
     role: binding.role,
-    workdir: defaults?.workdirRoot ?? "/tmp",
+    workdir,
     allowedPaths: [],
     denyPaths: [],
     allowedTools: defaults?.allowedTools ?? [],

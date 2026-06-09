@@ -10,7 +10,9 @@ import {
 import type { AgentTool, AgentToolResult } from "../../workers/guarded-tool-types.js";
 
 function policy(overrides?: Partial<WorkerPolicy>): WorkerPolicy {
-  return {
+  const base = {
+    policyId: "2065",
+    rootPath: "/tmp/pi-worker",
     assignmentId: "2065",
     role: "coder",
     workdir: "/tmp/pi-worker",
@@ -25,11 +27,12 @@ function policy(overrides?: Partial<WorkerPolicy>): WorkerPolicy {
     idleTimeoutMs: 10 * 60 * 1000,
     maxIterations: 50,
     maxTokensPerTurn: 128_000,
-    credentialScope: "none",
+    credentialScope: "none" as const,
     releaseOnCompletion: true,
     cleanupWorkdir: true,
     ...overrides,
   };
+  return base;
 }
 
 function binding(): WorkerBinding {

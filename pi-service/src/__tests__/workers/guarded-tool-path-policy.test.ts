@@ -20,7 +20,9 @@ function binding(): WorkerBinding {
 }
 
 function policy(overrides?: Partial<WorkerPolicy>): WorkerPolicy {
-  return {
+  const base = {
+    policyId: "2063",
+    rootPath: "/workspace/task",
     assignmentId: "2063",
     role: "coder",
     workdir: "/workspace/task",
@@ -35,11 +37,12 @@ function policy(overrides?: Partial<WorkerPolicy>): WorkerPolicy {
     idleTimeoutMs: 10 * 60 * 1000,
     maxIterations: 50,
     maxTokensPerTurn: 128_000,
-    credentialScope: "none",
+    credentialScope: "none" as const,
     releaseOnCompletion: true,
     cleanupWorkdir: true,
     ...overrides,
   };
+  return base;
 }
 
 function config(overrides?: Partial<GuardedToolAssemblyConfig>): GuardedToolAssemblyConfig {
