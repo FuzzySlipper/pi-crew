@@ -65,6 +65,16 @@ export {
   scanToolName,
 } from "./policy-scanner.js";
 
+// ── Delegation policy derivation ───────────────────────────────
+export {
+  type DelegationPolicyConstraints,
+  type DeriveChildExecutionPolicyInput,
+  type DelegationPolicyDerivation,
+  type DelegationPolicyDerivationErrorCode,
+  type DelegationPolicyDerivationError,
+  deriveChildExecutionPolicy,
+} from "./delegation-policy.js";
+
 // ── Tool policy enforcer ──────────────────────────────────────
 
 export {
