@@ -1,8 +1,8 @@
 /** Assemble Agent-backed ordinary conversational runtimes from installed config. */
 
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
-import type { Api, Model, TextContent } from "@earendil-works/pi-ai";
+import { getModels, getProviders, Type } from "@earendil-works/pi-ai";
+import type { Api, KnownProvider, Model, TextContent } from "@earendil-works/pi-ai";
 import { ConfigurationError, type Logger, type EventBus } from "@pi-crew/core";
 import { type MCPClient, type ToolCallContentBlock, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import { assembleProfilePrompt, loadProfile, type Profile, type ToolPolicy } from "@pi-crew/profiles";
@@ -158,6 +158,9 @@ function selectAgentForContext(
     if (only === undefined) {
       throw new ConfigurationError("No enabled conversational agent is available");
     }
+    if (only.profileId !== profileId) {
+      throw new ConfigurationError(`No configured conversational agent matches profile ${profileId}`);
+    }
     return only;
   }
   const match = agents.find((agent) => agent.profileId === profileId);
@@ -196,6 +199,25 @@ function resolveModelConfig(
 }
 
 function createAgentModel(config: ConversationalRuntimeModelConfig): Model<Api> {
+  if (isKnownProvider(config.provider)) {
+    const registered = getModels(config.provider).find((model) => model.id === config.modelName);
+    if (registered !== undefined) {
+      return {
+        ...registered,
+        baseUrl: config.modelBaseUrl ?? registered.baseUrl,
+        maxTokens: config.maxTokens ?? registered.maxTokens,
+      };
+    }
+    if (config.modelBaseUrl === undefined) {
+      throw new ConfigurationError(
+        `Conversational model ${config.provider}/${config.modelName} is not registered and has no OpenAI-compatible baseUrl`,
+      );
+    }
+  } else if (config.modelBaseUrl === undefined) {
+    throw new ConfigurationError(
+      `Conversational provider ${config.provider} is not registered and has no OpenAI-compatible baseUrl`,
+    );
+  }
   return {
     id: config.modelName,
     name: config.modelName,
@@ -208,6 +230,10 @@ function createAgentModel(config: ConversationalRuntimeModelConfig): Model<Api> 
     contextWindow: 128_000,
     maxTokens: config.maxTokens ?? 4096,
   };
+}
+
+function isKnownProvider(provider: string): provider is KnownProvider {
+  return getProviders().includes(provider as KnownProvider);
 }
 
 function resolveApiKey(

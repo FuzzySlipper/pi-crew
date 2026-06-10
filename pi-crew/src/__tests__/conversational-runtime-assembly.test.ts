@@ -8,6 +8,7 @@ import { ToolRegistry, type AgentTool as McpAgentTool, type MCPClient } from "@p
 import { CrewConfigSchema } from "../config.js";
 import {
   buildConversationalAgentResponderFactory,
+  buildConversationalAgentResponderFactoryForAgents,
   resolveConversationalAgentRuntime,
 } from "../conversational-runtime-assembly.js";
 
@@ -35,6 +36,25 @@ function makeClient(): MCPClient {
   return {
     callTool: () => Promise.resolve({ ok: true, content: [{ type: "text", text: "ok" }] }),
   } as unknown as MCPClient;
+}
+
+type ConversationalAgentConfig = ReturnType<typeof CrewConfigSchema.parse>["conversationalAgents"][number];
+
+function parsedAgent(profileId: string, runtime: Record<string, unknown>): ConversationalAgentConfig {
+  return CrewConfigSchema.parse({
+    den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
+    conversationalAgents: [{
+      agentId: `agent-${profileId}`,
+      enabled: true,
+      profileId,
+      profileIdentity: profileId,
+      memberIdentity: profileId,
+      session: { ownerId: "owner", sessionId: `sess-${profileId}`, maxHistoryMessages: 20 },
+      channels: [{ providerId: "den-channels", channelId: "642", subscriptionIdentity: `${profileId}:ordinary` }],
+      runtime,
+      lifecycle: { turnTimeoutMs: 300000 },
+    }],
+  }).conversationalAgents[0] as ConversationalAgentConfig;
 }
 
 describe("conversational agent config schema", () => {
@@ -281,6 +301,41 @@ describe("resolveConversationalAgentRuntime", () => {
     expect(runtime.tools.map((tool) => tool.name)).toEqual(["mcp_den_get_task"]);
   });
 
+  it("fails closed when provider/model are not registered and no OpenAI-compatible baseUrl is configured", () => {
+    const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-invalid-provider-"));
+    writeProfile(
+      profilesRoot,
+      "invalid-provider",
+      [
+        'name: "Invalid Provider"',
+        'description: "Invalid"',
+        "toolPolicy:",
+        "  mode: allow_all",
+        "",
+      ].join("\n"),
+      "Invalid provider soul.",
+    );
+    const registry = new ToolRegistry(new FakeLogger());
+
+    expect(() =>
+      resolveConversationalAgentRuntime({
+        agent: parsedAgent("invalid-provider", {
+          mode: "agent",
+          provider: "not-a-provider",
+          model: "not-a-model",
+          systemPromptSource: "profile",
+          tools: { allow: [] },
+          toolPolicy: { mode: "profile" },
+        }),
+        profilesRoot,
+        toolRegistry: registry,
+        mcpClient: makeClient(),
+        logger: new FakeLogger(),
+        env: {},
+      }),
+    ).toThrow(/not registered and has no OpenAI-compatible baseUrl/);
+  });
+
   it("fails closed when an enabled agent has no resolved provider or model", () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-missing-model-"));
     writeProfile(
@@ -336,6 +391,45 @@ describe("resolveConversationalAgentRuntime", () => {
 });
 
 describe("buildConversationalAgentResponderFactory", () => {
+  it("fails closed when a single configured conversational agent receives another profileId", () => {
+    const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-profile-mismatch-"));
+    writeProfile(
+      profilesRoot,
+      "runner-profile",
+      [
+        'name: "Runner Profile"',
+        'description: "Runner"',
+        "modelConfig:",
+        '  provider: "openai"',
+        '  model: "gpt-4.1-mini"',
+        "toolPolicy:",
+        "  mode: allow_all",
+        "",
+      ].join("\n"),
+      "Runner soul.",
+    );
+    const factory = buildConversationalAgentResponderFactoryForAgents({
+      agents: [
+        parsedAgent("runner-profile", {
+          mode: "agent",
+          systemPromptSource: "profile",
+          tools: { allow: [] },
+          toolPolicy: { mode: "profile" },
+        }),
+      ],
+      profilesRoot,
+      toolRegistry: new ToolRegistry(new FakeLogger()),
+      mcpClient: makeClient(),
+      logger: new FakeLogger(),
+      eventBus: new FakeEventBus(),
+      env: {},
+    });
+
+    expect(() => factory.createResponder({ profileId: "other-profile" })).toThrow(
+      /No configured conversational agent matches profile other-profile/,
+    );
+  });
+
   it("creates an Agent-backed responder factory for configured agent mode", () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-factory-"));
     writeProfile(
