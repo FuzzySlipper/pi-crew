@@ -40,9 +40,7 @@ export interface AgentResponderFactory {
 export class EchoAgentResponder implements AgentResponder {
   respond(request: AgentResponseRequest): Promise<ChannelContent> {
     const text =
-      request.message.content.kind === "text"
-        ? request.message.content.text
-        : "[non-text content]";
+      request.message.content.kind === "text" ? request.message.content.text : "[non-text content]";
 
     return Promise.resolve({ kind: "text", text: `received: ${text}` });
   }

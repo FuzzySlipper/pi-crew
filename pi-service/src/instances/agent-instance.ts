@@ -86,9 +86,7 @@ export class AgentInstanceImpl implements AgentInstance {
     return this._disposed;
   }
 
-  processMessage(
-    message: ChannelMessage,
-  ): Promise<ChannelContent> {
+  processMessage(message: ChannelMessage): Promise<ChannelContent> {
     return this.responder.respond({
       sessionId: this.sessionId,
       profileId: this.profileId,

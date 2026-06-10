@@ -35,9 +35,7 @@ export interface DeterministicArithmeticResult {
 /** Small static runtime tool contract for deterministic responder paths. */
 export interface DeterministicRuntimeTool {
   readonly name: string;
-  execute(
-    request: DeterministicArithmeticRequest,
-  ): Promise<DeterministicArithmeticResult>;
+  execute(request: DeterministicArithmeticRequest): Promise<DeterministicArithmeticResult>;
 }
 
 /** Options for the deterministic responder. */
@@ -58,9 +56,7 @@ export interface DeterministicToolAgentResponderFactoryOptions {
 export class DeterministicArithmeticTool implements DeterministicRuntimeTool {
   public readonly name = DETERMINISTIC_ARITHMETIC_TOOL_NAME;
 
-  execute(
-    request: DeterministicArithmeticRequest,
-  ): Promise<DeterministicArithmeticResult> {
+  execute(request: DeterministicArithmeticRequest): Promise<DeterministicArithmeticResult> {
     const sum = request.left + request.right;
     return Promise.resolve({
       sum,
@@ -106,10 +102,7 @@ export class DeterministicToolAgentResponder implements AgentResponder {
   }
 
   async respond(request: AgentResponseRequest): Promise<ChannelContent> {
-    const text =
-      request.message.content.kind === "text"
-        ? request.message.content.text
-        : null;
+    const text = request.message.content.kind === "text" ? request.message.content.text : null;
     const parsed = parseDeterministicArithmeticRequest(text);
     if (parsed === null) {
       return this.fallback.respond(request);
@@ -142,12 +135,8 @@ export class DeterministicToolAgentResponder implements AgentResponder {
 }
 
 /** Factory for deterministic runtime mode; fails closed without its tool. */
-export class DeterministicToolAgentResponderFactory
-  implements AgentResponderFactory
-{
-  constructor(
-    private readonly options: DeterministicToolAgentResponderFactoryOptions,
-  ) {}
+export class DeterministicToolAgentResponderFactory implements AgentResponderFactory {
+  constructor(private readonly options: DeterministicToolAgentResponderFactoryOptions) {}
 
   createResponder(context: AgentResponderFactoryContext): AgentResponder {
     void context;

@@ -4,7 +4,11 @@ import type { ChannelContent, ChannelMessage } from "@pi-crew/core";
 import { FakeChannelProvider, FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { describe, expect, it } from "vitest";
 import { AgentFactoryImpl } from "../../agents/agent-factory.js";
-import type { AgentResponseRequest, AgentResponder, AgentResponderFactory } from "../../instances/agent-responder.js";
+import type {
+  AgentResponseRequest,
+  AgentResponder,
+  AgentResponderFactory,
+} from "../../instances/agent-responder.js";
 import { InstanceFactoryImpl } from "../../instances/instance-factory.js";
 import { DEFAULT_POOL_CONFIG, InstancePoolImpl } from "../../instances/instance-pool.js";
 import { SessionManagerImpl } from "../../sessions/session-manager.js";
@@ -44,9 +48,20 @@ describe("session history routing", () => {
     const store = new InMemorySessionStore();
     const responderFactory = new CapturingResponderFactory();
     const instanceFactory = new InstanceFactoryImpl(logger, responderFactory);
-    const pool = new InstancePoolImpl(instanceFactory, { ...DEFAULT_POOL_CONFIG, idleTimeoutMs: 0 }, logger);
+    const pool = new InstancePoolImpl(
+      instanceFactory,
+      { ...DEFAULT_POOL_CONFIG, idleTimeoutMs: 0 },
+      logger,
+    );
     const agentFactory = new AgentFactoryImpl(pool, store, eventBus, logger);
-    const manager = new SessionManagerImpl(store, agentFactory, pool, eventBus, logger, "system-architect");
+    const manager = new SessionManagerImpl(
+      store,
+      agentFactory,
+      pool,
+      eventBus,
+      logger,
+      "system-architect",
+    );
     const channel = new FakeChannelProvider();
 
     await manager.routeMessage(channel, message("msg-1", "hello"));

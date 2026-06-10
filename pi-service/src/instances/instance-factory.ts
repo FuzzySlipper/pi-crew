@@ -51,8 +51,7 @@ export interface InstanceFactory {
 export class InstanceFactoryImpl implements InstanceFactory {
   constructor(
     private readonly logger: Logger,
-    private readonly responderFactory: AgentResponderFactory =
-      new EchoAgentResponderFactory(),
+    private readonly responderFactory: AgentResponderFactory = new EchoAgentResponderFactory(),
   ) {}
 
   create(

@@ -88,9 +88,7 @@ describe("AgentInstanceImpl", () => {
   it("sets createdAt to now", () => {
     const before = new Date();
     const instance = new AgentInstanceImpl("test");
-    expect(instance.createdAt.getTime()).toBeGreaterThanOrEqual(
-      before.getTime(),
-    );
+    expect(instance.createdAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
   });
 
   it("is not disposed initially", () => {
@@ -112,11 +110,7 @@ describe("AgentInstanceImpl", () => {
   });
 
   it("accepts a custom id", () => {
-    const instance = new AgentInstanceImpl(
-      "test",
-      new EchoAgentResponder(),
-      "custom-42",
-    );
+    const instance = new AgentInstanceImpl("test", new EchoAgentResponder(), "custom-42");
     expect(instance.id).toBe("custom-42");
   });
 
@@ -194,9 +188,7 @@ describe("InstanceFactoryImpl", () => {
     const response = await instance.processMessage(createTextMessage("hello"));
 
     expect(response).toEqual({ kind: "text", text: "factory-response" });
-    expect(responderFactory.contexts).toEqual([
-      { profileId: "profile-b", role: "coder" },
-    ]);
+    expect(responderFactory.contexts).toEqual([{ profileId: "profile-b", role: "coder" }]);
   });
 
   it("can create instances through the Agent-backed conversational responder factory", async () => {
@@ -208,8 +200,6 @@ describe("InstanceFactoryImpl", () => {
     const response = await instance.processMessage(createTextMessage("hello"));
 
     expect(response).toEqual({ kind: "text", text: "agent-backed-response" });
-    expect(builder.contexts).toEqual([
-      { profileId: "system-architect", role: "runner" },
-    ]);
+    expect(builder.contexts).toEqual([{ profileId: "system-architect", role: "runner" }]);
   });
 });

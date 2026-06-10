@@ -133,9 +133,7 @@ export class InstancePoolImpl implements InstancePool {
     }
 
     // Enforce max per profile
-    const profileCount = [...this.entries.values()].filter(
-      (e) => e.profileId === profileId,
-    ).length;
+    const profileCount = [...this.entries.values()].filter((e) => e.profileId === profileId).length;
     if (profileCount >= this.config.maxPerProfile) {
       throw new SessionLimitError(
         `Instance pool at capacity for profile "${profileId}" (${String(this.config.maxPerProfile)})`,

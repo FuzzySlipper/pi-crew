@@ -20,7 +20,9 @@ class CapturingAgent implements ConversationalAgentAdapter {
   readonly #signal = new AbortController().signal;
   readonly #listeners: Array<(event: AgentEvent, signal: AbortSignal) => Promise<void> | void> = [];
 
-  subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void {
+  subscribe(
+    listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void,
+  ): () => void {
     this.#listeners.push(listener);
     return () => undefined;
   }
@@ -55,7 +57,11 @@ class CapturingAgentFactory implements ConversationalAgentFactory {
 }
 
 class InMemoryTurnHistory implements ConversationalTurnHistory {
-  readonly appended: Array<{ sessionId: string; role: AgentMessage["role"]; message: AgentMessage }> = [];
+  readonly appended: Array<{
+    sessionId: string;
+    role: AgentMessage["role"];
+    message: AgentMessage;
+  }> = [];
 
   constructor(private readonly existing: readonly AgentMessage[]) {}
 
@@ -119,17 +125,18 @@ describe("conversational Agent history", () => {
       logger: new FakeLogger(),
       systemPrompt: "System prompt",
     });
-    const instance = new AgentInstanceImpl("system-architect", responder, "inst-fresh", "sess-conv-1");
+    const instance = new AgentInstanceImpl(
+      "system-architect",
+      responder,
+      "inst-fresh",
+      "sess-conv-1",
+    );
 
     const response = await instance.processMessage(channelMessage("second user message"));
 
     expect(response).toEqual({ kind: "text", text: "fresh assistant response" });
     expect(factory.agent.prompts).toEqual([
-      [
-        priorUser,
-        priorAssistant,
-        userMessage("second user message", "2026-06-10T00:00:02.000Z"),
-      ],
+      [priorUser, priorAssistant, userMessage("second user message", "2026-06-10T00:00:02.000Z")],
     ]);
     expect(history.appended.map((entry) => [entry.sessionId, entry.role])).toEqual([
       ["sess-conv-1", "user"],

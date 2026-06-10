@@ -9,10 +9,7 @@
  */
 
 import type { Logger, EventBus } from "@pi-crew/core";
-import type {
-  SessionConfig,
-  SessionRecord,
-} from "../sessions/types.js";
+import type { SessionConfig, SessionRecord } from "../sessions/types.js";
 import type { SessionStore } from "../sessions/session-store.js";
 import type { InstancePool } from "../instances/instance-pool.js";
 
@@ -51,7 +48,8 @@ export class AgentFactoryImpl implements AgentFactory {
   ) {}
 
   async createSession(config: SessionConfig): Promise<SessionRecord> {
-    const sessionId = config.sessionId ?? `sess-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId =
+      config.sessionId ?? `sess-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
     const instance = await this.pool.acquire(
       config.profileId,
       config.workerBinding?.role,
@@ -74,8 +72,8 @@ export class AgentFactoryImpl implements AgentFactory {
       lastActiveAt: now,
       state: "active",
       messageCount: 0,
-      channelBindings: config.kind === "conversational" ? config.channelBindings ?? [] : [],
-      workerBinding: config.kind === "worker" ? config.workerBinding ?? null : null,
+      channelBindings: config.kind === "conversational" ? (config.channelBindings ?? []) : [],
+      workerBinding: config.kind === "worker" ? (config.workerBinding ?? null) : null,
     };
 
     await this.store.save(record);
