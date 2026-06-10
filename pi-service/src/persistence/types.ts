@@ -30,6 +30,7 @@ export interface SessionRow {
   id: string;
   kind: SessionKind;
   profile_id: string;
+  instance_id: string | null;
   channel_bindings_json: string;
   worker_binding_json: string | null;
   delegation_json: string | null;
@@ -190,7 +191,7 @@ export function rowToRecord(row: SessionRow): SessionRecord {
     id: row.id,
     kind: row.kind,
     profileId: row.profile_id,
-    instanceId: null,
+    instanceId: row.instance_id,
     createdAt: row.created_at,
     lastActiveAt: row.last_activity,
     state: row.status,
@@ -212,6 +213,7 @@ export function recordToRow(record: SessionRecord): SessionRow {
     id: record.id,
     kind: record.kind,
     profile_id: record.profileId,
+    instance_id: record.instanceId,
     channel_bindings_json: JSON.stringify(record.channelBindings),
     worker_binding_json: record.workerBinding
       ? JSON.stringify(record.workerBinding)

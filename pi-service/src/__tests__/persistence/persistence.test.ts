@@ -101,7 +101,7 @@ describe("runtime persistence", () => {
   it("opens SQLite in WAL mode and creates only runtime tables", () => {
     const health = db.health();
     expect(health.walEnabled).toBe(true);
-    expect(health.schemaVersion).toBe(3);
+    expect(health.schemaVersion).toBe(4);
     const rows = db.handle.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
     const names = rows.map((row) => row.name);
     expect(names).toContain("sessions");
@@ -114,13 +114,15 @@ describe("runtime persistence", () => {
 
   it("persists conversational and worker sessions across reopen", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
-    await sessions.save(session({ id: "chat", channelBindings: ["den:604"] }));
+    await sessions.save(session({ id: "chat", channelBindings: ["den:604"], instanceId: "inst-chat" }));
     await sessions.save(session({ id: "worker", kind: "worker", channelBindings: [], workerBinding: binding() }));
     db.close();
 
     db = new RuntimeDb(config(path), logger);
     const reopened = new SqliteSessionRepository(db.handle, logger);
-    expect(present(await reopened.findByChannel("den:604")).id).toBe("chat");
+    const chat = present(await reopened.findByChannel("den:604"));
+    expect(chat.id).toBe("chat");
+    expect(chat.instanceId).toBe("inst-chat");
     expect(present(await reopened.get("worker")).workerBinding?.runId).toBe("run-1");
   });
 

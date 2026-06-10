@@ -91,7 +91,7 @@ describe("DeterministicToolAgentResponder", () => {
       event: "tool.called",
       payload: {
         toolName: "deterministic_arithmetic_sum",
-        sessionId: "instance-1",
+        sessionId: "sess-test",
         params: { left: 19, right: 23 },
       },
     });
@@ -101,7 +101,7 @@ describe("DeterministicToolAgentResponder", () => {
       expect.fail("Expected tool.completed event");
     }
     expect(completed.payload.toolName).toBe("deterministic_arithmetic_sum");
-    expect(completed.payload.sessionId).toBe("instance-1");
+    expect(completed.payload.sessionId).toBe("sess-test");
     expect(completed.payload.success).toBe(true);
     expect(completed.payload.durationMs).toBeGreaterThanOrEqual(0);
     expect(completed.payload.result).toEqual({

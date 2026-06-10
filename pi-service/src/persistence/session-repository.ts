@@ -111,27 +111,28 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
     return {
       get: this.#db.prepare("SELECT * FROM sessions WHERE id = @id"),
       save: this.#db.prepare(
-        `INSERT INTO sessions (id, kind, profile_id, channel_bindings_json,
+        `INSERT INTO sessions (id, kind, profile_id, instance_id, channel_bindings_json,
            worker_binding_json, delegation_json, delegation_spawn_request_json,
            delegation_constraints_json, effective_runtime_json,
            status, created_at, last_activity, expires_at)
-         VALUES (@id, @kind, @profile_id, @channel_bindings_json,
+         VALUES (@id, @kind, @profile_id, @instance_id, @channel_bindings_json,
                  @worker_binding_json, @delegation_json, @delegation_spawn_request_json,
                  @delegation_constraints_json, @effective_runtime_json,
                  @status, @created_at, @last_activity, @expires_at)`,
       ),
       upsert: this.#db.prepare(
-        `INSERT INTO sessions (id, kind, profile_id, channel_bindings_json,
+        `INSERT INTO sessions (id, kind, profile_id, instance_id, channel_bindings_json,
            worker_binding_json, delegation_json, delegation_spawn_request_json,
            delegation_constraints_json, effective_runtime_json,
            status, created_at, last_activity, expires_at)
-         VALUES (@id, @kind, @profile_id, @channel_bindings_json,
+         VALUES (@id, @kind, @profile_id, @instance_id, @channel_bindings_json,
                  @worker_binding_json, @delegation_json, @delegation_spawn_request_json,
                  @delegation_constraints_json, @effective_runtime_json,
                  @status, @created_at, @last_activity, @expires_at)
          ON CONFLICT(id) DO UPDATE SET
            kind = excluded.kind,
            profile_id = excluded.profile_id,
+           instance_id = excluded.instance_id,
            channel_bindings_json = excluded.channel_bindings_json,
            worker_binding_json = excluded.worker_binding_json,
            delegation_json = excluded.delegation_json,

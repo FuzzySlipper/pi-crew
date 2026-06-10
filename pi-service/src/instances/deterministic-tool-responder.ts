@@ -119,7 +119,7 @@ export class DeterministicToolAgentResponder implements AgentResponder {
       event: "tool.called",
       payload: {
         toolName: this.options.tool.name,
-        sessionId: request.instanceId,
+        sessionId: request.sessionId,
         params: parsed,
       },
     });
@@ -130,7 +130,7 @@ export class DeterministicToolAgentResponder implements AgentResponder {
       event: "tool.completed",
       payload: {
         toolName: this.options.tool.name,
-        sessionId: request.instanceId,
+        sessionId: request.sessionId,
         success: true,
         durationMs: Date.now() - startedAt,
         result,
