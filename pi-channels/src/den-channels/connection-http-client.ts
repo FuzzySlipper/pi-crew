@@ -16,6 +16,7 @@ export interface DirectAgentEventItem {
   readonly eventId?: number;
   readonly channelId: number;
   readonly memberIdentity?: string | null;
+  readonly targetMemberIdentity?: string | null;
   readonly sourceKind?: string | null;
   readonly sourceId?: string | null;
   readonly sourceProjectId?: string | null;
@@ -37,7 +38,6 @@ export interface DirectAgentEventItem {
   readonly intent?: string | null;
   readonly createdAt?: string | null;
 }
-
 interface DirectAgentEventListResponse {
   readonly items: readonly DirectAgentEventItem[];
   readonly nextAfterId?: number | null;

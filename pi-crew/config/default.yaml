@@ -124,6 +124,43 @@ sessions:
   # a visible fallback when no existing session matches the channel.
   fallbackProfileId: "system-architect"
 
+# ── Non-pooled conversational agents (ordinary Den Channels members) ──
+# Configure stable member/session/subscription identities here when deploying
+# multiple long-lived conversational agents. These are not worker pool members.
+# conversationalAgents:
+#   - agentId: "pi-crew-runner"
+#     enabled: true
+#     profileId: "system-architect"
+#     profileIdentity: "pi-crew-runner"
+#     memberIdentity: "pi-crew-runner"
+#     memberRole: "runner"
+#     displayName: "Pi Crew Runner"
+#     session:
+#       ownerId: "owner:den-k8plus:pi-crew-runner"
+#       sessionId: "sess-pi-crew-runner-live"
+#       idleTimeoutMs: 28800000
+#       maxHistoryMessages: 200
+#     channels:
+#       - providerId: "den-channels"
+#         channelId: "642"
+#         subscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-live"
+#         wakePolicy: "subscription"
+#     runtime:
+#       mode: "agent"
+#       provider: "openai-compatible-local"
+#       model: "Qwen3.6-35B-A3B-MTP-GGUF"
+#       baseUrl: "http://192.168.1.23:13305/"
+#       systemPromptSource: "profile"
+#       tools:
+#         allow: ["den"]
+#       toolPolicy:
+#         mode: "profile"
+#     lifecycle:
+#       singleFlight: true
+#       turnTimeoutMs: 300000
+#       onStartup: "rehydrate_or_create"
+#       onShutdownStatus: "offline"
+
 # ── Logging ───────────────────────────────────────────────────────
 logging:
   # Minimum log level: "debug", "info", "warn", or "error".

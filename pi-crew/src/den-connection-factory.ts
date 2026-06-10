@@ -34,6 +34,7 @@ export function buildDenConnection(
   den: DenConfig,
   logger: Logger,
   cursorStore: CursorStore,
+  memberIdentities: readonly string[] = [],
 ): DenConnection {
   if (den.channelsUrl.length === 0) {
     logger.info("No channelsUrl configured — using simulated connection");
@@ -45,7 +46,7 @@ export function buildDenConnection(
     return buildWebSocketConnection(den, logger);
   }
   if (url.protocol === "http:" || url.protocol === "https:") {
-    return buildHttpConnection(den, logger, cursorStore);
+    return buildHttpConnection(den, logger, cursorStore, memberIdentities);
   }
 
   throw new ConfigurationError(
@@ -104,6 +105,7 @@ function buildHttpConnection(
   den: DenConfig,
   logger: Logger,
   cursorStore: CursorStore,
+  memberIdentities: readonly string[],
 ): DenConnection {
   validateHttpConfig(den);
   logger.info("Creating live Den HTTP direct-agent connection", {
@@ -116,10 +118,11 @@ function buildHttpConnection(
     legacyDirectPolling: den.channelsAllowLegacyDirectPolling,
   });
 
-  const httpConfig: DenHttpConnectionConfig = {
+  const httpConfig = {
     baseUrl: den.channelsUrl,
     projectId: den.channelsProjectId,
     memberIdentity: den.channelsMemberIdentity,
+    memberIdentities,
     token: den.channelsToken,
     pollIntervalMs: den.channelsPollIntervalMs,
     pollLimit: den.channelsPollLimit,
@@ -135,7 +138,7 @@ function buildHttpConnection(
           subscriptionIdentity: den.channelsSubscriptionIdentity,
         },
     allowLegacyDirectPolling: den.channelsAllowLegacyDirectPolling,
-  };
+  } satisfies DenHttpConnectionConfig & { readonly memberIdentities: readonly string[] };
   return new DenHttpDirectAgentConnection(httpConfig, logger, cursorStore);
 }
 

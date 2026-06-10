@@ -39,6 +39,12 @@ import {
   withTurnTimeout,
   type ConversationalTurnCoordinatorOptions,
 } from "./conversational-turn-coordinator.js";
+import {
+  findConfiguredConversationalSession,
+  normalizeConfiguredConversationalSessions,
+  sessionConfigFromConfigured,
+  type ConfiguredConversationalSession,
+} from "./configured-conversational-sessions.js";
 
 /**
  * Multi-session orchestrator.
@@ -127,6 +133,7 @@ export interface SessionManager {
  */
 export class SessionManagerImpl implements SessionManager {
   private readonly turnCoordinator: ConversationalTurnCoordinator;
+  private configuredSessions: readonly ConfiguredConversationalSession[];
 
   constructor(
     private readonly store: SessionStore,
@@ -139,6 +146,11 @@ export class SessionManagerImpl implements SessionManager {
     turnOptions: ConversationalTurnCoordinatorOptions = {},
   ) {
     this.turnCoordinator = new ConversationalTurnCoordinator(turnOptions);
+    this.configuredSessions = [];
+  }
+
+  configureConversationalSessions(configs: readonly SessionConfig[]): void {
+    this.configuredSessions = normalizeConfiguredConversationalSessions(configs);
   }
 
   async create(config: SessionConfig): Promise<SessionRecord> {
@@ -203,7 +215,7 @@ export class SessionManagerImpl implements SessionManager {
   }
 
   async routeMessage(channel: ChannelProvider, message: ChannelMessage): Promise<void> {
-    const record = await this.resolveSession(message.channelId);
+    const record = await this.resolveSession(message);
     await this.turnCoordinator.run(record.id, () =>
       this.processQueuedTurn(channel, message, record.id),
     );
@@ -325,78 +337,61 @@ export class SessionManagerImpl implements SessionManager {
     this.emitPresence(updated, "idle_evicted", "idle", "active");
   }
 
-  /**
-   * Resolve (or create) the session for a channel.
-   *
-   * 1. Look for an existing in-progress session bound to the channel.
-   * 2. If found, route to it.
-   * 3. If not found, create a new conversational session as a visible
-   *    fallback (emits `session.routing` with reason `fallback_created`).
-   *
-   * @returns The resolved session record.
-   */
-  private async resolveSession(channelId: string): Promise<SessionRecord> {
-    // 1. Look for an existing in-progress session bound to this channel.
+  private async resolveSession(message: ChannelMessage): Promise<SessionRecord> {
+    const channelId = message.channelId;
+    const configured = findConfiguredConversationalSession(this.configuredSessions, message);
+    if (configured !== null) {
+      return this.resolveConfiguredSession(configured, channelId);
+    }
     const existing = await this.findByChannel(channelId);
 
     if (existing && existing.state !== "archived") {
-      // Touch the instance to prevent idle eviction.
-      if (existing.instanceId) {
-        this.pool.touch(existing.instanceId);
-      }
-
+      if (existing.instanceId) this.pool.touch(existing.instanceId);
       this.emitPresence(existing, "routed", "active", "active");
-
-      this.eventBus.emit({
-        event: "session.routing",
-        payload: {
-          sessionId: existing.id,
-          channelId,
-          reason: "existing_session",
-        },
-      });
-
-      this.logger.debug("Message routed to existing session", {
-        sessionId: existing.id,
-        channelId,
-      });
-
+      this.emitRouting(existing.id, channelId, "existing_session");
+      this.logger.debug("Message routed to existing session", { sessionId: existing.id, channelId });
       return existing;
     }
 
-    // 2. No suitable session — create a new conversational session as
-    //    a visible fallback.
     const newSession = await this.create({
       profileId: this.fallbackProfileId,
       kind: "conversational",
       channelBindings: [this.bindingFor(channelId)],
     });
-
-    this.eventBus.emit({
-      event: "session.routing",
-      payload: {
-        sessionId: newSession.id,
-        channelId,
-        reason: "fallback_created",
-      },
-    });
-
-    this.logger.info("Fallback session created for routing", {
-      sessionId: newSession.id,
-      channelId,
-    });
-
+    this.emitRouting(newSession.id, channelId, "fallback_created");
+    this.logger.info("Fallback session created for routing", { sessionId: newSession.id, channelId });
     return newSession;
+  }
+
+  private async resolveConfiguredSession(
+    configured: ConfiguredConversationalSession,
+    channelId: string,
+  ): Promise<SessionRecord> {
+    const existing = await this.store.get(configured.sessionId);
+    if (existing !== null && existing.state !== "archived") {
+      if (existing.instanceId) this.pool.touch(existing.instanceId);
+      this.emitPresence(existing, "routed", "active", "active");
+      this.emitRouting(existing.id, channelId, "existing_session");
+      return existing;
+    }
+    const created = await this.create(sessionConfigFromConfigured(configured));
+    this.emitRouting(created.id, channelId, "fallback_created");
+    return created;
+  }
+
+  private emitRouting(
+    sessionId: string,
+    channelId: string,
+    reason: "existing_session" | "fallback_created",
+  ): void {
+    this.eventBus.emit({ event: "session.routing", payload: { sessionId, channelId, reason } });
   }
 
   async archive(sessionId: string): Promise<void> {
     const record = await this.store.get(sessionId);
     if (!record) return;
 
-    // Release instance from pool.
-    if (record.instanceId) {
-      await this.pool.release(record.instanceId);
-    }
+    if (record.instanceId) await this.pool.release(record.instanceId);
 
     const updated: SessionRecord = {
       ...record,
@@ -407,13 +402,7 @@ export class SessionManagerImpl implements SessionManager {
     await this.store.save(updated);
     this.emitPresence(record, "archived", "offline", "left");
 
-    this.eventBus.emit({
-      event: "session.expired",
-      payload: {
-        sessionId,
-        reason: "archived",
-      },
-    });
+    this.eventBus.emit({ event: "session.expired", payload: { sessionId, reason: "archived" } });
 
     this.logger.info("Session archived", { sessionId });
   }
@@ -421,10 +410,6 @@ export class SessionManagerImpl implements SessionManager {
   async evictIdleSessions(): Promise<number> {
     const evictedCount = await this.pool.evictIdle();
 
-    // Update session records for evicted instances.
-    // We need to find sessions whose instance was evicted.
-    // Since the pool doesn't tell us which instance IDs were evicted,
-    // we sweep active sessions and check if their instance is still in pool.
     const activeSessions = await this.store.findByState("active");
     let updatedCount = 0;
 
@@ -441,11 +426,7 @@ export class SessionManagerImpl implements SessionManager {
       }
     }
 
-    if (updatedCount > 0) {
-      this.logger.info("Session records marked idle after eviction", {
-        updatedCount,
-      });
-    }
+    if (updatedCount > 0) this.logger.info("Session records marked idle after eviction", { updatedCount });
 
     return evictedCount;
   }

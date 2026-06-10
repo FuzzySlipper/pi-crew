@@ -276,6 +276,9 @@ export interface DenHttpConnectionConfig {
   /** Member identity for direct-agent event delivery/wake. */
   readonly memberIdentity: string;
 
+  /** Additional configured conversational member identities accepted by this runtime. */
+  readonly memberIdentities?: readonly string[];
+
   /** Authentication token for the Den Channels Gateway. */
   readonly token: string;
 

@@ -161,7 +161,6 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     });
     await Promise.resolve();
   }
-
   async deleteMessage(
     channelId: string,
     messageId: string,
@@ -172,14 +171,12 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     });
     await Promise.resolve();
   }
-
   async sendBreadcrumb(breadcrumb: DenBreadcrumbPayload): Promise<void> {
     this.#logger.debug("HTTP connection: sendBreadcrumb no-op", {
       breadcrumbId: breadcrumb.id,
     });
     await Promise.resolve();
   }
-
   async updateBreadcrumb(
     breadcrumbId: string,
     update: Partial<
@@ -262,7 +259,6 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       });
     }
   }
-
   async #releaseSubscription(): Promise<void> {
     try {
       await this.#subscriptionClient.release(this.#pollState.controller.signal);
@@ -350,9 +346,9 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     const isWake = sourceKind === "wake_event";
     const isGatewayIngress = sourceKind === "gateway_delivery" && isIngressIntent(item.intent);
     if (!isWake && !isGatewayIngress) return false;
-    return targetMemberIdentity(item) === this.#config.memberIdentity;
+    const target = targetMemberIdentity(item);
+    return target !== null && [this.#config.memberIdentity, ...(this.#config.memberIdentities ?? [])].includes(target);
   }
-
   #mapEventToMessage(item: DirectAgentEventItem): DenInboundMessage {
     return {
       id: String(item.id),
@@ -372,6 +368,8 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         assignmentId: item.assignmentId,
         workerRunId: item.workerRunId,
         workerRole: item.workerRole,
+        memberIdentity: item.memberIdentity,
+        targetMemberIdentity: item.targetMemberIdentity,
         profileIdentity: item.profileIdentity,
         agentInstanceId: item.agentInstanceId,
         sessionOwnerId: item.sessionOwnerId,
@@ -464,6 +462,7 @@ function isIngressIntent(value: unknown): boolean {
 }
 
 function targetMemberIdentity(item: DirectAgentEventItem): string | null {
+  if (typeof item.targetMemberIdentity === "string" && item.targetMemberIdentity.length > 0) return item.targetMemberIdentity;
   if (typeof item.memberIdentity === "string" && item.memberIdentity.length > 0) {
     return item.memberIdentity;
   }

@@ -65,6 +65,7 @@ import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
+import { configureConversationalSessionManager, configuredConversationalMemberIdentities } from "./conversational-agent-sessions.js";
 import {
   auditEntryToRecord,
   completionDefaultsFromEnv,
@@ -156,7 +157,7 @@ export class Crew {
 
     // 2. Channel provider (Den Channels adapter).
     const cursorStore = createSqliteCursorStore(this.#runtimeDb);
-    const denConnection = buildDenConnection(config.den, this.#logger, cursorStore);
+    const denConnection = buildDenConnection(config.den, this.#logger, cursorStore, configuredConversationalMemberIdentities(config));
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
     } satisfies DenChannelsAdapterConfig);
@@ -240,6 +241,7 @@ export class Crew {
       config.sessions.fallbackProfileId,
       createFallbackChannelBinding(config),
     );
+    configureConversationalSessionManager(this.#sessionManager, config);
 
     const delegationBridge = new SessionManagerDelegationSessionBridge({
       sessionManager: this.#sessionManager,
