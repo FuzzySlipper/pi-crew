@@ -78,8 +78,20 @@ export class SessionPresenceBridge {
       sessionOwnerId: payload.channelBinding.sessionOwnerId,
       sessionId: payload.sessionId,
     });
-    await membershipResult;
-    await subscriptionResult;
+    // DESIGN: Presence updates are advisory. Individual failures should not
+    // prevent the other from completing or crash the process.
+    // Rationale: Den Channels HTTP subscription endpoints may return 404 when
+    // legacy direct polling is in use, which is a valid degraded mode.
+    const results = await Promise.allSettled([membershipResult, subscriptionResult]);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        this.logger.warn("Session presence bridge upsert failed", {
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          sessionId: payload.sessionId,
+          reason: payload.reason,
+        });
+      }
+    }
   }
 
   private async updateStatus(
