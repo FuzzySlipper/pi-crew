@@ -140,7 +140,7 @@ describe("resolveConversationalAgentRuntime", () => {
         "toolPolicy:",
         "  mode: allow_list",
         "  allow:",
-        "    - den",
+        "    - mcp_den_get_task",
         "",
       ].join("\n"),
       "Base soul prompt.",
@@ -161,6 +161,7 @@ describe("resolveConversationalAgentRuntime", () => {
     const registry = new ToolRegistry(new FakeLogger());
     registry.setMcpTools([
       mcpTool("mcp_den_get_task"),
+      mcpTool("mcp_den_get_messages"),
       mcpTool("mcp_den_delete_document"),
       mcpTool("mcp_web_search"),
     ]);
@@ -212,6 +213,71 @@ describe("resolveConversationalAgentRuntime", () => {
     expect(runtime.systemPrompt).toContain("Base soul prompt.");
     expect(runtime.systemPrompt).toContain("Child soul prompt.");
     expect(runtime.systemPrompt).toContain("Inherited prompt: base-profile");
+    expect(runtime.tools.map((tool) => tool.name)).toEqual(["mcp_den_get_task"]);
+  });
+
+  it("applies profile deny-list after runtime tool selection", () => {
+    const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-deny-tools-"));
+    writeProfile(
+      profilesRoot,
+      "deny-profile",
+      [
+        'name: "Deny Profile"',
+        'description: "Deny profile"',
+        "modelConfig:",
+        '  provider: "openai"',
+        '  model: "gpt-4.1-mini"',
+        "toolPolicy:",
+        "  mode: deny_list",
+        "  deny:",
+        "    - mcp_den_get_messages",
+        "",
+      ].join("\n"),
+      "Deny soul.",
+    );
+    const registry = new ToolRegistry(new FakeLogger());
+    registry.setMcpTools([mcpTool("mcp_den_get_task"), mcpTool("mcp_den_get_messages")]);
+
+    const runtime = resolveConversationalAgentRuntime({
+      agent: {
+        agentId: "pi-crew-runner",
+        enabled: true,
+        profileId: "deny-profile",
+        profileIdentity: "pi-crew-runner",
+        memberIdentity: "pi-crew-runner",
+        session: {
+          ownerId: "owner:den-k8plus:pi-crew-runner",
+          sessionId: "sess-pi-crew-runner-installed-service",
+          maxHistoryMessages: 200,
+        },
+        channels: [
+          {
+            providerId: "den-channels",
+            channelId: "642",
+            subscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-installed-service",
+            wakePolicy: "subscription",
+          },
+        ],
+        runtime: {
+          mode: "agent",
+          systemPromptSource: "profile",
+          tools: { allow: ["den"] },
+          toolPolicy: { mode: "profile" },
+        },
+        lifecycle: {
+          singleFlight: true,
+          turnTimeoutMs: 300000,
+          onStartup: "rehydrate_or_create",
+          onShutdownStatus: "offline",
+        },
+      },
+      profilesRoot,
+      toolRegistry: registry,
+      mcpClient: makeClient(),
+      logger: new FakeLogger(),
+      env: {},
+    });
+
     expect(runtime.tools.map((tool) => tool.name)).toEqual(["mcp_den_get_task"]);
   });
 

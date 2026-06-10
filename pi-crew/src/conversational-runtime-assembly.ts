@@ -5,7 +5,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { Api, Model, TextContent } from "@earendil-works/pi-ai";
 import { ConfigurationError, type Logger, type EventBus } from "@pi-crew/core";
 import { type MCPClient, type ToolCallContentBlock, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
-import { assembleProfilePrompt, loadProfile, type Profile } from "@pi-crew/profiles";
+import { assembleProfilePrompt, loadProfile, type Profile, type ToolPolicy } from "@pi-crew/profiles";
 import {
   ConversationalAgentResponder,
   ConversationalAgentResponderFactory,
@@ -120,6 +120,7 @@ export function resolveConversationalAgentRuntime(
   const tools = selectConversationalTools({
     allow: input.agent.runtime.tools.allow,
     mcpClient: input.mcpClient,
+    profileToolPolicy: profile.toolPolicy,
     registry: input.toolRegistry,
   });
   return {
@@ -223,13 +224,25 @@ function resolveApiKey(
 
 function selectConversationalTools(input: {
   readonly allow: readonly string[];
+  readonly profileToolPolicy: ToolPolicy | undefined;
   readonly registry: McpToolRegistry;
   readonly mcpClient: MCPClient;
 }): AgentTool[] {
   return input.registry
     .listTools()
     .filter((tool) => input.allow.some((set) => toolMatchesSelectedSet(tool.name, set)))
+    .filter((tool) => toolAllowedByProfilePolicy(tool.name, input.profileToolPolicy))
     .map((tool) => createAgentTool(tool, input.mcpClient));
+}
+
+function toolAllowedByProfilePolicy(toolName: string, policy: ToolPolicy | undefined): boolean {
+  if (policy === undefined) return false;
+  const mode = policy.mode ?? "allow_all";
+  if (mode === "allow_all") return true;
+  if (mode === "allow_list") {
+    return (policy.allow ?? []).some((entry) => toolMatchesSelectedSet(toolName, entry));
+  }
+  return !(policy.deny ?? []).some((entry) => toolMatchesSelectedSet(toolName, entry));
 }
 
 function createAgentTool(
