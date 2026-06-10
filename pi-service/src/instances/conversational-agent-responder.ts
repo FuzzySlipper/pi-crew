@@ -131,12 +131,74 @@ export class ConversationalAgentResponder implements AgentResponder {
         break;
       case "agent_start":
       case "agent_end":
+        break;
       case "message_start":
+        this.#eventBus.emit({
+          event: "message.started",
+          payload: {
+            profileId: request.profileId,
+            sessionId: request.instanceId,
+            messageRole: event.message.role,
+          },
+        });
+        break;
       case "message_update":
+        this.#eventBus.emit({
+          event: "message.updated",
+          payload: {
+            profileId: request.profileId,
+            sessionId: request.instanceId,
+            messageRole: event.message.role,
+            updateType: event.assistantMessageEvent.type,
+          },
+        });
+        break;
       case "message_end":
+        this.#eventBus.emit({
+          event: "message.completed",
+          payload: {
+            profileId: request.profileId,
+            sessionId: request.instanceId,
+            messageRole: event.message.role,
+          },
+        });
+        break;
       case "tool_execution_start":
+        this.#eventBus.emit({
+          event: "tool.called",
+          payload: {
+            profileId: request.profileId,
+            sessionId: request.instanceId,
+            toolName: event.toolName,
+            params: event.args,
+          },
+        });
+        break;
       case "tool_execution_update":
+        this.#eventBus.emit({
+          event: "tool.completed",
+          payload: {
+            profileId: request.profileId,
+            sessionId: request.instanceId,
+            toolName: event.toolName,
+            success: true,
+            durationMs: 0,
+            result: event.partialResult,
+          },
+        });
+        break;
       case "tool_execution_end":
+        this.#eventBus.emit({
+          event: "tool.completed",
+          payload: {
+            profileId: request.profileId,
+            sessionId: request.instanceId,
+            toolName: event.toolName,
+            success: !event.isError,
+            durationMs: 0,
+            result: event.result,
+          },
+        });
         break;
       default:
         assertNever(event);

@@ -118,6 +118,25 @@ export interface TurnCompletedPayload extends DenWorkerCorrelationPayload {
   readonly durationMs: number;
 }
 
+/** Fired when an Agent conversational message begins. */
+export interface MessageStartedPayload extends DenWorkerCorrelationPayload {
+  readonly sessionId: string;
+  readonly messageRole: string;
+}
+
+/** Fired when an Agent conversational message streams an update. */
+export interface MessageUpdatedPayload extends DenWorkerCorrelationPayload {
+  readonly sessionId: string;
+  readonly messageRole: string;
+  readonly updateType: string;
+}
+
+/** Fired when an Agent conversational message completes. */
+export interface MessageCompletedPayload extends DenWorkerCorrelationPayload {
+  readonly sessionId: string;
+  readonly messageRole: string;
+}
+
 /** Fired when a turn encounters an error. */
 export interface TurnErroredPayload {
   readonly sessionId: string;
@@ -362,6 +381,9 @@ export type GatewayEvent =
   | { event: "assignment.timed_out"; payload: AssignmentTimedOutPayload }
   | { event: "turn.started"; payload: TurnStartedPayload }
   | { event: "turn.completed"; payload: TurnCompletedPayload }
+  | { event: "message.started"; payload: MessageStartedPayload }
+  | { event: "message.updated"; payload: MessageUpdatedPayload }
+  | { event: "message.completed"; payload: MessageCompletedPayload }
   | { event: "turn.errored"; payload: TurnErroredPayload }
   | { event: "turn.exhausted"; payload: TurnExhaustedPayload }
   | { event: "checkpoint.waiting"; payload: CheckpointWaitingPayload }
