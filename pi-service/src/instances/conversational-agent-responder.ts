@@ -2,7 +2,7 @@
 
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import { Agent } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, Api, Model, TextContent } from "@earendil-works/pi-ai";
+import { streamSimple, type AssistantMessage, type Api, type Model, type TextContent } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger, ChannelContent } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
@@ -30,6 +30,9 @@ export interface ConversationalAgentFactoryInput {
   readonly instanceId: string;
   readonly systemPrompt: string;
   readonly model?: Model<Api>;
+  readonly apiKey?: string;
+  readonly temperature?: number;
+  readonly maxTokens?: number;
   readonly tools?: readonly AgentTool[];
 }
 
@@ -42,7 +45,10 @@ export interface ConversationalAgentResponderConfig {
   readonly eventBus: EventBus;
   readonly logger: Logger;
   readonly model?: Model<Api>;
+  readonly apiKey?: string;
   readonly systemPrompt: string;
+  readonly temperature?: number;
+  readonly maxTokens?: number;
   readonly tools?: readonly AgentTool[];
 }
 
@@ -62,6 +68,13 @@ export class DefaultConversationalAgentFactory implements ConversationalAgentFac
   create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
     return new Agent({
       sessionId: input.instanceId,
+      getApiKey: () => input.apiKey,
+      streamFn: (model, context, options) =>
+        streamSimple(model, context, {
+          ...options,
+          maxTokens: input.maxTokens,
+          temperature: input.temperature,
+        }),
       initialState: {
         model: input.model,
         systemPrompt: input.systemPrompt,
@@ -76,7 +89,10 @@ export class ConversationalAgentResponder implements AgentResponder {
   readonly #eventBus: EventBus;
   readonly #logger: Logger;
   readonly #model: Model<Api> | undefined;
+  readonly #apiKey: string | undefined;
   readonly #systemPrompt: string;
+  readonly #temperature: number | undefined;
+  readonly #maxTokens: number | undefined;
   readonly #tools: readonly AgentTool[] | undefined;
 
   constructor(config: ConversationalAgentResponderConfig) {
@@ -84,7 +100,10 @@ export class ConversationalAgentResponder implements AgentResponder {
     this.#eventBus = config.eventBus;
     this.#logger = config.logger;
     this.#model = config.model;
+    this.#apiKey = config.apiKey;
     this.#systemPrompt = config.systemPrompt;
+    this.#temperature = config.temperature;
+    this.#maxTokens = config.maxTokens;
     this.#tools = config.tools;
   }
 
@@ -94,6 +113,9 @@ export class ConversationalAgentResponder implements AgentResponder {
       instanceId: request.instanceId,
       systemPrompt: this.#systemPrompt,
       model: this.#model,
+      apiKey: this.#apiKey,
+      temperature: this.#temperature,
+      maxTokens: this.#maxTokens,
       tools: this.#tools,
     });
     this.#logger.debug("Starting Agent-backed conversational response", {

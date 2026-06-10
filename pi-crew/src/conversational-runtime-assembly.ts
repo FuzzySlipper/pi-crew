@@ -10,6 +10,7 @@ import {
   ConversationalAgentResponder,
   ConversationalAgentResponderFactory,
   type AgentResponderFactory,
+  type AgentResponderFactoryContext,
   type ConversationalAgentRuntimeBuilder,
 } from "@pi-crew/service";
 
@@ -46,6 +47,16 @@ export interface BuildConversationalAgentResponderFactoryInput
   readonly eventBus?: EventBus;
 }
 
+export interface BuildConversationalAgentResponderFactoryForAgentsInput {
+  readonly agents: readonly CrewConfig["conversationalAgents"][number][];
+  readonly profilesRoot?: string;
+  readonly toolRegistry: McpToolRegistry;
+  readonly mcpClient: MCPClient;
+  readonly logger: Logger;
+  readonly eventBus: EventBus;
+  readonly env?: Readonly<Record<string, string | undefined>>;
+}
+
 class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
   constructor(
     private readonly input: ResolveConversationalAgentRuntimeInput,
@@ -55,13 +66,17 @@ class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBu
 
   build(): ConversationalAgentResponder {
     const runtime = resolveConversationalAgentRuntime(this.input);
-    return new ConversationalAgentResponder({
-      eventBus: this.eventBus,
-      logger: this.logger,
-      model: runtime.agentModel,
-      systemPrompt: runtime.systemPrompt,
-      tools: runtime.tools,
-    });
+    return createResponder(runtime, this.logger, this.eventBus);
+  }
+}
+
+class ProfileMappedConversationalRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
+  constructor(private readonly input: BuildConversationalAgentResponderFactoryForAgentsInput) {}
+
+  build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
+    const agent = selectAgentForContext(this.input.agents, context.profileId);
+    const runtime = resolveConversationalAgentRuntime({ ...this.input, agent });
+    return createResponder(runtime, this.input.logger, this.input.eventBus);
   }
 }
 
@@ -74,6 +89,21 @@ export function buildConversationalAgentResponderFactory(
   resolveConversationalAgentRuntime(input);
   return new ConversationalAgentResponderFactory(
     new StaticConversationalRuntimeBuilder(input, input.logger, input.eventBus),
+  );
+}
+
+export function buildConversationalAgentResponderFactoryForAgents(
+  input: BuildConversationalAgentResponderFactoryForAgentsInput,
+): AgentResponderFactory {
+  const enabled = input.agents.filter((agent) => agent.enabled);
+  if (enabled.length === 0) {
+    throw new ConfigurationError("Conversational Agent runtime assembly requires at least one enabled agent");
+  }
+  for (const agent of enabled) {
+    resolveConversationalAgentRuntime({ ...input, agent });
+  }
+  return new ConversationalAgentResponderFactory(
+    new ProfileMappedConversationalRuntimeBuilder({ ...input, agents: enabled }),
   );
 }
 
@@ -101,6 +131,41 @@ export function resolveConversationalAgentRuntime(
   };
 }
 
+function createResponder(
+  runtime: ResolvedConversationalAgentRuntime,
+  logger: Logger,
+  eventBus: EventBus,
+): ConversationalAgentResponder {
+  return new ConversationalAgentResponder({
+    eventBus,
+    logger,
+    model: runtime.agentModel,
+    apiKey: runtime.model.apiKey,
+    maxTokens: runtime.model.maxTokens,
+    systemPrompt: runtime.systemPrompt,
+    temperature: runtime.model.temperature,
+    tools: runtime.tools,
+  });
+}
+
+function selectAgentForContext(
+  agents: readonly CrewConfig["conversationalAgents"][number][],
+  profileId: string,
+): CrewConfig["conversationalAgents"][number] {
+  if (agents.length === 1) {
+    const only = agents[0];
+    if (only === undefined) {
+      throw new ConfigurationError("No enabled conversational agent is available");
+    }
+    return only;
+  }
+  const match = agents.find((agent) => agent.profileId === profileId);
+  if (match === undefined) {
+    throw new ConfigurationError(`No configured conversational agent matches profile ${profileId}`);
+  }
+  return match;
+}
+
 function resolveModelConfig(
   agent: CrewConfig["conversationalAgents"][number],
   profile: Profile,
@@ -113,11 +178,17 @@ function resolveModelConfig(
       `Conversational agent "${agent.agentId}" requires a resolved runtime provider and model`,
     );
   }
+  if (profile.toolPolicy === undefined) {
+    throw new ConfigurationError(
+      `Conversational agent "${agent.agentId}" requires profile toolPolicy when runtime.toolPolicy.mode is profile`,
+    );
+  }
+  const apiKey = resolveApiKey(agent.runtime.apiKeyEnv ?? profile.modelConfig?.apiKeyEnv, env);
   return {
     provider,
     modelName,
     modelBaseUrl: agent.runtime.baseUrl ?? profile.modelConfig?.baseUrl,
-    apiKey: resolveApiKey(agent.runtime.apiKeyEnv ?? profile.modelConfig?.apiKeyEnv, env),
+    apiKey,
     temperature: profile.modelConfig?.temperature,
     maxTokens: profile.modelConfig?.maxTokens,
   };
@@ -143,7 +214,11 @@ function resolveApiKey(
   env: Readonly<Record<string, string | undefined>>,
 ): string | undefined {
   if (apiKeyEnv === undefined || apiKeyEnv.trim() === "") return undefined;
-  return env[apiKeyEnv];
+  const value = env[apiKeyEnv];
+  if (value === undefined || value.trim() === "") {
+    throw new ConfigurationError(`Required conversational agent API key env ${apiKeyEnv} is not set`);
+  }
+  return value;
 }
 
 function selectConversationalTools(input: {

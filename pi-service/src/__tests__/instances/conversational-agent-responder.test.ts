@@ -1,7 +1,7 @@
 /** Tests for Agent-backed conversational responder boundary. */
 
-import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AgentEvent, AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
+import { Type, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
 import type { ChannelMessage } from "@pi-crew/core";
 import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { describe, expect, it } from "vitest";
@@ -140,6 +140,27 @@ function createAssistantMessage(text: string): AssistantMessage {
   };
 }
 
+const runtimeModel: Model<Api> = {
+  id: "gpt-test",
+  name: "gpt-test",
+  api: "openai-completions",
+  provider: "test-provider",
+  baseUrl: "http://model.test/v1",
+  reasoning: false,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128000,
+  maxTokens: 2048,
+};
+
+const runtimeTool: AgentTool = {
+  label: "lookup_status",
+  name: "lookup_status",
+  description: "Lookup status",
+  parameters: Type.Object({}),
+  execute: () => Promise.resolve({ content: [{ type: "text", text: "ok" }], details: { ok: true } }),
+};
+
 function createTextMessage(text: string): ChannelMessage {
   return {
     id: "message-1",
@@ -163,6 +184,11 @@ describe("ConversationalAgentResponder", () => {
       eventBus: new FakeEventBus(),
       logger: new FakeLogger(),
       systemPrompt: "You are a conversational pi-crew agent.",
+      model: runtimeModel,
+      apiKey: "runtime-key",
+      temperature: 0.4,
+      maxTokens: 2048,
+      tools: [runtimeTool],
     });
     const instance = new AgentInstanceImpl("system-architect", responder, "inst-conv-1");
 
@@ -170,11 +196,16 @@ describe("ConversationalAgentResponder", () => {
 
     expect(response).toEqual({ kind: "text", text: "model says hello" });
     expect(factory.created).toEqual([
-      {
+      expect.objectContaining({
         profileId: "system-architect",
         instanceId: "inst-conv-1",
         systemPrompt: "You are a conversational pi-crew agent.",
-      },
+        model: runtimeModel,
+        apiKey: "runtime-key",
+        temperature: 0.4,
+        maxTokens: 2048,
+        tools: [runtimeTool],
+      }),
     ]);
     expect(factory.agent.prompts).toEqual([
       [

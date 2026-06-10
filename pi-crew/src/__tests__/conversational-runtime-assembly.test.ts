@@ -86,6 +86,42 @@ describe("conversational agent config schema", () => {
     expect(parsed.conversationalAgents).toHaveLength(1);
     expect(parsed.workerPool.groups).toEqual([]);
   });
+  it("fails closed when enabled agent runtime omits explicit tool policy", () => {
+    const result = CrewConfigSchema.safeParse({
+      den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
+      conversationalAgents: [
+        {
+          agentId: "pi-crew-runner",
+          enabled: true,
+          profileId: "child-profile",
+          profileIdentity: "pi-crew-runner",
+          memberIdentity: "pi-crew-runner",
+          session: {
+            ownerId: "owner:den-k8plus:pi-crew-runner",
+            sessionId: "sess-pi-crew-runner-installed-service",
+            maxHistoryMessages: 200,
+          },
+          channels: [
+            {
+              providerId: "den-channels",
+              channelId: "642",
+              subscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-installed-service",
+            },
+          ],
+          runtime: {
+            mode: "agent",
+            provider: "openai",
+            model: "gpt-4.1-mini",
+            systemPromptSource: "profile",
+            tools: { allow: ["den"] },
+          },
+          lifecycle: { turnTimeoutMs: 300000 },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("resolveConversationalAgentRuntime", () => {
@@ -245,6 +281,10 @@ describe("buildConversationalAgentResponderFactory", () => {
         "modelConfig:",
         '  provider: "openai"',
         '  model: "gpt-4.1-mini"',
+        "toolPolicy:",
+        "  mode: allow_list",
+        "  allow:",
+        "    - den",
         "",
       ].join("\n"),
       "Runner soul.",

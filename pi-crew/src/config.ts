@@ -105,7 +105,7 @@ const ConversationalAgentRuntimeConfigSchema = z.object({
   apiKeyEnv: z.string().min(1).optional(),
   systemPromptSource: z.literal("profile").default("profile"),
   tools: z.object({ allow: z.array(z.string().min(1)).default([]) }).default({}),
-  toolPolicy: z.object({ mode: z.literal("profile").default("profile") }).default({}),
+  toolPolicy: z.object({ mode: z.literal("profile") }),
 });
 
 const ConversationalAgentLifecycleConfigSchema = z.object({

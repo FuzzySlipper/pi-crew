@@ -46,6 +46,7 @@ export {
 } from "./worker-pool-groups.js";
 export {
   buildConversationalAgentResponderFactory,
+  buildConversationalAgentResponderFactoryForAgents,
   resolveConversationalAgentRuntime,
   type ConversationalRuntimeModelConfig,
   type ResolvedConversationalAgentRuntime,
