@@ -40,8 +40,6 @@ import {
   type ConversationalTurnCoordinatorOptions,
 } from "./conversational-turn-coordinator.js";
 
-// ── SessionManager interface ────────────────────────────────────
-
 /**
  * Multi-session orchestrator.
  *
@@ -122,8 +120,6 @@ export interface SessionManager {
   evictIdleSessions(): Promise<number>;
 }
 
-// ── SessionManager implementation ───────────────────────────────
-
 /**
  * Default {@link SessionManager} implementation.
  *
@@ -145,22 +141,17 @@ export class SessionManagerImpl implements SessionManager {
     this.turnCoordinator = new ConversationalTurnCoordinator(turnOptions);
   }
 
-  // ── SessionManager contract ───────────────────────────────────
-
   async create(config: SessionConfig): Promise<SessionRecord> {
     const record = await this.factory.createSession(config);
     this.emitPresence(record, "created", "active", "active");
     return record;
   }
-
   async get(sessionId: string): Promise<SessionRecord | null> {
     return this.store.get(sessionId);
   }
-
   async findByChannel(channelId: string): Promise<SessionRecord | null> {
     return this.store.findByChannel(channelId);
   }
-
   async bindChannel(sessionId: string, channelId: string): Promise<void> {
     const record = await this.store.get(sessionId);
     if (!record) return;
@@ -188,7 +179,6 @@ export class SessionManagerImpl implements SessionManager {
       channelId,
     });
   }
-
   async unbindChannel(sessionId: string, channelId: string): Promise<void> {
     const record = await this.store.get(sessionId);
     if (!record) return;
@@ -213,79 +203,74 @@ export class SessionManagerImpl implements SessionManager {
   }
 
   async routeMessage(channel: ChannelProvider, message: ChannelMessage): Promise<void> {
-    let record = await this.resolveSession(message.channelId);
+    const record = await this.resolveSession(message.channelId);
+    await this.turnCoordinator.run(record.id, () =>
+      this.processQueuedTurn(channel, message, record.id),
+    );
+  }
 
-    // ── Rehydration path for conversational sessions ──────────────
-    // When a conversational session is idle (instance evicted),
-    // acquire a fresh instance and re-bind it so the next message
-    // is processed instead of silently dropped.
-    if (record.kind === "conversational") {
-      const instanceId = record.instanceId;
-      const hasLiveInstance = instanceId !== null && this.pool.has(instanceId);
-
-      if (!hasLiveInstance) {
-        const reason = instanceId === null ? "idle_session" : "instance_missing";
-        const instance = await this.pool.acquire(
-          record.profileId,
-          record.workerBinding?.role,
-          record.effectiveRuntime ?? undefined,
-          record.id,
-        );
-
-        const now = new Date().toISOString();
-        const rehydrated: typeof record = {
-          ...record,
-          instanceId: instance.id,
-          state: "active",
-          lastActiveAt: now,
-        };
-
-        await this.store.save(rehydrated);
-        this.emitPresence(rehydrated, "rehydrated", "active", "active");
-
-        this.eventBus.emit({
-          event: "session.rehydrated",
-          payload: {
-            sessionId: record.id,
-            profileId: record.profileId,
-            channelId: message.channelId,
-            oldInstanceId: instanceId,
-            newInstanceId: instance.id,
-            reason,
-          },
-        });
-
-        this.logger.info("Conversational session rehydrated", {
-          sessionId: record.id,
-          profileId: record.profileId,
-          newInstanceId: instance.id,
-        });
-
-        record = rehydrated;
-      }
-    }
-
-    // Retrieve the session's agent instance and process the message.
+  private async processQueuedTurn(
+    channel: ChannelProvider,
+    message: ChannelMessage,
+    sessionId: string,
+  ): Promise<void> {
+    const record = await this.prepareSessionForTurn(sessionId, message.channelId);
+    if (record === null) return;
     const instanceId = record.instanceId;
     if (!instanceId) {
-      this.logger.warn("Session has no instance, cannot process message", {
-        sessionId: record.id,
-      });
+      this.logger.warn("Session has no instance, cannot process message", { sessionId });
       return;
     }
-
     const instance = this.pool.get(instanceId);
     if (!instance) {
-      this.logger.warn("Instance not found in pool", {
-        instanceId,
-        sessionId: record.id,
-      });
+      this.logger.warn("Instance not found in pool", { instanceId, sessionId });
       return;
     }
+    await this.processTurn(channel, message, record, instance);
+  }
 
-    await this.turnCoordinator.run(record.id, () =>
-      this.processTurn(channel, message, record, instance),
+  private async prepareSessionForTurn(
+    sessionId: string,
+    channelId: string,
+  ): Promise<SessionRecord | null> {
+    const record = await this.store.get(sessionId);
+    if (record === null) return null;
+    if (record.kind !== "conversational") return record;
+    const instanceId = record.instanceId;
+    const hasLiveInstance = instanceId !== null && this.pool.has(instanceId);
+    if (hasLiveInstance) return record;
+    const reason = instanceId === null ? "idle_session" : "instance_missing";
+    const instance = await this.pool.acquire(
+      record.profileId,
+      record.workerBinding?.role,
+      record.effectiveRuntime ?? undefined,
+      record.id,
     );
+    const rehydrated: typeof record = {
+      ...record,
+      instanceId: instance.id,
+      state: "active",
+      lastActiveAt: new Date().toISOString(),
+    };
+    await this.store.save(rehydrated);
+    this.emitPresence(rehydrated, "rehydrated", "active", "active");
+    this.eventBus.emit({
+      event: "session.rehydrated",
+      payload: {
+        sessionId: record.id,
+        profileId: record.profileId,
+        channelId,
+        oldInstanceId: instanceId,
+        newInstanceId: instance.id,
+        reason,
+      },
+    });
+    this.logger.info("Conversational session rehydrated", {
+      sessionId: record.id,
+      profileId: record.profileId,
+      newInstanceId: instance.id,
+    });
+    return rehydrated;
   }
 
   private async processTurn(
@@ -315,14 +300,29 @@ export class SessionManagerImpl implements SessionManager {
         error: error instanceof Error ? error.message : String(error),
         timedOut,
       });
+      if (timedOut) await this.markTimedOutTurnIdle(record, instance.id);
       await channel.sendMessage(message.channelId, {
         kind: "text",
         text: timedOut
           ? "The agent timed out while responding. Please try again."
           : "The agent hit an internal error while responding. Please try again.",
       });
-      this.emitPresence(record, "routed", "active", "active");
+      this.emitPresence(record, "routed", timedOut ? "idle" : "active", "active");
     }
+  }
+
+  private async markTimedOutTurnIdle(record: SessionRecord, instanceId: string): Promise<void> {
+    await this.pool.release(instanceId);
+    const current = await this.store.get(record.id);
+    if (current?.instanceId !== instanceId) return;
+    const updated: SessionRecord = {
+      ...current,
+      state: "idle",
+      instanceId: null,
+      lastActiveAt: new Date().toISOString(),
+    };
+    await this.store.save(updated);
+    this.emitPresence(updated, "idle_evicted", "idle", "active");
   }
 
   /**

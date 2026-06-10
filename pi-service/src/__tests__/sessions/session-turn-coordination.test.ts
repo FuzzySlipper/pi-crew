@@ -144,10 +144,14 @@ describe("SessionManagerImpl conversational turn coordination", () => {
     });
 
     await manager.routeMessage(provider, message("msg-1", "timeout"));
+    const timedOutInstanceId = responder.requests.at(0)?.instanceId;
     const second = manager.routeMessage(provider, message("msg-2", "after timeout"));
     await waitFor(() => responder.requests.length === 2);
+    expect(responder.requests.at(1)?.instanceId).not.toBe(timedOutInstanceId);
     responder.deferred[1]?.resolve({ kind: "text", text: "recovered" });
     await second;
+    responder.deferred[0]?.resolve({ kind: "text", text: "late stale response" });
+    await Promise.resolve();
 
     expect(provider.sentMessages.map((sent) => textOf(sent.content))).toEqual([
       "The agent timed out while responding. Please try again.",
