@@ -314,16 +314,13 @@ const SAFE_DEN_TOOL_NAMES = new Set([
   "get_thread",
   "get_messages",
   "get_latest_task_packet",
-  "get_latest_worker_completion",
   "get_task_workflow_summary",
   "get_document",
   "search_documents",
   "query_librarian",
   "list_review_findings",
   "list_review_rounds",
-  "get_worker_run_status",
 ]);
-
 function stripMcpPrefix(toolName: string): string {
   if (toolName.startsWith("mcp_den_")) return toolName.slice("mcp_den_".length);
   if (toolName.startsWith("den_")) return toolName.slice("den_".length);

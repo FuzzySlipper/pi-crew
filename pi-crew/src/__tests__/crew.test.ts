@@ -385,7 +385,7 @@ describe("Crew composition root", () => {
   it("loads config with custom values overridden", () => {
     const customCrew = new Crew(
       makeTestCrewConfig({
-        sessions: { maxTotal: 8, maxPerProfile: 2, idleTimeoutMs: 1_000, fallbackProfileId: "pi-crew-planner" },
+        profiles: { root: join(process.cwd(), "../pi-profiles/profiles") }, sessions: { maxTotal: 8, maxPerProfile: 2, idleTimeoutMs: 1_000, fallbackProfileId: "pi-crew-planner" },
         logging: { level: "debug", json: true },
       }),
     );

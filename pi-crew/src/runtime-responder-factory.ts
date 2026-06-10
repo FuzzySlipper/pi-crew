@@ -16,6 +16,7 @@ import {
 import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 
 import type { CrewConfig } from "./config.js";
+import { resolveCrewInstallLayout } from "./config.js";
 import { buildConversationalAgentResponderFactoryForAgents } from "./conversational-runtime-assembly.js";
 
 /**
@@ -34,9 +35,10 @@ export function buildRuntimeResponderFactory(
       if (logger === undefined || toolRegistry === undefined || mcpClient === undefined) {
         throw new ConfigurationError("Conversational Agent runtime assembly requires logger, MCP client, and tool registry");
       }
+      const profilesRoot = resolveCrewInstallLayout(runtime).profilesRoot;
       return buildConversationalAgentResponderFactoryForAgents({
         agents,
-        profilesRoot: runtime.profiles.root,
+        profilesRoot,
         toolRegistry,
         mcpClient,
         logger,

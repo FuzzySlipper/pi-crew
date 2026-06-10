@@ -37,7 +37,7 @@ import {
   type AgentWorkerExecutor,
 } from "@pi-crew/service";
 
-import { loadCrewConfig, type CrewConfig } from "./config.js";
+import { loadCrewConfig, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
 export {
   CrewConfigSchema,
   loadCrewConfig,
@@ -106,7 +106,7 @@ export class Crew {
 
     // DESIGN: Validate configured profile IDs before runtime routing.
     // Rationale: SessionManager receives policy, not global fallback magic.
-    loadProfile(config.sessions.fallbackProfileId, config.profiles.root);
+    loadProfile(config.sessions.fallbackProfileId, resolveCrewInstallLayout(config).profilesRoot);
 
     // DESIGN: Worker role mapping is config-parse validated and injected.
     // Rationale: avoid hardcoded role-to-profile switches in WorkerRuntime.
@@ -457,7 +457,7 @@ export class Crew {
       mcpClient: this.#mcpClient,
       toolRegistry: this.#mcpToolRegistry,
       logger: this.#logger,
-      profilesRoot: this.#config.profiles.root,
+      profilesRoot: resolveCrewInstallLayout(this.#config).profilesRoot,
       delegatedSpawnLifecycle: this.#delegatedSpawnLifecycle,
     });
   }

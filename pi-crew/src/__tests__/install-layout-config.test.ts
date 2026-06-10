@@ -6,10 +6,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ConfigurationError } from "@pi-crew/core";
+import { ConfigurationError, FakeEventBus, FakeLogger } from "@pi-crew/core";
+import { ToolRegistry, type MCPClient } from "@pi-crew/mcp";
 import { describe, expect, it } from "vitest";
 
 import { loadCrewConfig, resolveCrewConfigPath, resolveCrewInstallLayout } from "../config.js";
+import { buildRuntimeResponderFactory } from "../runtime-responder-factory.js";
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "pi-crew-install-layout-"));
@@ -46,6 +48,12 @@ function writeInstalledConfig(root: string): string {
   return configPath;
 }
 
+function makeClient(): MCPClient {
+  return {
+    callTool: () => Promise.resolve({ ok: true, content: [{ type: "text", text: "ok" }] }),
+  } as unknown as MCPClient;
+}
+
 describe("installed config layout", () => {
   it("resolves the default installed config path under /home/agents/pi-crew", () => {
     expect(resolveCrewConfigPath({ argv: ["node", "main.js"], env: {}, cwd: "/repo" })).toBe(
@@ -78,6 +86,70 @@ describe("installed config layout", () => {
     expect(layout.root).toBe(root);
     expect(layout.configPath).toBe(join(root, "config.yaml"));
     expect(layout.profilesRoot).toBe(join(root, "profiles"));
+  });
+
+  it("uses installed profiles root for conversational responder assembly", () => {
+    const root = tempRoot();
+    const profileDir = join(root, "profiles", "installed-profile");
+    mkdirSync(profileDir, { recursive: true });
+    writeFileSync(
+      join(profileDir, "profile.yaml"),
+      [
+        'name: "Installed Profile"',
+        'description: "Installed"',
+        "modelConfig:",
+        '  provider: "openai"',
+        '  model: "gpt-4.1-mini"',
+        "toolPolicy:",
+        "  mode: allow_all",
+      ].join("\n"),
+      "utf-8",
+    );
+    writeFileSync(join(profileDir, "soul.md"), "Installed soul.", "utf-8");
+    const configPath = join(root, "config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "install:",
+        `  root: "${root}"`,
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "conversationalAgents:",
+        "  - agentId: installed",
+        "    enabled: true",
+        "    profileId: installed-profile",
+        "    profileIdentity: installed-profile",
+        "    memberIdentity: installed-profile",
+        "    session:",
+        "      ownerId: owner",
+        "      sessionId: sess-installed",
+        "      maxHistoryMessages: 20",
+        "    channels:",
+        "      - providerId: den-channels",
+        "        channelId: '642'",
+        "        subscriptionIdentity: installed:ordinary",
+        "    runtime:",
+        "      mode: agent",
+        "      systemPromptSource: profile",
+        "      toolPolicy:",
+        "        mode: profile",
+        "    lifecycle:",
+        "      turnTimeoutMs: 300000",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    const config = loadCrewConfig(configPath);
+    const factory = buildRuntimeResponderFactory(
+      config,
+      new FakeEventBus(),
+      new FakeLogger(),
+      new ToolRegistry(new FakeLogger()),
+      makeClient(),
+    );
+
+    expect(() => factory.createResponder({ profileId: "installed-profile" })).not.toThrow();
   });
 
   it("fails closed when installed profile root is missing", () => {
