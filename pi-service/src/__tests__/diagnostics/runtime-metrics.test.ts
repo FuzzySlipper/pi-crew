@@ -106,6 +106,7 @@ function overview(): DiagnosticsOverview {
       activeAssignmentsLocal: 1,
       stuckWorkers: 0,
       checkpointWaiting: 0,
+      degradedConversationalSessions: 0,
     },
     sessions: [],
     recentEvents: [],

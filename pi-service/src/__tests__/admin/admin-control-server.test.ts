@@ -134,6 +134,80 @@ describe("AdminServer remediation controls", () => {
     }
   });
 
+  it("archives only conversational sessions and denies worker sessions", async () => {
+    const fixture = await startControlServer(19407, overviewWithWorkerStale());
+    try {
+      const workerResponse = await responseJson(
+        await controlFetch(
+          fixture.server,
+          "/admin/control/sessions/worker-session/archive",
+          controlRequest("op-worker-archive"),
+        ),
+      );
+      const conversationResponse = await responseJson(
+        await controlFetch(
+          fixture.server,
+          "/admin/control/sessions/conversation-session/archive",
+          controlRequest("op-conversation-archive"),
+        ),
+      );
+      // DESIGN: Archived sessions are excluded from get() by contract, so verify
+      // via the control response and the instance pool release instead.
+      const archivedSession = await fixture.sessionStore.get("conversation-session");
+
+      expect(workerResponse["accepted"]).toBe(false);
+      expect(readPath(workerResponse, ["denEvidence", "status"])).toBe("worker_sessions_den_sovereign");
+      expect(conversationResponse["accepted"]).toBe(true);
+      expect(conversationResponse["action"]).toBe("archive_session");
+      expect(readPath(conversationResponse, ["after", "state"])).toBe("archived");
+      expect(readPath(conversationResponse, ["after", "instanceId"])).toBe(null);
+      expect(archivedSession).toBe(null);
+      expect(fixture.instancePool.released).toEqual(["old-instance-1"]);
+    } finally {
+      await fixture.server.stop();
+    }
+  });
+
+  it("archive session returns session_not_found for missing sessions", async () => {
+    const fixture = await startControlServer(19408, overviewWithWorkerStale());
+    try {
+      const response = await responseJson(
+        await controlFetch(
+          fixture.server,
+          "/admin/control/sessions/nonexistent-session/archive",
+          controlRequest("op-archive-missing"),
+        ),
+      );
+
+      expect(response["accepted"]).toBe(false);
+      expect(readPath(response, ["denEvidence", "status"])).toBe("session_not_found");
+    } finally {
+      await fixture.server.stop();
+    }
+  });
+
+  it("archive session supports dry-run without mutating state", async () => {
+    const fixture = await startControlServer(19409, overviewWithWorkerStale());
+    try {
+      const response = await responseJson(
+        await controlFetch(
+          fixture.server,
+          "/admin/control/sessions/conversation-session/archive",
+          controlRequest("op-archive-dryrun", true),
+        ),
+      );
+      const unchanged = await fixture.sessionStore.get("conversation-session");
+
+      expect(response["accepted"]).toBe(true);
+      expect(response["dryRun"]).toBe(true);
+      expect(response["after"]).toBe(null);
+      expect(unchanged?.state).toBe("active");
+      expect(fixture.instancePool.released).toEqual([]);
+    } finally {
+      await fixture.server.stop();
+    }
+  });
+
   it("redacts secret-like control response fields", async () => {
     const fixture = await startControlServer(19406, overviewWithWorkerStale());
     try {
@@ -308,6 +382,7 @@ function overviewWithWorkerStale(overrides: Partial<DiagnosticsOverview> = {}): 
       activeAssignmentsLocal: 1,
       stuckWorkers: 1,
       checkpointWaiting: 0,
+      degradedConversationalSessions: 0,
     },
     sessions: [
       {
@@ -318,6 +393,7 @@ function overviewWithWorkerStale(overrides: Partial<DiagnosticsOverview> = {}): 
         sessionState: "active",
         messageCount: 1,
         channelBindings: [],
+        channelBindingDetails: [],
         workerBinding: {
           assignmentId: "assignment-1",
           runId: "run-1",
@@ -331,6 +407,8 @@ function overviewWithWorkerStale(overrides: Partial<DiagnosticsOverview> = {}): 
         lastGatewayEvent: "worker.stuck",
         contextPressure: null,
         drainState: "inactive",
+        recentErrorCount: 0,
+        presenceStatus: "active",
         classification: "pi_crew_local",
         evidenceRefs: ["worker.stuck:assignment-1"],
       },

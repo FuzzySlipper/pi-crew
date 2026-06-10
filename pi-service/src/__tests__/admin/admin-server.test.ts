@@ -244,6 +244,7 @@ function healthyOverview(overrides: Partial<DiagnosticsOverview> = {}): Diagnost
       activeAssignmentsLocal: 1,
       stuckWorkers: 0,
       checkpointWaiting: 0,
+      degradedConversationalSessions: 0,
     },
     sessions: [
       {
@@ -254,6 +255,7 @@ function healthyOverview(overrides: Partial<DiagnosticsOverview> = {}): Diagnost
         sessionState: "active",
         messageCount: 2,
         channelBindings: [],
+        channelBindingDetails: [],
         workerBinding: {
           assignmentId: "assignment-1",
           runId: "run-1",
@@ -267,6 +269,8 @@ function healthyOverview(overrides: Partial<DiagnosticsOverview> = {}): Diagnost
         lastGatewayEvent: "turn.started",
         contextPressure: null,
         drainState: "inactive",
+        recentErrorCount: 0,
+        presenceStatus: "active",
         classification: "healthy",
         evidenceRefs: [],
       },

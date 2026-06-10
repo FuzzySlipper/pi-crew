@@ -318,6 +318,7 @@ function emptyDiagnosticsOverview(startedAt: string): DiagnosticsOverview {
       activeAssignmentsLocal: 0,
       stuckWorkers: 0,
       checkpointWaiting: 0,
+      degradedConversationalSessions: 0,
     },
     sessions: [],
     recentEvents: [],

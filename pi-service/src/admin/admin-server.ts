@@ -174,6 +174,13 @@ export class AdminServer {
       writeJson(res, 200, await this.#controls.recreateInstance(sessionId, request));
       return;
     }
+    if (pathname.startsWith("/admin/control/sessions/") && pathname.endsWith("/archive")) {
+      const sessionId = decodeURIComponent(
+        pathname.slice("/admin/control/sessions/".length, -"/archive".length),
+      );
+      writeJson(res, 200, await this.#controls.archiveSession(sessionId, request));
+      return;
+    }
     if (pathname.startsWith("/admin/control/workers/") && pathname.endsWith("/mark-local-stale")) {
       const assignmentId = decodeURIComponent(
         pathname.slice("/admin/control/workers/".length, -"/mark-local-stale".length),

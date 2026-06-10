@@ -10,6 +10,7 @@ export type RemediationAction =
   | "drain"
   | "resume"
   | "recreate_instance"
+  | "archive_session"
   | "mark_local_stale"
   | "config_validate"
   | "config_reload";
@@ -179,6 +180,20 @@ export class RemediationControlService {
         warnings: nextInstance === undefined ? ["instance pool not wired; session record refreshed only"] : [],
         denEvidence: localEvidence("conversation_history_preserved"),
       };
+    });
+  }
+
+  async archiveSession(sessionId: string, request: RemediationRequest): Promise<RemediationResult> {
+    return this.#run("archive_session", request, async () => {
+      const session = await this.#sessionStore?.get(sessionId);
+      const before = { sessionId, kind: session?.kind ?? "missing", state: session?.state ?? "missing", instanceId: session?.instanceId ?? null };
+      if (session === undefined || session === null) return denied(before, "session_not_found", []);
+      if (session.kind !== "conversational") return denied(before, "worker_sessions_den_sovereign", []);
+      if (request.dryRun) return { accepted: true, before, after: null, warnings: [], denEvidence: localEvidence("dry_run") };
+      if (session.instanceId !== null) await this.#instancePool?.release(session.instanceId);
+      await this.#sessionStore?.save({ ...session, state: "archived", instanceId: null });
+      this.#eventBus.emit({ event: "session.expired", payload: { sessionId, reason: "admin_archive" } });
+      return { accepted: true, before, after: { sessionId, state: "archived", instanceId: null }, warnings: [], denEvidence: localEvidence("session_archived_local_only") };
     });
   }
 

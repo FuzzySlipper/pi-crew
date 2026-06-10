@@ -65,6 +65,17 @@ export interface DiagnosticCounts {
   readonly activeAssignmentsLocal: number;
   readonly stuckWorkers: number;
   readonly checkpointWaiting: number;
+  readonly degradedConversationalSessions: number;
+}
+
+export interface DiagnosticChannelBindingProjection {
+  readonly providerId: string;
+  readonly channelId: string;
+  readonly memberIdentity?: string;
+  readonly profileIdentity?: string;
+  readonly memberRole?: string;
+  readonly subscriptionIdentity?: string;
+  readonly sessionOwnerId?: string;
 }
 
 export interface DiagnosticSessionProjection {
@@ -75,6 +86,7 @@ export interface DiagnosticSessionProjection {
   readonly sessionState: "active" | "idle" | "archived";
   readonly messageCount: number;
   readonly channelBindings: readonly ChannelBinding[];
+  readonly channelBindingDetails: readonly DiagnosticChannelBindingProjection[];
   readonly workerBinding: WorkerBinding | null;
   readonly denAssignment: DenAssignmentStatus | null;
   readonly localLifecycleState: GatewayEvent["event"] | "unknown";
@@ -82,6 +94,8 @@ export interface DiagnosticSessionProjection {
   readonly lastGatewayEvent: GatewayEvent["event"] | null;
   readonly contextPressure: DiagnosticContextPressure | null;
   readonly drainState: "active" | "inactive" | "unknown";
+  readonly recentErrorCount: number;
+  readonly presenceStatus: "active" | "idle" | "degraded" | "offline" | "unknown";
   readonly classification: DiagnosticClassificationKind;
   readonly evidenceRefs: readonly string[];
 }

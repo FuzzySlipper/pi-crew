@@ -3,6 +3,7 @@ import type { DenAssignmentReader, DenAssignmentStatus } from "../persistence/ty
 import type { SessionStore } from "../sessions/session-store.js";
 import type { SessionRecord } from "../sessions/types.js";
 import type {
+  DiagnosticChannelBindingProjection,
   DiagnosticClassification,
   DiagnosticClassificationKind,
   DiagnosticContextPressure,
@@ -60,6 +61,11 @@ export class DiagnosticsService {
         .length,
       checkpointWaiting: projectedSessions.filter(
         (session) => session.localLifecycleState === "checkpoint.waiting",
+      ).length,
+      degradedConversationalSessions: projectedSessions.filter(
+        (session) =>
+          session.kind === "conversational" &&
+          (session.recentErrorCount > 0 || session.presenceStatus === "degraded"),
       ).length,
     };
     const classification = classifyOverview({
@@ -119,7 +125,9 @@ export class DiagnosticsService {
       ? assignments.get(session.workerBinding.assignmentId) ?? null
       : null;
     const contextPressure = findContextPressure(session.id, sessionEvents);
+    const recentErrorCount = countRecentErrors(session.id, sessionEvents);
     const classification = classifySession(session, denAssignment, sessionEvents);
+    const presenceStatus = findPresenceStatus(session, sessionEvents);
 
     return {
       sessionId: session.id,
@@ -129,6 +137,7 @@ export class DiagnosticsService {
       sessionState: session.state,
       messageCount: session.messageCount,
       channelBindings: session.channelBindings,
+      channelBindingDetails: projectChannelBindingDetails(session),
       workerBinding: session.workerBinding,
       denAssignment,
       localLifecycleState: lastEvent?.event ?? "unknown",
@@ -136,6 +145,8 @@ export class DiagnosticsService {
       lastGatewayEvent: lastEvent?.event ?? null,
       contextPressure,
       drainState: findDrainState(session.id, sessionEvents),
+      recentErrorCount,
+      presenceStatus,
       classification,
       evidenceRefs: evidenceRefs(session, denAssignment, sessionEvents),
     };
@@ -182,6 +193,15 @@ function classifySession(
   }
   if (events.some((event) => event.event === "worker.stuck")) return "pi_crew_local";
   if (session.kind === "worker" && denAssignment === null) return "unknown";
+  // DESIGN: Conversational sessions with recent turn errors or degraded presence
+  // are classified as pi_crew_local so operators can see them in diagnostics.
+  // Rationale: these are local runtime issues that need operator attention.
+  if (session.kind === "conversational" && countRecentErrors(session.id, events) > 0) {
+    return "pi_crew_local";
+  }
+  if (session.kind === "conversational" && findPresenceStatus(session, events) === "degraded") {
+    return "pi_crew_local";
+  }
   return "healthy";
 }
 
@@ -262,4 +282,64 @@ function uptimeSeconds(startedAt: string, current: string): number {
   const elapsed = Date.parse(current) - Date.parse(startedAt);
   if (!Number.isFinite(elapsed) || elapsed < 0) return 0;
   return Math.floor(elapsed / 1000);
+}
+
+// ── Conversational diagnostics helpers ────────────────────────
+
+function countRecentErrors(sessionId: string, events: readonly DiagnosticEventRecord[]): number {
+  return events.filter(
+    (event) =>
+      event.event === "turn.errored" &&
+      asRecord(event.payload)?.sessionId === sessionId,
+  ).length;
+}
+
+function findPresenceStatus(
+  session: SessionRecord,
+  events: readonly DiagnosticEventRecord[],
+): "active" | "idle" | "degraded" | "offline" | "unknown" {
+  // DESIGN: Derive presence status from session state and recent presence events.
+  // Rationale: Conversational sessions need a quick health signal in diagnostics
+  // without requiring a separate presence query.
+  if (session.kind !== "conversational") return "unknown";
+  if (session.state === "archived") return "offline";
+  if (session.state === "idle") return "idle";
+
+  // Look for the most recent session.presence event for this session
+  const presenceEvent = findLastEvent(
+    events,
+    (event) =>
+      event.event === "session.presence" &&
+      asRecord(event.payload)?.sessionId === session.id,
+  );
+  if (presenceEvent !== null) {
+    const payload = asRecord(presenceEvent.payload);
+    const status = payload?.subscriptionStatus;
+    if (status === "degraded") return "degraded";
+    if (status === "active") return "active";
+    if (status === "idle") return "idle";
+  }
+  // No presence event found — if the session is active with an instance, assume active
+  if (session.instanceId !== null) return "active";
+  return "unknown";
+}
+
+function projectChannelBindingDetails(
+  session: SessionRecord,
+): DiagnosticChannelBindingProjection[] {
+  return session.channelBindings.map((binding): DiagnosticChannelBindingProjection => {
+    if (typeof binding === "string") {
+      return { providerId: "legacy", channelId: binding };
+    }
+    const record = binding;
+    return {
+      providerId: record.providerId,
+      channelId: record.channelId,
+      memberIdentity: record.memberIdentity,
+      profileIdentity: record.profileIdentity,
+      memberRole: record.memberRole,
+      subscriptionIdentity: record.subscriptionIdentity,
+      sessionOwnerId: record.sessionOwnerId,
+    };
+  });
 }
