@@ -176,13 +176,14 @@ export class ConversationalAgentResponder implements AgentResponder {
   }
 
   #emitLifecycleEvent(event: AgentEvent, request: AgentResponseRequest): void {
+    const sessionId = request.sessionId;
     switch (event.type) {
       case "turn_start":
         this.#eventBus.emit({
           event: "turn.started",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             turnNumber: 1,
           },
         });
@@ -192,7 +193,7 @@ export class ConversationalAgentResponder implements AgentResponder {
           event: "turn.completed",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             turnNumber: 1,
             durationMs: 0,
           },
@@ -206,7 +207,7 @@ export class ConversationalAgentResponder implements AgentResponder {
           event: "message.started",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             messageRole: event.message.role,
           },
         });
@@ -216,7 +217,7 @@ export class ConversationalAgentResponder implements AgentResponder {
           event: "message.updated",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             messageRole: event.message.role,
             updateType: event.assistantMessageEvent.type,
           },
@@ -227,7 +228,7 @@ export class ConversationalAgentResponder implements AgentResponder {
           event: "message.completed",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             messageRole: event.message.role,
           },
         });
@@ -237,7 +238,7 @@ export class ConversationalAgentResponder implements AgentResponder {
           event: "tool.called",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             toolName: event.toolName,
             params: event.args,
           },
@@ -248,7 +249,7 @@ export class ConversationalAgentResponder implements AgentResponder {
           event: "tool.completed",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             toolName: event.toolName,
             success: true,
             durationMs: 0,
@@ -261,7 +262,7 @@ export class ConversationalAgentResponder implements AgentResponder {
           event: "tool.completed",
           payload: {
             profileId: request.profileId,
-            sessionId: request.instanceId,
+            sessionId,
             toolName: event.toolName,
             success: !event.isError,
             durationMs: 0,

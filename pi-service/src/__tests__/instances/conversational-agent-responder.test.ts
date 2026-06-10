@@ -242,13 +242,13 @@ describe("ConversationalAgentResponder", () => {
     ]);
     expect(bus.emitted[0]?.payload).toEqual({
       profileId: "system-architect",
-      sessionId: "inst-conv-2",
+      sessionId: "sess-conv-2",
       turnNumber: 1,
     });
     expect(bus.emitted[2]?.payload).toEqual(
       expect.objectContaining({
         profileId: "system-architect",
-        sessionId: "inst-conv-2",
+        sessionId: "sess-conv-2",
         turnNumber: 1,
       }),
     );
@@ -283,24 +283,24 @@ describe("ConversationalAgentResponder", () => {
     ]);
     expect(bus.emitted[1]?.payload).toEqual({
       profileId: "system-architect",
-      sessionId: "inst-conv-3",
+      sessionId: "sess-conv-2",
       messageRole: "assistant",
     });
     expect(bus.emitted[2]?.payload).toEqual({
       profileId: "system-architect",
-      sessionId: "inst-conv-3",
+      sessionId: "sess-conv-2",
       messageRole: "assistant",
       updateType: "start",
     });
     expect(bus.emitted[3]?.payload).toEqual({
       profileId: "system-architect",
-      sessionId: "inst-conv-3",
+      sessionId: "sess-conv-2",
       toolName: "lookup_status",
       params: { channelId: "channel-1" },
     });
     expect(bus.emitted[4]?.payload).toEqual({
       profileId: "system-architect",
-      sessionId: "inst-conv-3",
+      sessionId: "sess-conv-2",
       toolName: "lookup_status",
       success: true,
       durationMs: 0,
@@ -308,7 +308,7 @@ describe("ConversationalAgentResponder", () => {
     });
     expect(bus.emitted[5]?.payload).toEqual({
       profileId: "system-architect",
-      sessionId: "inst-conv-3",
+      sessionId: "sess-conv-2",
       toolName: "lookup_status",
       success: true,
       durationMs: 0,
@@ -316,7 +316,7 @@ describe("ConversationalAgentResponder", () => {
     });
     expect(bus.emitted[6]?.payload).toEqual({
       profileId: "system-architect",
-      sessionId: "inst-conv-3",
+      sessionId: "sess-conv-2",
       messageRole: "assistant",
     });
     expect(bus.emitted.some((event) => event.event === "completion.posted")).toBe(false);

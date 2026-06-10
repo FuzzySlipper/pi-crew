@@ -11,8 +11,8 @@ export class MessageRepositoryTurnHistory implements ConversationalTurnHistory {
   constructor(private readonly messages: MessageRepository) {}
 
   async loadRecent(sessionId: string, limit: number): Promise<AgentMessage[]> {
-    const rows = await this.messages.getBySession(sessionId);
-    return rows.slice(-limit).map(rowToAgentMessage);
+    const rows = await this.messages.getRecentBySession(sessionId, limit);
+    return rows.map(rowToAgentMessage);
   }
 
   append(sessionId: string, message: AgentMessage): Promise<void> {

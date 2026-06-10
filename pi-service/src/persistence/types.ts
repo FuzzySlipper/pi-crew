@@ -118,6 +118,9 @@ export interface MessageRepository {
   /** Retrieve all messages for a session, ordered by id ascending. */
   getBySession(sessionId: string, limit?: number): Promise<MessageRow[]>;
 
+  /** Retrieve newest messages for a session, returned in chronological order. */
+  getRecentBySession(sessionId: string, limit?: number): Promise<MessageRow[]>;
+
   /** Count messages for a session. */
   count(sessionId: string): Promise<number>;
 

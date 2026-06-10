@@ -17,6 +17,7 @@ export class SqliteMessageRepository implements MessageRepository {
   readonly #stmts: {
     append: Database.Statement;
     getBySession: Database.Statement;
+    getRecentBySession: Database.Statement;
     count: Database.Statement;
     deleteBySession: Database.Statement;
   };
@@ -44,6 +45,11 @@ export class SqliteMessageRepository implements MessageRepository {
     return Promise.resolve(this.#stmts.getBySession.all(sessionId, limit) as MessageRow[]);
   }
 
+  getRecentBySession(sessionId: string, limit = 500): Promise<MessageRow[]> {
+    const rows = this.#stmts.getRecentBySession.all(sessionId, limit) as MessageRow[];
+    return Promise.resolve(rows.reverse());
+  }
+
   count(sessionId: string): Promise<number> {
     const row = this.#stmts.count.get(sessionId) as { cnt: number } | undefined;
     return Promise.resolve(row?.cnt ?? 0);
@@ -64,6 +70,9 @@ export class SqliteMessageRepository implements MessageRepository {
       ),
       getBySession: this.#db.prepare(
         `SELECT * FROM messages WHERE session_id = ? ORDER BY id ASC LIMIT ?`,
+      ),
+      getRecentBySession: this.#db.prepare(
+        `SELECT * FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?`,
       ),
       count: this.#db.prepare(
         "SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?",

@@ -90,4 +90,20 @@ describe("MessageRepositoryTurnHistory", () => {
       userMessage("third", 3),
     ]);
   });
+
+  it("loads the actual newest bounded messages after more than the default repository window", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    await sessions.save(session("sess-long"));
+    const history = new MessageRepositoryTurnHistory(new SqliteMessageRepository(db.handle));
+
+    for (let index = 0; index < 505; index += 1) {
+      await history.append("sess-long", userMessage(`message-${String(index)}`, index));
+    }
+
+    expect(await history.loadRecent("sess-long", 3)).toEqual([
+      userMessage("message-502", 502),
+      userMessage("message-503", 503),
+      userMessage("message-504", 504),
+    ]);
+  });
 });
