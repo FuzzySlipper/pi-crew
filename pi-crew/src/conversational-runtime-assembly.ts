@@ -3,7 +3,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getModels, getProviders, Type } from "@earendil-works/pi-ai";
 import type { Api, KnownProvider, Model, TextContent } from "@earendil-works/pi-ai";
-import { ConfigurationError, type Logger, type EventBus } from "@pi-crew/core";
+import { ConfigurationError, type EventBus, type ExecutionPolicy, type Logger } from "@pi-crew/core";
 import {
   type MCPClient,
   type ToolCallContentBlock,
@@ -23,6 +23,11 @@ import {
   type ConversationalAgentRuntimeBuilder,
   type ConversationalTurnHistory,
 } from "@pi-crew/service";
+import {
+  type ConversationalPolicyInput,
+  createConversationalPolicy,
+  SessionToolFilter,
+} from "@pi-crew/tools";
 
 import type { CrewConfig } from "./config.js";
 
@@ -41,6 +46,7 @@ export interface ResolvedConversationalAgentRuntime {
   readonly agentModel: Model<Api>;
   readonly systemPrompt: string;
   readonly tools: readonly AgentTool[];
+  readonly executionPolicy: ExecutionPolicy;
 }
 
 export interface ResolveConversationalAgentRuntimeInput {
@@ -50,6 +56,7 @@ export interface ResolveConversationalAgentRuntimeInput {
   readonly mcpClient: MCPClient;
   readonly logger: Logger;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly sessionToolFilter?: SessionToolFilter;
 }
 
 export interface BuildConversationalAgentResponderFactoryInput extends ResolveConversationalAgentRuntimeInput {
@@ -76,7 +83,8 @@ class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBu
   ) {}
 
   build(): ConversationalAgentResponder {
-    const runtime = resolveConversationalAgentRuntime(this.input);
+    const filter = new SessionToolFilter(this.eventBus, this.logger);
+    const runtime = resolveConversationalAgentRuntime({ ...this.input, sessionToolFilter: filter });
     return createResponder(runtime, this.logger, this.eventBus, this.input.history);
   }
 }
@@ -86,7 +94,8 @@ class ProfileMappedConversationalRuntimeBuilder implements ConversationalAgentRu
 
   build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
     const agent = selectAgentForContext(this.input.agents, context.profileId);
-    const runtime = resolveConversationalAgentRuntime({ ...this.input, agent });
+    const filter = new SessionToolFilter(this.input.eventBus, this.input.logger);
+    const runtime = resolveConversationalAgentRuntime({ ...this.input, agent, sessionToolFilter: filter });
     return createResponder(runtime, this.input.logger, this.input.eventBus, this.input.history);
   }
 }
@@ -130,11 +139,15 @@ export function resolveConversationalAgentRuntime(
   }
   const profile = loadProfile(input.agent.profileId, input.profilesRoot);
   const model = resolveModelConfig(input.agent, profile, input.env ?? process.env);
+  const executionPolicy = buildConversationalExecutionPolicy(input.agent, profile);
   const tools = selectConversationalTools({
     allow: input.agent.runtime.tools.allow,
-    mcpClient: input.mcpClient,
     profileToolPolicy: profile.toolPolicy,
     registry: input.toolRegistry,
+    mcpClient: input.mcpClient,
+    policy: executionPolicy,
+    sessionToolFilter: input.sessionToolFilter,
+    sessionId: input.agent.session.sessionId,
   });
   return {
     profile,
@@ -142,6 +155,7 @@ export function resolveConversationalAgentRuntime(
     agentModel: createAgentModel(model),
     systemPrompt: assembleProfilePrompt(profile),
     tools,
+    executionPolicy,
   };
 }
 
@@ -267,16 +281,48 @@ function resolveApiKey(
   return value;
 }
 
+// ── Execution policy derivation ─────────────────────────────────
+
+function buildConversationalExecutionPolicy(
+  agent: CrewConfig["conversationalAgents"][number],
+  profile: Profile,
+): ExecutionPolicy {
+  const input: ConversationalPolicyInput = {
+    policyId: `conv-${agent.agentId}-${agent.session.sessionId}`,
+    deniedTools: [...(profile.toolPolicy?.deny ?? [])],
+  };
+  return createConversationalPolicy(input);
+}
+
+// ── Tool selection with policy enforcement ──────────────────────
+
 function selectConversationalTools(input: {
   readonly allow: readonly string[];
   readonly profileToolPolicy: ToolPolicy | undefined;
   readonly registry: McpToolRegistry;
   readonly mcpClient: MCPClient;
+  readonly policy: ExecutionPolicy;
+  readonly sessionToolFilter: SessionToolFilter | undefined;
+  readonly sessionId: string;
 }): AgentTool[] {
-  return input.registry
+  const beforePolicy = input.registry
     .listTools()
     .filter((tool) => input.allow.some((set) => toolMatchesSelectedSet(tool.name, set)))
-    .filter((tool) => toolAllowedByProfilePolicy(tool.name, input.profileToolPolicy))
+    .filter((tool) => toolAllowedByProfilePolicy(tool.name, input.profileToolPolicy));
+
+  // Apply ExecutionPolicy-based tool filtering
+  const afterPolicy = input.sessionToolFilter !== undefined
+    ? input.sessionToolFilter.filter(
+        input.policy,
+        input.sessionId,
+        beforePolicy.map((tool) => tool.name),
+        null,
+      )
+    : beforePolicy.map((tool) => tool.name);
+
+  const allowedSet = new Set(afterPolicy);
+  return beforePolicy
+    .filter((tool) => allowedSet.has(tool.name))
     .map((tool) => createAgentTool(tool, input.mcpClient));
 }
 
@@ -340,6 +386,7 @@ const SAFE_DEN_TOOL_NAMES = new Set([
   "list_review_findings",
   "list_review_rounds",
 ]);
+
 function stripMcpPrefix(toolName: string): string {
   if (toolName.startsWith("mcp_den_")) return toolName.slice("mcp_den_".length);
   if (toolName.startsWith("den_")) return toolName.slice("den_".length);

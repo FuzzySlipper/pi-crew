@@ -121,3 +121,12 @@ export {
 // ── Session tool filter ───────────────────────────────────────
 
 export { SessionToolFilter } from "./session-tool-filter.js";
+
+// ── Conversational policy ─────────────────────────────────────
+
+export {
+  type ConversationalPolicyInput,
+  createConversationalPolicy,
+  WORKER_ONLY_TOOLS,
+  isWorkerOnlyTool,
+} from "./conversational-policy.js";
