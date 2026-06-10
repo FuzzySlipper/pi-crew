@@ -7,6 +7,7 @@
 export { RuntimeDb, type RuntimeDbHealth } from "./runtime-db.js";
 export { SqliteSessionRepository } from "./session-repository.js";
 export { SqliteMessageRepository } from "./message-repository.js";
+export { MessageRepositoryTurnHistory } from "./message-turn-history.js";
 export { SqliteAuditRepository } from "./audit-repository.js";
 export { StartupHydrator, type HydrationResult } from "./startup-hydration.js";
 

@@ -67,6 +67,7 @@ export {
   type ConversationalAgentResponderConfig,
   type ConversationalAgentRuntimeBuilder,
   type ConversationalAgentState,
+  type ConversationalTurnHistory,
 } from "./instances/conversational-agent-responder.js";
 export {
   type DeterministicArithmeticRequest,
@@ -96,6 +97,7 @@ export {
   type RuntimeDbHealth,
   SqliteSessionRepository,
   SqliteMessageRepository,
+  MessageRepositoryTurnHistory,
   SqliteAuditRepository,
   StartupHydrator,
   type HydrationResult,

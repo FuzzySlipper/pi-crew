@@ -29,7 +29,7 @@ import {
   SessionManagerDelegationSessionBridge,
   SessionMaterializedDelegatedChildRunner,
   SqliteAuditRepository,
-  SqliteSessionRepository,
+  SqliteSessionRepository, SqliteMessageRepository, MessageRepositoryTurnHistory,
   type GatewayConfig,
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
@@ -181,7 +181,7 @@ export class Crew {
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
     // 4. Instance pool + factory
-    const responderFactory = buildRuntimeResponderFactory(config, this.#eventBus, this.#logger, this.#mcpToolRegistry, this.#mcpClient);
+    const responderFactory = buildRuntimeResponderFactory(config, this.#eventBus, this.#logger, this.#mcpToolRegistry, this.#mcpClient, new MessageRepositoryTurnHistory(new SqliteMessageRepository(this.#runtimeDb.handle)));
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
     this.#instancePool = new InstancePoolImpl(
       instanceFactory,

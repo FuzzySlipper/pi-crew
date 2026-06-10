@@ -34,6 +34,7 @@ export interface InstanceFactory {
     profileId: string,
     role?: string,
     effectiveRuntime?: EffectiveDelegationRuntime,
+    sessionId?: string,
   ): Promise<AgentInstance>;
 }
 
@@ -58,6 +59,7 @@ export class InstanceFactoryImpl implements InstanceFactory {
     profileId: string,
     role?: string,
     effectiveRuntime?: EffectiveDelegationRuntime,
+    sessionId?: string,
   ): Promise<AgentInstance> {
     // DESIGN: Keep pi-service instance construction profile-id based until the
     // composition root wires a concrete ProfileSource. Rationale: pi-profiles is
@@ -75,6 +77,6 @@ export class InstanceFactoryImpl implements InstanceFactory {
       ...(effectiveRuntime ? { effectiveRuntime } : {}),
     });
 
-    return Promise.resolve(new AgentInstanceImpl(profileId, responder));
+    return Promise.resolve(new AgentInstanceImpl(profileId, responder, undefined, sessionId));
   }
 }

@@ -55,6 +55,7 @@ export interface InstancePool {
     profileId: string,
     role?: string,
     effectiveRuntime?: EffectiveDelegationRuntime,
+    sessionId?: string,
   ): Promise<AgentInstance>;
 
   /**
@@ -122,6 +123,7 @@ export class InstancePoolImpl implements InstancePool {
     profileId: string,
     role?: string,
     effectiveRuntime?: EffectiveDelegationRuntime,
+    sessionId?: string,
   ): Promise<AgentInstance> {
     // Enforce max total
     if (this.entries.size >= this.config.maxTotal) {
@@ -140,7 +142,7 @@ export class InstancePoolImpl implements InstancePool {
       );
     }
 
-    const instance = await this.factory.create(profileId, role, effectiveRuntime);
+    const instance = await this.factory.create(profileId, role, effectiveRuntime, sessionId);
 
     this.entries.set(instance.id, {
       instance,

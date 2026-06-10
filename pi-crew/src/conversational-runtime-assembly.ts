@@ -12,6 +12,7 @@ import {
   type AgentResponderFactory,
   type AgentResponderFactoryContext,
   type ConversationalAgentRuntimeBuilder,
+  type ConversationalTurnHistory,
 } from "@pi-crew/service";
 
 import type { CrewConfig } from "./config.js";
@@ -45,6 +46,7 @@ export interface ResolveConversationalAgentRuntimeInput {
 export interface BuildConversationalAgentResponderFactoryInput
   extends ResolveConversationalAgentRuntimeInput {
   readonly eventBus?: EventBus;
+  readonly history?: ConversationalTurnHistory;
 }
 
 export interface BuildConversationalAgentResponderFactoryForAgentsInput {
@@ -54,19 +56,20 @@ export interface BuildConversationalAgentResponderFactoryForAgentsInput {
   readonly mcpClient: MCPClient;
   readonly logger: Logger;
   readonly eventBus: EventBus;
+  readonly history?: ConversationalTurnHistory;
   readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
   constructor(
-    private readonly input: ResolveConversationalAgentRuntimeInput,
+    private readonly input: BuildConversationalAgentResponderFactoryInput,
     private readonly logger: Logger,
     private readonly eventBus: EventBus,
   ) {}
 
   build(): ConversationalAgentResponder {
     const runtime = resolveConversationalAgentRuntime(this.input);
-    return createResponder(runtime, this.logger, this.eventBus);
+    return createResponder(runtime, this.logger, this.eventBus, this.input.history);
   }
 }
 
@@ -76,7 +79,7 @@ class ProfileMappedConversationalRuntimeBuilder implements ConversationalAgentRu
   build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
     const agent = selectAgentForContext(this.input.agents, context.profileId);
     const runtime = resolveConversationalAgentRuntime({ ...this.input, agent });
-    return createResponder(runtime, this.input.logger, this.input.eventBus);
+    return createResponder(runtime, this.input.logger, this.input.eventBus, this.input.history);
   }
 }
 
@@ -136,9 +139,11 @@ function createResponder(
   runtime: ResolvedConversationalAgentRuntime,
   logger: Logger,
   eventBus: EventBus,
+  history?: ConversationalTurnHistory,
 ): ConversationalAgentResponder {
   return new ConversationalAgentResponder({
     eventBus,
+    history,
     logger,
     model: runtime.agentModel,
     apiKey: runtime.model.apiKey,

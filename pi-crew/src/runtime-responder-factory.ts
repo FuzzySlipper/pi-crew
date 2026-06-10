@@ -11,6 +11,7 @@ import {
   DeterministicToolAgentResponderFactory,
   EchoAgentResponderFactory,
   type AgentResponderFactory,
+  type ConversationalTurnHistory,
   type RuntimeConfig,
 } from "@pi-crew/service";
 import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
@@ -28,6 +29,7 @@ export function buildRuntimeResponderFactory(
   logger?: Logger,
   toolRegistry?: McpToolRegistry,
   mcpClient?: MCPClient,
+  history?: ConversationalTurnHistory,
 ): AgentResponderFactory {
   if (isCrewConfig(runtime)) {
     const agents = runtime.conversationalAgents.filter((candidate) => candidate.enabled);
@@ -43,6 +45,7 @@ export function buildRuntimeResponderFactory(
         mcpClient,
         logger,
         eventBus,
+        history,
       });
     }
     return buildRuntimeResponderFactory(runtime.runtime, eventBus);

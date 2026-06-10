@@ -133,6 +133,7 @@ describe("AgentInstanceImpl", () => {
     expect(response).toEqual({ kind: "text", text: "custom-response" });
     expect(responder.requests).toHaveLength(1);
     expect(responder.requests[0]).toEqual({
+      sessionId: instance.id,
       profileId: "profile-a",
       instanceId: instance.id,
       message,

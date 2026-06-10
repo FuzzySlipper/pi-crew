@@ -51,16 +51,18 @@ export class AgentFactoryImpl implements AgentFactory {
   ) {}
 
   async createSession(config: SessionConfig): Promise<SessionRecord> {
+    const sessionId = config.sessionId ?? `sess-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
     const instance = await this.pool.acquire(
       config.profileId,
       config.workerBinding?.role,
       config.effectiveRuntime,
+      sessionId,
     );
 
     const now = new Date().toISOString();
 
     const record: SessionRecord = {
-      id: config.sessionId ?? `sess-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`,
+      id: sessionId,
       profileId: config.profileId,
       instanceId: instance.id,
       kind: config.kind,

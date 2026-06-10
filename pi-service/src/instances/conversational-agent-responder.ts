@@ -17,6 +17,11 @@ export interface ConversationalAgentState {
   readonly messages: AgentMessage[];
 }
 
+export interface ConversationalTurnHistory {
+  loadRecent(sessionId: string, limit: number): Promise<AgentMessage[]>;
+  append(sessionId: string, message: AgentMessage): Promise<void>;
+}
+
 export interface ConversationalAgentAdapter {
   readonly state: ConversationalAgentState;
   subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void;
@@ -27,6 +32,7 @@ export interface ConversationalAgentAdapter {
 
 export interface ConversationalAgentFactoryInput {
   readonly profileId: string;
+  readonly sessionId: string;
   readonly instanceId: string;
   readonly systemPrompt: string;
   readonly model?: Model<Api>;
@@ -50,6 +56,8 @@ export interface ConversationalAgentResponderConfig {
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly tools?: readonly AgentTool[];
+  readonly history?: ConversationalTurnHistory;
+  readonly historyLimit?: number;
 }
 
 export interface ConversationalAgentRuntimeBuilder {
@@ -67,7 +75,7 @@ export class ConversationalAgentResponderFactory implements AgentResponderFactor
 export class DefaultConversationalAgentFactory implements ConversationalAgentFactory {
   create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
     return new Agent({
-      sessionId: input.instanceId,
+      sessionId: input.sessionId,
       getApiKey: () => input.apiKey,
       streamFn: (model, context, options) =>
         streamSimple(model, context, {
@@ -94,6 +102,8 @@ export class ConversationalAgentResponder implements AgentResponder {
   readonly #temperature: number | undefined;
   readonly #maxTokens: number | undefined;
   readonly #tools: readonly AgentTool[] | undefined;
+  readonly #history: ConversationalTurnHistory | undefined;
+  readonly #historyLimit: number;
 
   constructor(config: ConversationalAgentResponderConfig) {
     this.#agentFactory = config.agentFactory ?? new DefaultConversationalAgentFactory();
@@ -105,11 +115,14 @@ export class ConversationalAgentResponder implements AgentResponder {
     this.#temperature = config.temperature;
     this.#maxTokens = config.maxTokens;
     this.#tools = config.tools;
+    this.#history = config.history;
+    this.#historyLimit = config.historyLimit ?? 24;
   }
 
   async respond(request: AgentResponseRequest): Promise<ChannelContent> {
     const agent = this.#agentFactory.create({
       profileId: request.profileId,
+      sessionId: request.sessionId,
       instanceId: request.instanceId,
       systemPrompt: this.#systemPrompt,
       model: this.#model,
@@ -128,9 +141,12 @@ export class ConversationalAgentResponder implements AgentResponder {
     });
 
     try {
-      await agent.prompt([toUserAgentMessage(request)]);
+      const userMessage = toUserAgentMessage(request);
+      const history = await this.#loadHistory(request.sessionId);
+      await agent.prompt([...history, userMessage]);
       await agent.waitForIdle();
       const response = responseFromMessages(agent.state.messages);
+      await this.#appendTurn(request.sessionId, userMessage, agent.state.messages);
       this.#logger.debug("Completed Agent-backed conversational response", {
         profileId: request.profileId,
         instanceId: request.instanceId,
@@ -138,6 +154,24 @@ export class ConversationalAgentResponder implements AgentResponder {
       return response;
     } finally {
       unsubscribe();
+    }
+  }
+
+  async #loadHistory(sessionId: string): Promise<AgentMessage[]> {
+    if (this.#history === undefined) return [];
+    return this.#history.loadRecent(sessionId, this.#historyLimit);
+  }
+
+  async #appendTurn(
+    sessionId: string,
+    userMessage: AgentMessage,
+    messages: readonly AgentMessage[],
+  ): Promise<void> {
+    if (this.#history === undefined) return;
+    await this.#history.append(sessionId, userMessage);
+    const assistant = lastAssistantMessage(messages);
+    if (assistant !== undefined) {
+      await this.#history.append(sessionId, assistant);
     }
   }
 

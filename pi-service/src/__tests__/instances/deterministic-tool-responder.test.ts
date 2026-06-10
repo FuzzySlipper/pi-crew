@@ -41,6 +41,7 @@ describe("DeterministicToolAgentResponder", () => {
       "Please reply exactly NON_ECHO_RUNTIME_OK:42 for the arithmetic request 19+23.";
 
     const response = await responder.respond({
+      sessionId: "sess-test",
       profileId: "pi-crew-gateway",
       instanceId: "instance-1",
       message: createTextMessage(prompt),
@@ -61,6 +62,7 @@ describe("DeterministicToolAgentResponder", () => {
     });
 
     const response = await responder.respond({
+      sessionId: "sess-test",
       profileId: "pi-crew-gateway",
       instanceId: "instance-1",
       message: createTextMessage("hello world"),
@@ -78,6 +80,7 @@ describe("DeterministicToolAgentResponder", () => {
     });
 
     await responder.respond({
+      sessionId: "sess-test",
       profileId: "pi-crew-gateway",
       instanceId: "instance-1",
       message: createTextMessage("Return NON_ECHO_RUNTIME_OK for 19+23."),
@@ -116,6 +119,7 @@ describe("DeterministicToolAgentResponder", () => {
     });
 
     await responder.respond({
+      sessionId: "sess-test",
       profileId: "pi-crew-gateway",
       instanceId: "instance-1",
       message: createTextMessage("hello world"),

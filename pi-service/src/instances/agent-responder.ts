@@ -12,6 +12,7 @@ import type { ChannelContent, ChannelMessage, EffectiveDelegationRuntime } from 
 
 /** Input passed from an agent instance to its response runtime. */
 export interface AgentResponseRequest {
+  readonly sessionId: string;
   readonly profileId: string;
   readonly instanceId: string;
   readonly message: ChannelMessage;

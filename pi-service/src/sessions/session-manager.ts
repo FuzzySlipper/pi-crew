@@ -230,6 +230,7 @@ export class SessionManagerImpl implements SessionManager {
           record.profileId,
           record.workerBinding?.role,
           record.effectiveRuntime ?? undefined,
+          record.id,
         );
 
         const now = new Date().toISOString();

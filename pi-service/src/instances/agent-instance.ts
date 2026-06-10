@@ -66,6 +66,7 @@ let instanceCounter = 0;
  */
 export class AgentInstanceImpl implements AgentInstance {
   public readonly id: string;
+  public readonly sessionId: string;
   public readonly createdAt: Date;
   private _disposed = false;
 
@@ -73,9 +74,11 @@ export class AgentInstanceImpl implements AgentInstance {
     public readonly profileId: string,
     private readonly responder: AgentResponder = new EchoAgentResponder(),
     id?: string,
+    sessionId?: string,
   ) {
     instanceCounter += 1;
     this.id = id ?? `inst-${String(instanceCounter)}-${String(Date.now())}`;
+    this.sessionId = sessionId ?? this.id;
     this.createdAt = new Date();
   }
 
@@ -87,6 +90,7 @@ export class AgentInstanceImpl implements AgentInstance {
     message: ChannelMessage,
   ): Promise<ChannelContent> {
     return this.responder.respond({
+      sessionId: this.sessionId,
       profileId: this.profileId,
       instanceId: this.id,
       message,

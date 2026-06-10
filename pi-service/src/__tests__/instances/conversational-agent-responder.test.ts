@@ -197,6 +197,7 @@ describe("ConversationalAgentResponder", () => {
     expect(response).toEqual({ kind: "text", text: "model says hello" });
     expect(factory.created).toEqual([
       expect.objectContaining({
+        sessionId: "inst-conv-1",
         profileId: "system-architect",
         instanceId: "inst-conv-1",
         systemPrompt: "You are a conversational pi-crew agent.",
@@ -228,6 +229,7 @@ describe("ConversationalAgentResponder", () => {
     });
 
     await responder.respond({
+      sessionId: "sess-conv-2",
       profileId: "system-architect",
       instanceId: "inst-conv-2",
       message: createTextMessage("status?"),
@@ -263,6 +265,7 @@ describe("ConversationalAgentResponder", () => {
     });
 
     await responder.respond({
+      sessionId: "sess-conv-2",
       profileId: "system-architect",
       instanceId: "inst-conv-3",
       message: createTextMessage("use a tool"),
