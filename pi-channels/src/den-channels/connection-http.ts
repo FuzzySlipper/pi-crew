@@ -10,7 +10,6 @@ import type {
   Logger,
 } from "@pi-crew/core";
 import { ConnectionError } from "@pi-crew/core";
-
 import {
   HttpDirectAgentClient,
   type DirectAgentEventItem,
@@ -34,19 +33,15 @@ import type {
   DenBreadcrumbPayload,
   DenSendResult,
 } from "./connection-types.js";
-
 interface PollState {
   readonly controller: AbortController;
   timer: ReturnType<typeof setInterval> | null;
   inFlight: boolean;
 }
-
 export interface DenHttpConnectionOptions extends HttpDirectAgentClientOptions {}
-
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_POLL_LIMIT = 10;
 const DEFAULT_CURSOR_KEY = "den_channels_cursor";
-
 /**
  * HTTP cursor/polling {@link DenConnection} for Den Channels
  * direct-agent-events.
@@ -62,12 +57,10 @@ export class DenHttpDirectAgentConnection implements DenConnection {
   readonly #cursorStore: CursorStore;
   readonly #client: HttpDirectAgentClient;
   readonly #subscriptionClient: HttpSubscriptionClient;
-
   readonly #listeners = new Map<
     keyof DenConnectionEvents,
     Set<DenConnectionEvents[keyof DenConnectionEvents]>
   >();
-
   #open = false;
   #lastCursor: number | null = null;
   #activeSubscription: ActiveSubscriptionState | null = null;
@@ -76,7 +69,6 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     inFlight: false,
     controller: new AbortController(),
   };
-
   constructor(
     config: DenHttpConnectionConfig,
     logger: Logger,
@@ -89,19 +81,15 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     this.#client = new HttpDirectAgentClient(config, logger, options);
     this.#subscriptionClient = new HttpSubscriptionClient(config, logger, options);
   }
-
   get isOpen(): boolean {
     return this.#open;
   }
-
   async open(): Promise<void> {
     if (this.#open) return;
-
     await this.#restoreCursor();
     await this.#registerSubscription();
     this.#open = true;
     this.#emit("connected");
-
     const interval = this.#config.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.#pollState.timer = setInterval(() => {
       void this.#poll();
@@ -133,10 +121,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     this.#logger.info("Den HTTP direct-agent connection closed");
   }
 
-  async sendMessage(
-    channelId: string,
-    payload: DenOutboundPayload,
-  ): Promise<DenSendResult> {
+  async sendMessage(channelId: string, payload: DenOutboundPayload): Promise<DenSendResult> {
     const text = denContentToText(payload.content);
     const sourceId = `http-delivery-${String(Date.now())}`;
     await this.#client.postGatewaySystemMessage(
@@ -144,6 +129,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       "gateway_delivery",
       sourceId,
       text,
+      senderIdentityFromMetadata(payload.metadata) ?? this.#config.memberIdentity,
       this.#pollState.controller.signal,
     );
     return { id: sourceId };
@@ -161,10 +147,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     });
     await Promise.resolve();
   }
-  async deleteMessage(
-    channelId: string,
-    messageId: string,
-  ): Promise<void> {
+  async deleteMessage(channelId: string, messageId: string): Promise<void> {
     this.#logger.debug("HTTP connection: deleteMessage no-op", {
       channelId,
       messageId,
@@ -179,9 +162,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
   }
   async updateBreadcrumb(
     breadcrumbId: string,
-    update: Partial<
-      Pick<DenBreadcrumbPayload, "status" | "description">
-    >,
+    update: Partial<Pick<DenBreadcrumbPayload, "status" | "description">>,
   ): Promise<void> {
     this.#logger.debug("HTTP connection: updateBreadcrumb no-op", {
       breadcrumbId,
@@ -190,10 +171,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     await Promise.resolve();
   }
 
-  on<K extends keyof DenConnectionEvents>(
-    event: K,
-    listener: DenConnectionEvents[K],
-  ): () => void {
+  on<K extends keyof DenConnectionEvents>(event: K, listener: DenConnectionEvents[K]): () => void {
     let set = this.#listeners.get(event);
     if (!set) {
       set = new Set();
@@ -222,20 +200,27 @@ export class DenHttpDirectAgentConnection implements DenConnection {
   }
 
   async updateSubscriptionStatus(input: ChannelSubscriptionStatusUpdate): Promise<void> {
-    await this.#subscriptionClient.updateSubscriptionStatus(input, this.#pollState.controller.signal);
+    await this.#subscriptionClient.updateSubscriptionStatus(
+      input,
+      this.#pollState.controller.signal,
+    );
   }
 
   async #registerSubscription(): Promise<void> {
     try {
       const result = await this.#subscriptionClient.register(this.#pollState.controller.signal);
-      const readback = await this.#subscriptionClient.readSubscriptions(this.#pollState.controller.signal);
+      const readback = await this.#subscriptionClient.readSubscriptions(
+        this.#pollState.controller.signal,
+      );
       this.#activeSubscription = selectActiveSubscription(
         this.#config,
         readback.subscriptions,
         result.membershipId,
       );
       if (this.#activeSubscription === null) {
-        throw new ConnectionError("Registered subscription was not discoverable in channel-subscriptions readback");
+        throw new ConnectionError(
+          "Registered subscription was not discoverable in channel-subscriptions readback",
+        );
       }
       const cursors = await this.#subscriptionClient.listSubscriptionCursors(
         this.#activeSubscription.subscriptionId,
@@ -254,9 +239,12 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     } catch (err: unknown) {
       if (!this.#config.allowLegacyDirectPolling) throw err;
       this.#activeSubscription = null;
-      this.#logger.warn("Subscription registration failed; using explicit legacy polling fallback", {
-        error: errorMessage(err),
-      });
+      this.#logger.warn(
+        "Subscription registration failed; using explicit legacy polling fallback",
+        {
+          error: errorMessage(err),
+        },
+      );
     }
   }
   async #releaseSubscription(): Promise<void> {
@@ -298,7 +286,9 @@ export class DenHttpDirectAgentConnection implements DenConnection {
 
   async #handleEvent(item: DirectAgentEventItem): Promise<void> {
     const eventId = item.id;
-    const eventItem = await this.#client.readEvent(eventId, this.#pollState.controller.signal) ?? item;
+    const eventItem =
+      (await this.#client.readEvent(eventId, this.#pollState.controller.signal)) ?? item;
+    const senderIdentity = targetMemberIdentity(eventItem) ?? this.#config.memberIdentity;
     this.#logger.info("Handling Den HTTP direct-agent event", {
       eventId,
       channelId: eventItem.channelId,
@@ -309,24 +299,28 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       "runtime_received",
       eventId,
       eventItem,
+      senderIdentity,
       this.#pollState.controller.signal,
     );
     await this.#client.postLifecycleEvent(
       "request_claimed",
       eventId,
       eventItem,
+      senderIdentity,
       this.#pollState.controller.signal,
     );
     await this.#client.postLifecycleEvent(
       "agent_turn_started",
       eventId,
       eventItem,
+      senderIdentity,
       this.#pollState.controller.signal,
     );
     await this.#client.postLifecycleEvent(
       "heartbeat",
       eventId,
       eventItem,
+      senderIdentity,
       this.#pollState.controller.signal,
     );
 
@@ -336,9 +330,9 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       "completed",
       eventId,
       eventItem,
+      senderIdentity,
       this.#pollState.controller.signal,
     );
-
   }
 
   #shouldProcessEvent(item: DirectAgentEventItem): boolean {
@@ -347,7 +341,10 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     const isGatewayIngress = sourceKind === "gateway_delivery" && isIngressIntent(item.intent);
     if (!isWake && !isGatewayIngress) return false;
     const target = targetMemberIdentity(item);
-    return target !== null && [this.#config.memberIdentity, ...(this.#config.memberIdentities ?? [])].includes(target);
+    return (
+      target !== null &&
+      [this.#config.memberIdentity, ...(this.#config.memberIdentities ?? [])].includes(target)
+    );
   }
   #mapEventToMessage(item: DirectAgentEventItem): DenInboundMessage {
     return {
@@ -361,7 +358,9 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       content: { kind: "text", text: item.body ?? "" },
       timestamp: item.createdAt ?? new Date().toISOString(),
       metadata: {
-        ...(this.#activeSubscription === null ? {} : subscriptionMetadata(this.#activeSubscription)),
+        ...(this.#activeSubscription === null
+          ? {}
+          : subscriptionMetadata(this.#activeSubscription)),
         sourceProjectId: item.sourceProjectId,
         targetProjectId: item.targetProjectId,
         targetTaskId: item.targetTaskId,
@@ -445,11 +444,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     if (!set) return;
     for (const listener of set) {
       try {
-        Reflect.apply(
-          listener as (...a: unknown[]) => void,
-          undefined,
-          args,
-        );
+        Reflect.apply(listener as (...a: unknown[]) => void, undefined, args);
       } catch {
         // Listener errors must not crash the connection.
       }
@@ -462,7 +457,8 @@ function isIngressIntent(value: unknown): boolean {
 }
 
 function targetMemberIdentity(item: DirectAgentEventItem): string | null {
-  if (typeof item.targetMemberIdentity === "string" && item.targetMemberIdentity.length > 0) return item.targetMemberIdentity;
+  if (typeof item.targetMemberIdentity === "string" && item.targetMemberIdentity.length > 0)
+    return item.targetMemberIdentity;
   if (typeof item.memberIdentity === "string" && item.memberIdentity.length > 0) {
     return item.memberIdentity;
   }
@@ -477,6 +473,10 @@ function targetMemberIdentity(item: DirectAgentEventItem): string | null {
   } catch {
     return encoded;
   }
+}
+function senderIdentityFromMetadata(metadata: Record<string, unknown> | undefined): string | null {
+  const value = metadata?.["senderIdentity"];
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function denContentToText(content: DenInboundMessage["content"]): string {

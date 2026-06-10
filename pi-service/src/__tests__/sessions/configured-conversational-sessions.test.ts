@@ -91,8 +91,14 @@ describe("SessionManagerImpl configured conversational sessions", () => {
   it("routes two configured agents on one channel by Den member identity", async () => {
     const { manager, provider, responder, store } = createHarness();
 
-    await manager.routeMessage(provider, message("msg-runner", { memberIdentity: "pi-crew-runner" }));
-    await manager.routeMessage(provider, message("msg-planner", { targetMemberIdentity: "pi-crew-planner" }));
+    await manager.routeMessage(
+      provider,
+      message("msg-runner", { memberIdentity: "pi-crew-runner" }),
+    );
+    await manager.routeMessage(
+      provider,
+      message("msg-planner", { targetMemberIdentity: "pi-crew-planner" }),
+    );
 
     expect(responder.requests.map((request) => request.profileId)).toEqual([
       "runner-profile",
@@ -100,6 +106,10 @@ describe("SessionManagerImpl configured conversational sessions", () => {
     ]);
     expect((await store.get("sess-runner"))?.channelBindings).toEqual([runnerBinding]);
     expect((await store.get("sess-planner"))?.channelBindings).toEqual([plannerBinding]);
+    expect(provider.sentMessages.map((sent) => sent.content.metadata?.["senderIdentity"])).toEqual([
+      "pi-crew-runner",
+      "pi-crew-planner",
+    ]);
   });
 
   it("keeps configured agent membership stable while instances stay unshared", async () => {
@@ -123,9 +133,12 @@ describe("SessionManagerImpl configured conversational sessions", () => {
   it("emits configured membership and subscription presence when creating sessions", async () => {
     const { eventBus, manager, provider } = createHarness();
 
-    await manager.routeMessage(provider, message("msg-planner", {
-      subscriptionIdentity: "pi-crew-planner:ordinary:sess-planner",
-    }));
+    await manager.routeMessage(
+      provider,
+      message("msg-planner", {
+        subscriptionIdentity: "pi-crew-planner:ordinary:sess-planner",
+      }),
+    );
 
     expect(
       eventBus.emitted

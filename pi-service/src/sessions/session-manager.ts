@@ -45,6 +45,7 @@ import {
   sessionConfigFromConfigured,
   type ConfiguredConversationalSession,
 } from "./configured-conversational-sessions.js";
+import { withReplyIdentity } from "./session-reply-identity.js";
 
 /**
  * Multi-session orchestrator.
@@ -297,7 +298,7 @@ export class SessionManagerImpl implements SessionManager {
         instance.processMessage(message),
         this.turnCoordinator.turnTimeoutMs,
       );
-      await channel.sendMessage(message.channelId, response);
+      await channel.sendMessage(message.channelId, withReplyIdentity(response, message));
       this.emitPresence(record, "routed", "active", "active");
       this.logger.debug("Agent response sent", {
         sessionId: record.id,
@@ -313,12 +314,18 @@ export class SessionManagerImpl implements SessionManager {
         timedOut,
       });
       if (timedOut) await this.markTimedOutTurnIdle(record, instance.id);
-      await channel.sendMessage(message.channelId, {
-        kind: "text",
-        text: timedOut
-          ? "The agent timed out while responding. Please try again."
-          : "The agent hit an internal error while responding. Please try again.",
-      });
+      await channel.sendMessage(
+        message.channelId,
+        withReplyIdentity(
+          {
+            kind: "text",
+            text: timedOut
+              ? "The agent timed out while responding. Please try again."
+              : "The agent hit an internal error while responding. Please try again.",
+          },
+          message,
+        ),
+      );
       this.emitPresence(record, "routed", timedOut ? "idle" : "active", "active");
     }
   }
@@ -349,7 +356,10 @@ export class SessionManagerImpl implements SessionManager {
       if (existing.instanceId) this.pool.touch(existing.instanceId);
       this.emitPresence(existing, "routed", "active", "active");
       this.emitRouting(existing.id, channelId, "existing_session");
-      this.logger.debug("Message routed to existing session", { sessionId: existing.id, channelId });
+      this.logger.debug("Message routed to existing session", {
+        sessionId: existing.id,
+        channelId,
+      });
       return existing;
     }
 
@@ -359,7 +369,10 @@ export class SessionManagerImpl implements SessionManager {
       channelBindings: [this.bindingFor(channelId)],
     });
     this.emitRouting(newSession.id, channelId, "fallback_created");
-    this.logger.info("Fallback session created for routing", { sessionId: newSession.id, channelId });
+    this.logger.info("Fallback session created for routing", {
+      sessionId: newSession.id,
+      channelId,
+    });
     return newSession;
   }
 
@@ -426,7 +439,8 @@ export class SessionManagerImpl implements SessionManager {
       }
     }
 
-    if (updatedCount > 0) this.logger.info("Session records marked idle after eviction", { updatedCount });
+    if (updatedCount > 0)
+      this.logger.info("Session records marked idle after eviction", { updatedCount });
 
     return evictedCount;
   }

@@ -28,9 +28,7 @@ import type {
  * Translate a raw Den Channels inbound message into the abstract
  * {@link ChannelMessage} used by the rest of the gateway.
  */
-export function translateInboundMessage(
-  raw: DenInboundMessage,
-): ChannelMessage {
+export function translateInboundMessage(raw: DenInboundMessage): ChannelMessage {
   return {
     id: raw.id,
     channelId: raw.channelId,
@@ -45,9 +43,7 @@ export function translateInboundMessage(
 /**
  * Translate a Den sender into a {@link ChannelParticipant}.
  */
-export function translateDenSender(
-  sender: DenInboundMessage["sender"],
-): ChannelParticipant {
+export function translateDenSender(sender: DenInboundMessage["sender"]): ChannelParticipant {
   return {
     id: sender.id,
     displayName: sender.displayName,
@@ -59,9 +55,7 @@ export function translateDenSender(
 /**
  * Translate Den wire content into the abstract {@link ChannelContent}.
  */
-export function translateDenContent(
-  content: DenContent,
-): ChannelContent {
+export function translateDenContent(content: DenContent): ChannelContent {
   switch (content.kind) {
     case "text":
       return { kind: "text", text: content.text };
@@ -94,7 +88,9 @@ export function translateOutboundContent(
   const payload: DenOutboundPayload = {
     content: denContent,
     ...(options?.replyToId ? { replyToId: options.replyToId } : {}),
-    ...(options?.metadata ? { metadata: options.metadata } : {}),
+    ...((content.metadata ?? options?.metadata)
+      ? { metadata: { ...(options?.metadata ?? {}), ...(content.metadata ?? {}) } }
+      : {}),
   };
   return payload;
 }
@@ -102,9 +98,7 @@ export function translateOutboundContent(
 /**
  * Translate abstract {@link ChannelContent} into {@link DenContent}.
  */
-export function channelContentToDenContent(
-  content: ChannelContent,
-): DenContent {
+export function channelContentToDenContent(content: ChannelContent): DenContent {
   switch (content.kind) {
     case "text":
       return { kind: "text", text: content.text };
@@ -129,9 +123,7 @@ export function channelContentToDenContent(
  * Translate a {@link ChannelBreadcrumb} into the Den breadcrumb
  * payload for sending / updating via {@link DenConnection}.
  */
-export function translateBreadcrumbToDen(
-  breadcrumb: ChannelBreadcrumb,
-): DenBreadcrumbPayload {
+export function translateBreadcrumbToDen(breadcrumb: ChannelBreadcrumb): DenBreadcrumbPayload {
   return {
     id: breadcrumb.id,
     channelId: breadcrumb.channelId,

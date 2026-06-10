@@ -6,9 +6,7 @@
  *
  * @module pi-channels/den-channels/connection-http-client
  */
-
 import { ConnectionError, type Logger } from "@pi-crew/core";
-
 import type { DenHttpConnectionConfig } from "./connection-types.js";
 
 export interface DirectAgentEventItem {
@@ -153,10 +151,7 @@ export class HttpDirectAgentClient {
     return [];
   }
 
-  async readEvent(
-    eventId: number,
-    signal: AbortSignal,
-  ): Promise<DirectAgentEventItem | null> {
+  async readEvent(eventId: number, signal: AbortSignal): Promise<DirectAgentEventItem | null> {
     const url = `${this.#baseUrl()}/api/direct-agent-events/${String(eventId)}`;
     const response = await this.#fetchWithTimeout(url, {
       method: "GET",
@@ -178,12 +173,13 @@ export class HttpDirectAgentClient {
     eventType: string,
     sourceRequestId: number,
     item: DirectAgentEventItem,
+    agentIdentity: string,
     signal: AbortSignal,
   ): Promise<void> {
     const lastActivityAt = new Date();
     const payload: LifecycleEventPayload = {
       channelId: item.channelId,
-      agentIdentity: this.#config.memberIdentity,
+      agentIdentity,
       eventType,
       projectId: item.targetProjectId ?? item.sourceProjectId,
       taskId: parseOptionalLong(item.targetTaskId),
@@ -236,9 +232,7 @@ export class HttpDirectAgentClient {
         error: errorMessage(err),
       });
       if (err instanceof ConnectionError) throw err;
-      throw new ConnectionError(
-        `Lifecycle telemetry ${eventType} failed: ${errorMessage(err)}`,
-      );
+      throw new ConnectionError(`Lifecycle telemetry ${eventType} failed: ${errorMessage(err)}`);
     }
   }
 
@@ -309,11 +303,12 @@ export class HttpDirectAgentClient {
     sourceKind: string,
     sourceId: string,
     body: string,
+    senderIdentity: string,
     signal: AbortSignal,
   ): Promise<void> {
     const payload: GatewaySystemMessagePayload = {
       channelId,
-      senderIdentity: this.#config.memberIdentity,
+      senderIdentity,
       messageKind: "agent_text",
       sourceKind,
       sourceId,
@@ -378,10 +373,7 @@ export class HttpDirectAgentClient {
     return headers;
   }
 
-  async #fetchWithTimeout(
-    url: string,
-    init: RequestInit,
-  ): Promise<Response> {
+  async #fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
@@ -402,15 +394,11 @@ export class HttpDirectAgentClient {
   }
 }
 
-function isDirectAgentEventItemArray(
-  payload: unknown,
-): payload is DirectAgentEventItem[] {
+function isDirectAgentEventItemArray(payload: unknown): payload is DirectAgentEventItem[] {
   return Array.isArray(payload) && payload.every(isDirectAgentEventItem);
 }
 
-function isDirectAgentEventListResponse(
-  payload: unknown,
-): payload is DirectAgentEventListResponse {
+function isDirectAgentEventListResponse(payload: unknown): payload is DirectAgentEventListResponse {
   if (typeof payload !== "object" || payload === null) return false;
   const record = payload as Record<string, unknown>;
   return isDirectAgentEventItemArray(record.items);
@@ -465,9 +453,7 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
 }
 
 function lifecycleTelemetryError(eventType: string, status: number): ConnectionError {
-  return new ConnectionError(
-    `Lifecycle telemetry ${eventType} failed with HTTP ${String(status)}`,
-  );
+  return new ConnectionError(`Lifecycle telemetry ${eventType} failed with HTTP ${String(status)}`);
 }
 
 function legacyLifecycleStatus(eventType: string): string {

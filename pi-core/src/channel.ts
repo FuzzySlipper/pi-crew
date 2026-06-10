@@ -35,14 +35,15 @@ export interface ChannelParticipant {
  * (e.g. a message with text + image).
  */
 export type ChannelContent =
-  | { kind: "text"; text: string }
+  | { kind: "text"; text: string; metadata?: Record<string, unknown> }
   | {
       kind: "media";
       url: string;
       mimeType: string;
       altText?: string;
+      metadata?: Record<string, unknown>;
     }
-  | { kind: "mixed"; parts: ChannelContent[] };
+  | { kind: "mixed"; parts: ChannelContent[]; metadata?: Record<string, unknown> };
 
 // ── Message ─────────────────────────────────────────────────────
 
@@ -152,17 +153,10 @@ export interface ChannelProvider {
   onMessage(handler: MessageHandler): void;
 
   /** Send a message to a channel. */
-  sendMessage(
-    channelId: string,
-    content: ChannelContent,
-  ): Promise<SentMessage>;
+  sendMessage(channelId: string, content: ChannelContent): Promise<SentMessage>;
 
   /** Update an existing message (e.g. breadcrumb update, edit). */
-  updateMessage(
-    channelId: string,
-    messageId: string,
-    content: ChannelContent,
-  ): Promise<void>;
+  updateMessage(channelId: string, messageId: string, content: ChannelContent): Promise<void>;
 
   /** Delete a message. */
   deleteMessage(channelId: string, messageId: string): Promise<void>;
