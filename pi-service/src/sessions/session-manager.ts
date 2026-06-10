@@ -13,7 +13,7 @@ import type {
   EventBus,
   ChannelProvider,
   ChannelMessage,
-  ChannelContent,
+  EventPayload,
   ChannelMembershipStatus,
   ChannelSubscriptionStatus,
 } from "@pi-crew/core";
@@ -32,6 +32,13 @@ import {
 import type { SessionStore } from "./session-store.js";
 import type { AgentFactory } from "../agents/agent-factory.js";
 import type { InstancePool } from "../instances/instance-pool.js";
+import type { AgentInstance } from "../instances/agent-instance.js";
+import {
+  ConversationalTurnCoordinator,
+  isConversationalTurnTimeoutError,
+  withTurnTimeout,
+  type ConversationalTurnCoordinatorOptions,
+} from "./conversational-turn-coordinator.js";
 
 // ── SessionManager interface ────────────────────────────────────
 
@@ -123,6 +130,8 @@ export interface SessionManager {
  * Dependencies are constructor-injected — no global singletons.
  */
 export class SessionManagerImpl implements SessionManager {
+  private readonly turnCoordinator: ConversationalTurnCoordinator;
+
   constructor(
     private readonly store: SessionStore,
     private readonly factory: AgentFactory,
@@ -131,7 +140,10 @@ export class SessionManagerImpl implements SessionManager {
     private readonly logger: Logger,
     private readonly fallbackProfileId: string,
     private readonly fallbackBinding: ((channelId: string) => ChannelBinding) | null = null,
-  ) {}
+    turnOptions: ConversationalTurnCoordinatorOptions = {},
+  ) {
+    this.turnCoordinator = new ConversationalTurnCoordinator(turnOptions);
+  }
 
   // ── SessionManager contract ───────────────────────────────────
 
@@ -271,27 +283,45 @@ export class SessionManagerImpl implements SessionManager {
       return;
     }
 
+    await this.turnCoordinator.run(record.id, () =>
+      this.processTurn(channel, message, record, instance),
+    );
+  }
+
+  private async processTurn(
+    channel: ChannelProvider,
+    message: ChannelMessage,
+    record: SessionRecord,
+    instance: AgentInstance,
+  ): Promise<void> {
+    this.emitPresence(record, "routed", "busy", "active");
     try {
-      const response: ChannelContent = await instance.processMessage(message);
-
+      const response = await withTurnTimeout(
+        instance.processMessage(message),
+        this.turnCoordinator.turnTimeoutMs,
+      );
       await channel.sendMessage(message.channelId, response);
-
+      this.emitPresence(record, "routed", "active", "active");
       this.logger.debug("Agent response sent", {
         sessionId: record.id,
         channelId: message.channelId,
       });
-    } catch (error) {
+    } catch (error: unknown) {
+      const timedOut = isConversationalTurnTimeoutError(error);
+      this.emitPresence(record, "idle_evicted", "degraded", "active");
       this.logger.error("Agent processMessage failed", {
         sessionId: record.id,
         channelId: message.channelId,
-        error: (error as Error).message,
+        error: error instanceof Error ? error.message : String(error),
+        timedOut,
       });
-
-      // Send an error message back to the channel.
       await channel.sendMessage(message.channelId, {
         kind: "text",
-        text: `[pi-service] Agent error: ${(error as Error).message}`,
+        text: timedOut
+          ? "The agent timed out while responding. Please try again."
+          : "The agent hit an internal error while responding. Please try again.",
       });
+      this.emitPresence(record, "routed", "active", "active");
     }
   }
 
@@ -422,7 +452,7 @@ export class SessionManagerImpl implements SessionManager {
 
   private emitPresence(
     record: SessionRecord,
-    reason: "created" | "routed" | "rehydrated" | "idle_evicted" | "archived" | "bound" | "unbound",
+    reason: EventPayload<"session.presence">["reason"],
     subscriptionStatus: ChannelSubscriptionStatus,
     membershipStatus?: ChannelMembershipStatus,
   ): void {
@@ -435,7 +465,7 @@ export class SessionManagerImpl implements SessionManager {
   private emitPresenceForBinding(
     record: SessionRecord,
     binding: ChannelBinding,
-    reason: "created" | "routed" | "rehydrated" | "idle_evicted" | "archived" | "bound" | "unbound",
+    reason: EventPayload<"session.presence">["reason"],
     subscriptionStatus: ChannelSubscriptionStatus,
     membershipStatus?: ChannelMembershipStatus,
   ): void {

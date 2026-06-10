@@ -8,21 +8,13 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
-import {
-  FakeLogger,
-  FakeEventBus,
-  FakeChannelProvider,
-  ConnectionError,
-} from "@pi-crew/core";
+import { FakeLogger, FakeEventBus, FakeChannelProvider, ConnectionError } from "@pi-crew/core";
 import type { ChannelMessage } from "@pi-crew/core";
 import { loadConfig } from "../config.js";
 import { Gateway } from "../gateway.js";
 import { InMemorySessionStore } from "../sessions/session-store.js";
 import { SessionManagerImpl } from "../sessions/session-manager.js";
-import {
-  InstancePoolImpl,
-  DEFAULT_POOL_CONFIG,
-} from "../instances/instance-pool.js";
+import { InstancePoolImpl, DEFAULT_POOL_CONFIG } from "../instances/instance-pool.js";
 import { InstanceFactoryImpl } from "../instances/instance-factory.js";
 import type { InstanceFactory } from "../instances/instance-factory.js";
 import { AgentFactoryImpl } from "../agents/agent-factory.js";
@@ -107,11 +99,8 @@ describe("E2E Pipeline Spike", () => {
         den: { coreUrl: "http://den-srv:3030", requiredAtStartup: true },
         health: { port: healthPort + 2, host: healthHost },
       });
-      const gateway = new Gateway(
-        cfg,
-        logger,
-        eventBus,
-        () => Promise.reject(new ConnectionError("Den unreachable")),
+      const gateway = new Gateway(cfg, logger, eventBus, () =>
+        Promise.reject(new ConnectionError("Den unreachable")),
       );
 
       await expect(gateway.start()).rejects.toThrow("Den unreachable");
@@ -147,14 +136,7 @@ describe("E2E Pipeline Spike", () => {
         logger,
       );
       const factory = new AgentFactoryImpl(pool, store, eventBus, logger);
-      const manager = new SessionManagerImpl(
-        store,
-        factory,
-        pool,
-        eventBus,
-        logger,
-        "default",
-      );
+      const manager = new SessionManagerImpl(store, factory, pool, eventBus, logger, "default");
       const provider = new FakeChannelProvider();
       await provider.connect();
       provider.addChannel({
@@ -167,9 +149,7 @@ describe("E2E Pipeline Spike", () => {
 
       // Register the handler as the composition root would:
       // provider.onMessage → manager.routeMessage
-      provider.onMessage((msg) =>
-        manager.routeMessage(provider, msg),
-      );
+      provider.onMessage((msg) => manager.routeMessage(provider, msg));
 
       // Send a test message through the provider.
       const msg = makeMessage();
@@ -184,9 +164,7 @@ describe("E2E Pipeline Spike", () => {
       });
 
       // Routing should have been fallback_created (no pre-existing session).
-      const routingEvents = eventBus.emitted.filter(
-        (e) => e.event === "session.routing",
-      );
+      const routingEvents = eventBus.emitted.filter((e) => e.event === "session.routing");
       expect(routingEvents).toHaveLength(1);
       expect(routingEvents[0]?.payload).toMatchObject({
         channelId: "ch-test",
@@ -194,9 +172,7 @@ describe("E2E Pipeline Spike", () => {
       });
 
       // A session.created event should have been emitted.
-      const createdEvents = eventBus.emitted.filter(
-        (e) => e.event === "session.created",
-      );
+      const createdEvents = eventBus.emitted.filter((e) => e.event === "session.created");
       expect(createdEvents).toHaveLength(1);
 
       await provider.disconnect();
@@ -210,14 +186,7 @@ describe("E2E Pipeline Spike", () => {
         logger,
       );
       const factory = new AgentFactoryImpl(pool, store, eventBus, logger);
-      const manager = new SessionManagerImpl(
-        store,
-        factory,
-        pool,
-        eventBus,
-        logger,
-        "default",
-      );
+      const manager = new SessionManagerImpl(store, factory, pool, eventBus, logger, "default");
       const provider = new FakeChannelProvider();
       await provider.connect();
       provider.addChannel({
@@ -226,9 +195,7 @@ describe("E2E Pipeline Spike", () => {
         kind: "channel",
       });
 
-      provider.onMessage((msg) =>
-        manager.routeMessage(provider, msg),
-      );
+      provider.onMessage((msg) => manager.routeMessage(provider, msg));
 
       // First message creates a session (fallback_created).
       await provider.simulateInboundMessage(makeMessage());
@@ -249,18 +216,14 @@ describe("E2E Pipeline Spike", () => {
       });
 
       // Should be existing_session, not fallback_created.
-      const routingEvents = eventBus.emitted.filter(
-        (e) => e.event === "session.routing",
-      );
+      const routingEvents = eventBus.emitted.filter((e) => e.event === "session.routing");
       expect(routingEvents).toHaveLength(1);
       expect(routingEvents[0]?.payload).toMatchObject({
         reason: "existing_session",
       });
 
       // No new session.created events on second message.
-      const createdEvents = eventBus.emitted.filter(
-        (e) => e.event === "session.created",
-      );
+      const createdEvents = eventBus.emitted.filter((e) => e.event === "session.created");
       expect(createdEvents).toHaveLength(0);
 
       await provider.disconnect();
@@ -278,26 +241,14 @@ describe("E2E Pipeline Spike", () => {
             createdAt: new Date(),
             isDisposed: false,
             dispose: () => Promise.resolve(),
-            processMessage: () =>
-              Promise.reject(new Error("simulated agent failure")),
+            processMessage: () => Promise.reject(new Error("simulated agent failure")),
           };
           return Promise.resolve(inst);
         },
       };
-      const pool = new InstancePoolImpl(
-        throwingFactory,
-        DEFAULT_POOL_CONFIG,
-        logger,
-      );
+      const pool = new InstancePoolImpl(throwingFactory, DEFAULT_POOL_CONFIG, logger);
       const factory = new AgentFactoryImpl(pool, store, eventBus, logger);
-      const manager = new SessionManagerImpl(
-        store,
-        factory,
-        pool,
-        eventBus,
-        logger,
-        "default",
-      );
+      const manager = new SessionManagerImpl(store, factory, pool, eventBus, logger, "default");
       const provider = new FakeChannelProvider();
       await provider.connect();
       provider.addChannel({
@@ -306,9 +257,7 @@ describe("E2E Pipeline Spike", () => {
         kind: "channel",
       });
 
-      provider.onMessage((msg) =>
-        manager.routeMessage(provider, msg),
-      );
+      provider.onMessage((msg) => manager.routeMessage(provider, msg));
 
       await provider.simulateInboundMessage(
         makeMessage({ content: { kind: "text", text: "trigger error" } }),
@@ -318,7 +267,7 @@ describe("E2E Pipeline Spike", () => {
       expect(provider.sentMessages).toHaveLength(1);
       expect(provider.sentMessages[0]?.content).toEqual({
         kind: "text",
-        text: "[pi-service] Agent error: simulated agent failure",
+        text: "The agent hit an internal error while responding. Please try again.",
       });
 
       await provider.disconnect();
@@ -349,9 +298,7 @@ describe("E2E Pipeline Spike", () => {
       expect(provider.isConnected).toBe(false);
 
       // Shutdown event should have been emitted.
-      const shutdownEvents = bus.emitted.filter(
-        (e) => e.event === "gateway.shutdown",
-      );
+      const shutdownEvents = bus.emitted.filter((e) => e.event === "gateway.shutdown");
       expect(shutdownEvents).toHaveLength(1);
     });
 
@@ -372,9 +319,7 @@ describe("E2E Pipeline Spike", () => {
 
   describe("den reachability check (default)", () => {
     it("resolves when the URL responds with non-5xx", async () => {
-      const { defaultDenReachabilityCheck } = await import(
-        "../gateway.js"
-      );
+      const { defaultDenReachabilityCheck } = await import("../gateway.js");
       // Start a local server that returns 200.
       const { createServer } = await import("node:http");
       const server = createServer((_req, res) => {
@@ -390,9 +335,7 @@ describe("E2E Pipeline Spike", () => {
 
       try {
         await expect(
-          defaultDenReachabilityCheck(
-            `http://${healthHost}:${String(healthPort + 6)}`,
-          ),
+          defaultDenReachabilityCheck(`http://${healthHost}:${String(healthPort + 6)}`),
         ).resolves.toBeUndefined();
       } finally {
         await new Promise<void>((resolve) => {
@@ -404,9 +347,7 @@ describe("E2E Pipeline Spike", () => {
     });
 
     it("throws ConnectionError for 5xx responses", async () => {
-      const { defaultDenReachabilityCheck } = await import(
-        "../gateway.js"
-      );
+      const { defaultDenReachabilityCheck } = await import("../gateway.js");
       const { createServer } = await import("node:http");
       const server = createServer((_req, res) => {
         res.writeHead(500);
@@ -421,9 +362,7 @@ describe("E2E Pipeline Spike", () => {
 
       try {
         await expect(
-          defaultDenReachabilityCheck(
-            `http://${healthHost}:${String(healthPort + 7)}`,
-          ),
+          defaultDenReachabilityCheck(`http://${healthHost}:${String(healthPort + 7)}`),
         ).rejects.toThrow(ConnectionError);
       } finally {
         await new Promise<void>((resolve) => {
@@ -435,15 +374,11 @@ describe("E2E Pipeline Spike", () => {
     });
 
     it("throws ConnectionError for unreachable hosts", async () => {
-      const { defaultDenReachabilityCheck } = await import(
-        "../gateway.js"
-      );
+      const { defaultDenReachabilityCheck } = await import("../gateway.js");
 
       await expect(
         // A port nothing should be listening on.
-        defaultDenReachabilityCheck(
-          `http://127.0.0.1:${String(healthPort + 8)}`,
-        ),
+        defaultDenReachabilityCheck(`http://127.0.0.1:${String(healthPort + 8)}`),
       ).rejects.toThrow(ConnectionError);
     });
   });
