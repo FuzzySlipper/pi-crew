@@ -51,14 +51,11 @@ export class RuntimeDb {
   readonly #logger: Logger;
   readonly #migrationsDir: string;
 
-  constructor(
-    config: DatabaseConfig,
-    logger: Logger,
-    migrationsDir?: string,
-  ) {
+  constructor(config: DatabaseConfig, logger: Logger, migrationsDir?: string) {
     this.#config = config;
     this.#logger = logger;
-    this.#migrationsDir = migrationsDir ?? join(dirname(fileURLToPath(import.meta.url)), "migrations");
+    this.#migrationsDir =
+      migrationsDir ?? join(dirname(fileURLToPath(import.meta.url)), "migrations");
 
     this.#db = this.#open();
     this.#migrate();
@@ -169,9 +166,7 @@ export class RuntimeDb {
   #loadMigrationSql(migration: Migration): string {
     const filePath = join(this.#migrationsDir, `${migration.name}.sql`);
     if (!existsSync(filePath)) {
-      throw new ConfigurationError(
-        `Migration file not found: ${filePath}`,
-      );
+      throw new ConfigurationError(`Migration file not found: ${filePath}`);
     }
     return readFileSync(filePath, "utf-8");
   }

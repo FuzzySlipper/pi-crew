@@ -35,7 +35,9 @@ export function buildRuntimeResponderFactory(
     const agents = runtime.conversationalAgents.filter((candidate) => candidate.enabled);
     if (agents.length > 0) {
       if (logger === undefined || toolRegistry === undefined || mcpClient === undefined) {
-        throw new ConfigurationError("Conversational Agent runtime assembly requires logger, MCP client, and tool registry");
+        throw new ConfigurationError(
+          "Conversational Agent runtime assembly requires logger, MCP client, and tool registry",
+        );
       }
       const profilesRoot = resolveCrewInstallLayout(runtime).profilesRoot;
       return buildConversationalAgentResponderFactoryForAgents({
@@ -66,9 +68,7 @@ export function buildRuntimeResponderFactory(
   }
 
   const exhaustive: never = runtime.responseMode;
-  throw new ConfigurationError(
-    `Unsupported runtime response mode: ${String(exhaustive)}`,
-  );
+  throw new ConfigurationError(`Unsupported runtime response mode: ${String(exhaustive)}`);
 }
 
 function isCrewConfig(value: RuntimeConfig | CrewConfig): value is CrewConfig {

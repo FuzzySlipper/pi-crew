@@ -4,8 +4,17 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getModels, getProviders, Type } from "@earendil-works/pi-ai";
 import type { Api, KnownProvider, Model, TextContent } from "@earendil-works/pi-ai";
 import { ConfigurationError, type Logger, type EventBus } from "@pi-crew/core";
-import { type MCPClient, type ToolCallContentBlock, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
-import { assembleProfilePrompt, loadProfile, type Profile, type ToolPolicy } from "@pi-crew/profiles";
+import {
+  type MCPClient,
+  type ToolCallContentBlock,
+  ToolRegistry as McpToolRegistry,
+} from "@pi-crew/mcp";
+import {
+  assembleProfilePrompt,
+  loadProfile,
+  type Profile,
+  type ToolPolicy,
+} from "@pi-crew/profiles";
 import {
   ConversationalAgentResponder,
   ConversationalAgentResponderFactory,
@@ -43,8 +52,7 @@ export interface ResolveConversationalAgentRuntimeInput {
   readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
-export interface BuildConversationalAgentResponderFactoryInput
-  extends ResolveConversationalAgentRuntimeInput {
+export interface BuildConversationalAgentResponderFactoryInput extends ResolveConversationalAgentRuntimeInput {
   readonly eventBus?: EventBus;
   readonly history?: ConversationalTurnHistory;
 }
@@ -100,7 +108,9 @@ export function buildConversationalAgentResponderFactoryForAgents(
 ): AgentResponderFactory {
   const enabled = input.agents.filter((agent) => agent.enabled);
   if (enabled.length === 0) {
-    throw new ConfigurationError("Conversational Agent runtime assembly requires at least one enabled agent");
+    throw new ConfigurationError(
+      "Conversational Agent runtime assembly requires at least one enabled agent",
+    );
   }
   for (const agent of enabled) {
     resolveConversationalAgentRuntime({ ...input, agent });
@@ -164,7 +174,9 @@ function selectAgentForContext(
       throw new ConfigurationError("No enabled conversational agent is available");
     }
     if (only.profileId !== profileId) {
-      throw new ConfigurationError(`No configured conversational agent matches profile ${profileId}`);
+      throw new ConfigurationError(
+        `No configured conversational agent matches profile ${profileId}`,
+      );
     }
     return only;
   }
@@ -248,7 +260,9 @@ function resolveApiKey(
   if (apiKeyEnv === undefined || apiKeyEnv.trim() === "") return undefined;
   const value = env[apiKeyEnv];
   if (value === undefined || value.trim() === "") {
-    throw new ConfigurationError(`Required conversational agent API key env ${apiKeyEnv} is not set`);
+    throw new ConfigurationError(
+      `Required conversational agent API key env ${apiKeyEnv} is not set`,
+    );
   }
   return value;
 }

@@ -16,11 +16,13 @@ export class MessageRepositoryTurnHistory implements ConversationalTurnHistory {
   }
 
   append(sessionId: string, message: AgentMessage): Promise<void> {
-    return this.messages.append({
-      sessionId,
-      role: toPersistableRole(message.role),
-      content: JSON.stringify(message),
-    }).then(() => undefined);
+    return this.messages
+      .append({
+        sessionId,
+        role: toPersistableRole(message.role),
+        content: JSON.stringify(message),
+      })
+      .then(() => undefined);
   }
 }
 

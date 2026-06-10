@@ -215,9 +215,7 @@ export function recordToRow(record: SessionRecord): SessionRow {
     profile_id: record.profileId,
     instance_id: record.instanceId,
     channel_bindings_json: JSON.stringify(record.channelBindings),
-    worker_binding_json: record.workerBinding
-      ? JSON.stringify(record.workerBinding)
-      : null,
+    worker_binding_json: record.workerBinding ? JSON.stringify(record.workerBinding) : null,
     delegation_json: record.delegation ? JSON.stringify(record.delegation) : null,
     delegation_spawn_request_json: record.delegationSpawnRequest
       ? JSON.stringify(record.delegationSpawnRequest)
@@ -253,23 +251,34 @@ function parseChannelBinding(value: unknown): ChannelBinding[] {
   if (typeof value === "string") return [value];
   if (typeof value !== "object" || value === null) return [];
   const candidate = value as Record<string, unknown>;
-  if (typeof candidate.providerId !== "string" || typeof candidate.channelId !== "string") return [];
-  return [{
-    providerId: candidate.providerId,
-    channelId: candidate.channelId,
-    ...readOptionalChannelBindingFields(candidate),
-  }];
+  if (typeof candidate.providerId !== "string" || typeof candidate.channelId !== "string")
+    return [];
+  return [
+    {
+      providerId: candidate.providerId,
+      channelId: candidate.channelId,
+      ...readOptionalChannelBindingFields(candidate),
+    },
+  ];
 }
 
 function readOptionalChannelBindingFields(
   candidate: Record<string, unknown>,
 ): Omit<ChannelBindingRecord, "providerId" | "channelId"> {
   return {
-    ...(typeof candidate.memberIdentity === "string" ? { memberIdentity: candidate.memberIdentity } : {}),
-    ...(typeof candidate.profileIdentity === "string" ? { profileIdentity: candidate.profileIdentity } : {}),
+    ...(typeof candidate.memberIdentity === "string"
+      ? { memberIdentity: candidate.memberIdentity }
+      : {}),
+    ...(typeof candidate.profileIdentity === "string"
+      ? { profileIdentity: candidate.profileIdentity }
+      : {}),
     ...(typeof candidate.memberRole === "string" ? { memberRole: candidate.memberRole } : {}),
-    ...(typeof candidate.subscriptionIdentity === "string" ? { subscriptionIdentity: candidate.subscriptionIdentity } : {}),
-    ...(typeof candidate.sessionOwnerId === "string" ? { sessionOwnerId: candidate.sessionOwnerId } : {}),
+    ...(typeof candidate.subscriptionIdentity === "string"
+      ? { subscriptionIdentity: candidate.subscriptionIdentity }
+      : {}),
+    ...(typeof candidate.sessionOwnerId === "string"
+      ? { sessionOwnerId: candidate.sessionOwnerId }
+      : {}),
   };
 }
 
@@ -340,10 +349,8 @@ function parseDelegationConstraints(raw: string | null): DelegationConstraints |
     if (typeof parsed !== "object" || parsed === null) return null;
     const candidate = parsed as Record<string, unknown>;
     if (typeof candidate.maxSpawnDepth !== "number") return null;
-    if (
-      "maxConcurrentChildren" in candidate
-      && typeof candidate.maxConcurrentChildren !== "number"
-    ) return null;
+    if ("maxConcurrentChildren" in candidate && typeof candidate.maxConcurrentChildren !== "number")
+      return null;
     return {
       maxSpawnDepth: candidate.maxSpawnDepth,
       ...(typeof candidate.maxConcurrentChildren === "number"
@@ -381,10 +388,12 @@ function isValidLineage(candidate: Record<string, unknown>): candidate is {
   readonly depth: number;
   readonly chain: readonly string[];
 } {
-  return typeof candidate.parentSessionId === "string"
-    && typeof candidate.rootSessionId === "string"
-    && typeof candidate.childSessionId === "string"
-    && typeof candidate.depth === "number"
-    && Array.isArray(candidate.chain)
-    && candidate.chain.every((entry) => typeof entry === "string");
+  return (
+    typeof candidate.parentSessionId === "string" &&
+    typeof candidate.rootSessionId === "string" &&
+    typeof candidate.childSessionId === "string" &&
+    typeof candidate.depth === "number" &&
+    Array.isArray(candidate.chain) &&
+    candidate.chain.every((entry) => typeof entry === "string")
+  );
 }

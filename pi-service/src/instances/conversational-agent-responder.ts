@@ -2,7 +2,13 @@
 
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import { Agent } from "@earendil-works/pi-agent-core";
-import { streamSimple, type AssistantMessage, type Api, type Model, type TextContent } from "@earendil-works/pi-ai";
+import {
+  streamSimple,
+  type AssistantMessage,
+  type Api,
+  type Model,
+  type TextContent,
+} from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger, ChannelContent } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";

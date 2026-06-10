@@ -83,7 +83,9 @@ describe("MessageRepositoryTurnHistory", () => {
     db.close();
 
     db = new RuntimeDb(config(path), logger);
-    const reopenedHistory = new MessageRepositoryTurnHistory(new SqliteMessageRepository(db.handle));
+    const reopenedHistory = new MessageRepositoryTurnHistory(
+      new SqliteMessageRepository(db.handle),
+    );
 
     expect(await reopenedHistory.loadRecent("sess-conv", 2)).toEqual([
       assistantMessage("second", 2),

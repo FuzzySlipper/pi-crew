@@ -74,12 +74,8 @@ export class SqliteMessageRepository implements MessageRepository {
       getRecentBySession: this.#db.prepare(
         `SELECT * FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?`,
       ),
-      count: this.#db.prepare(
-        "SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?",
-      ),
-      deleteBySession: this.#db.prepare(
-        "DELETE FROM messages WHERE session_id = ?",
-      ),
+      count: this.#db.prepare("SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?"),
+      deleteBySession: this.#db.prepare("DELETE FROM messages WHERE session_id = ?"),
     };
   }
 }

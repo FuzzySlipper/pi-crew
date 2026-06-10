@@ -158,7 +158,8 @@ const runtimeTool: AgentTool = {
   name: "lookup_status",
   description: "Lookup status",
   parameters: Type.Object({}),
-  execute: () => Promise.resolve({ content: [{ type: "text", text: "ok" }], details: { ok: true } }),
+  execute: () =>
+    Promise.resolve({ content: [{ type: "text", text: "ok" }], details: { ok: true } }),
 };
 
 function createTextMessage(text: string): ChannelMessage {

@@ -79,7 +79,13 @@ class StubDenReader implements DenAssignmentReader {
 
   checkAssignments(ids: string[]): Promise<DenAssignmentStatus[]> {
     return Promise.resolve(
-      ids.map((id) => this.statuses.find((status) => status.assignmentId === id) ?? { assignmentId: id, isActive: true }),
+      ids.map(
+        (id) =>
+          this.statuses.find((status) => status.assignmentId === id) ?? {
+            assignmentId: id,
+            isActive: true,
+          },
+      ),
     );
   }
 }
@@ -102,7 +108,9 @@ describe("runtime persistence", () => {
     const health = db.health();
     expect(health.walEnabled).toBe(true);
     expect(health.schemaVersion).toBe(4);
-    const rows = db.handle.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
+    const rows = db.handle
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all() as Array<{ name: string }>;
     const names = rows.map((row) => row.name);
     expect(names).toContain("sessions");
     expect(names).toContain("messages");
@@ -114,8 +122,12 @@ describe("runtime persistence", () => {
 
   it("persists conversational and worker sessions across reopen", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
-    await sessions.save(session({ id: "chat", channelBindings: ["den:604"], instanceId: "inst-chat" }));
-    await sessions.save(session({ id: "worker", kind: "worker", channelBindings: [], workerBinding: binding() }));
+    await sessions.save(
+      session({ id: "chat", channelBindings: ["den:604"], instanceId: "inst-chat" }),
+    );
+    await sessions.save(
+      session({ id: "worker", kind: "worker", channelBindings: [], workerBinding: binding() }),
+    );
     db.close();
 
     db = new RuntimeDb(config(path), logger);
@@ -128,24 +140,26 @@ describe("runtime persistence", () => {
 
   it("persists delegated runtime and remaining delegation constraints across reopen", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
-    await sessions.save(session({
-      id: "delegated-child",
-      kind: "delegated",
-      profileId: "spawned-coder",
-      delegation: {
-        parentSessionId: "parent-session",
-        rootSessionId: "root-session",
-        childSessionId: "delegated-child",
-        depth: 1,
-        chain: ["root-session", "delegated-child"],
-      },
-      delegationSpawnRequest: {
-        task: "check a delegated subtask",
-        modelSelection: { provider: "local-openai", model: "qwen-coder" },
-      },
-      delegationConstraints: delegatedConstraints,
-      effectiveRuntime: delegatedRuntime,
-    }));
+    await sessions.save(
+      session({
+        id: "delegated-child",
+        kind: "delegated",
+        profileId: "spawned-coder",
+        delegation: {
+          parentSessionId: "parent-session",
+          rootSessionId: "root-session",
+          childSessionId: "delegated-child",
+          depth: 1,
+          chain: ["root-session", "delegated-child"],
+        },
+        delegationSpawnRequest: {
+          task: "check a delegated subtask",
+          modelSelection: { provider: "local-openai", model: "qwen-coder" },
+        },
+        delegationConstraints: delegatedConstraints,
+        effectiveRuntime: delegatedRuntime,
+      }),
+    );
     db.close();
 
     db = new RuntimeDb(config(path), logger);
@@ -173,15 +187,24 @@ describe("runtime persistence", () => {
 
   it("finds exact typed channel bindings after LIKE false positives", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
-    await sessions.save(session({ id: "false-positive", channelBindings: [channelBinding({ channelId: "x642" })] }));
-    await sessions.save(session({ id: "exact-match", channelBindings: [channelBinding({ channelId: "642" })] }));
+    await sessions.save(
+      session({ id: "false-positive", channelBindings: [channelBinding({ channelId: "x642" })] }),
+    );
+    await sessions.save(
+      session({ id: "exact-match", channelBindings: [channelBinding({ channelId: "642" })] }),
+    );
 
     expect(present(await sessions.findByChannel("642")).id).toBe("exact-match");
   });
 
   it("finds typed channel bindings whose IDs contain LIKE wildcards", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
-    await sessions.save(session({ id: "underscore-channel", channelBindings: [channelBinding({ channelId: "ch_alpha" })] }));
+    await sessions.save(
+      session({
+        id: "underscore-channel",
+        channelBindings: [channelBinding({ channelId: "ch_alpha" })],
+      }),
+    );
 
     expect(present(await sessions.findByChannel("ch_alpha")).id).toBe("underscore-channel");
   });
@@ -217,8 +240,19 @@ describe("runtime persistence", () => {
   it("hydrates active sessions and archives terminal worker bindings", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
     await sessions.save(session({ id: "chat", kind: "conversational" }));
-    await sessions.save(session({ id: "done-worker", kind: "worker", channelBindings: [], workerBinding: binding({ assignmentId: "done" }) }));
-    const hydrator = new StartupHydrator(sessions, new StubDenReader([{ assignmentId: "done", isActive: false }]), logger);
+    await sessions.save(
+      session({
+        id: "done-worker",
+        kind: "worker",
+        channelBindings: [],
+        workerBinding: binding({ assignmentId: "done" }),
+      }),
+    );
+    const hydrator = new StartupHydrator(
+      sessions,
+      new StubDenReader([{ assignmentId: "done", isActive: false }]),
+      logger,
+    );
     const result = await hydrator.hydrate();
     expect(result.activeSessions).toBe(2);
     expect(result.archivedSessionIds).toContain("done-worker");

@@ -37,8 +37,7 @@ describe("DeterministicToolAgentResponder", () => {
       tool: new DeterministicArithmeticTool(),
       fallback: new EchoAgentResponder(),
     });
-    const prompt =
-      "Please reply exactly NON_ECHO_RUNTIME_OK:42 for the arithmetic request 19+23.";
+    const prompt = "Please reply exactly NON_ECHO_RUNTIME_OK:42 for the arithmetic request 19+23.";
 
     const response = await responder.respond({
       sessionId: "sess-test",
@@ -154,8 +153,8 @@ describe("DeterministicToolAgentResponderFactory", () => {
   it("fails closed when deterministic runtime is selected without the required tool", () => {
     const factory = new DeterministicToolAgentResponderFactory({});
 
-    expect(() =>
-      factory.createResponder({ profileId: "pi-crew-gateway" }),
-    ).toThrow(ConfigurationError);
+    expect(() => factory.createResponder({ profileId: "pi-crew-gateway" })).toThrow(
+      ConfigurationError,
+    );
   });
 });

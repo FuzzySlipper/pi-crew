@@ -94,10 +94,7 @@ export interface SessionManager {
    * @param channel — The channel provider.
    * @param message — The inbound message.
    */
-  routeMessage(
-    channel: ChannelProvider,
-    message: ChannelMessage,
-  ): Promise<void>;
+  routeMessage(channel: ChannelProvider, message: ChannelMessage): Promise<void>;
 
   /**
    * Archive a session.
@@ -152,10 +149,7 @@ export class SessionManagerImpl implements SessionManager {
     return this.store.findByChannel(channelId);
   }
 
-  async bindChannel(
-    sessionId: string,
-    channelId: string,
-  ): Promise<void> {
+  async bindChannel(sessionId: string, channelId: string): Promise<void> {
     const record = await this.store.get(sessionId);
     if (!record) return;
 
@@ -183,14 +177,13 @@ export class SessionManagerImpl implements SessionManager {
     });
   }
 
-  async unbindChannel(
-    sessionId: string,
-    channelId: string,
-  ): Promise<void> {
+  async unbindChannel(sessionId: string, channelId: string): Promise<void> {
     const record = await this.store.get(sessionId);
     if (!record) return;
 
-    const removed = record.channelBindings.find((binding) => channelBindingId(binding) === channelId);
+    const removed = record.channelBindings.find(
+      (binding) => channelBindingId(binding) === channelId,
+    );
     const updated: SessionRecord = {
       ...record,
       channelBindings: removeChannelBinding(record.channelBindings, channelId),
@@ -207,10 +200,7 @@ export class SessionManagerImpl implements SessionManager {
     });
   }
 
-  async routeMessage(
-    channel: ChannelProvider,
-    message: ChannelMessage,
-  ): Promise<void> {
+  async routeMessage(channel: ChannelProvider, message: ChannelMessage): Promise<void> {
     let record = await this.resolveSession(message.channelId);
 
     // ── Rehydration path for conversational sessions ──────────────
@@ -219,13 +209,10 @@ export class SessionManagerImpl implements SessionManager {
     // is processed instead of silently dropped.
     if (record.kind === "conversational") {
       const instanceId = record.instanceId;
-      const hasLiveInstance = instanceId !== null &&
-        this.pool.has(instanceId);
+      const hasLiveInstance = instanceId !== null && this.pool.has(instanceId);
 
       if (!hasLiveInstance) {
-        const reason = instanceId === null
-          ? "idle_session"
-          : "instance_missing";
+        const reason = instanceId === null ? "idle_session" : "instance_missing";
         const instance = await this.pool.acquire(
           record.profileId,
           record.workerBinding?.role,
@@ -285,8 +272,7 @@ export class SessionManagerImpl implements SessionManager {
     }
 
     try {
-      const response: ChannelContent =
-        await instance.processMessage(message);
+      const response: ChannelContent = await instance.processMessage(message);
 
       await channel.sendMessage(message.channelId, response);
 
@@ -319,9 +305,7 @@ export class SessionManagerImpl implements SessionManager {
    *
    * @returns The resolved session record.
    */
-  private async resolveSession(
-    channelId: string,
-  ): Promise<SessionRecord> {
+  private async resolveSession(channelId: string): Promise<SessionRecord> {
     // 1. Look for an existing in-progress session bound to this channel.
     const existing = await this.findByChannel(channelId);
 

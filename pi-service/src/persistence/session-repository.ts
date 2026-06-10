@@ -143,9 +143,7 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
            last_activity = excluded.last_activity,
            expires_at = excluded.expires_at`,
       ),
-      findByState: this.#db.prepare(
-        "SELECT * FROM sessions WHERE status = @status",
-      ),
+      findByState: this.#db.prepare("SELECT * FROM sessions WHERE status = @status"),
       findByChannel: this.#db.prepare(
         `SELECT * FROM sessions
          WHERE status != 'archived'
@@ -153,9 +151,7 @@ export class SqliteSessionRepository implements SessionStore, SqliteSessionStore
          LIMIT 1`,
       ),
       delete: this.#db.prepare("DELETE FROM sessions WHERE id = @id"),
-      archiveMany: this.#db.prepare(
-        "UPDATE sessions SET status = 'archived' WHERE id = ?",
-      ),
+      archiveMany: this.#db.prepare("UPDATE sessions SET status = 'archived' WHERE id = ?"),
     };
   }
 

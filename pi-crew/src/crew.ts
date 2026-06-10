@@ -29,7 +29,9 @@ import {
   SessionManagerDelegationSessionBridge,
   SessionMaterializedDelegatedChildRunner,
   SqliteAuditRepository,
-  SqliteSessionRepository, SqliteMessageRepository, MessageRepositoryTurnHistory,
+  SqliteSessionRepository,
+  SqliteMessageRepository,
+  MessageRepositoryTurnHistory,
   type GatewayConfig,
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
@@ -181,7 +183,14 @@ export class Crew {
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
     // 4. Instance pool + factory
-    const responderFactory = buildRuntimeResponderFactory(config, this.#eventBus, this.#logger, this.#mcpToolRegistry, this.#mcpClient, new MessageRepositoryTurnHistory(new SqliteMessageRepository(this.#runtimeDb.handle)));
+    const responderFactory = buildRuntimeResponderFactory(
+      config,
+      this.#eventBus,
+      this.#logger,
+      this.#mcpToolRegistry,
+      this.#mcpClient,
+      new MessageRepositoryTurnHistory(new SqliteMessageRepository(this.#runtimeDb.handle)),
+    );
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
     this.#instancePool = new InstancePoolImpl(
       instanceFactory,
@@ -375,67 +384,51 @@ export class Crew {
   get isRunning(): boolean {
     return this.#started;
   }
-
   get config(): CrewConfig {
     return this.#config;
   }
-
   get logger(): Logger {
     return this.#logger;
   }
-
   get eventBus(): EventBus {
     return this.#eventBus;
   }
-
   get gateway(): Gateway {
     return this.#gateway;
   }
-
   get runtimeDb(): RuntimeDb {
     return this.#runtimeDb;
   }
-
   get channelProvider(): ChannelProvider {
     return this.#channelProvider;
   }
-
   get mcpClient(): MCPClient {
     return this.#mcpClient;
   }
-
   get mcpToolRegistry(): McpToolRegistry {
     return this.#mcpToolRegistry;
   }
-
   get denCompletionPoster(): CompletionPoster {
     return this.#denCompletionPoster;
   }
-
   get sessionManager(): SessionManagerImpl {
     return this.#sessionManager;
   }
-
   get instancePool(): InstancePoolImpl {
     return this.#instancePool;
   }
-
   get breadcrumbManager(): BreadcrumbManager {
     return this.#breadcrumbManager;
   }
-
   get auditLogger(): AuditLogger {
     return this.#auditLogger;
   }
-
   get toolPolicyEnforcer(): ToolPolicyEnforcer {
     return this.#toolPolicyEnforcer;
   }
-
   get agentRegistry(): AgentRuntimeRegistry {
     return this.#agentRegistry;
   }
-
   get workerRuntimeHooks(): Pick<
     WorkerRuntimeConfig,
     "hookRegistry" | "toolPolicySessionRegistry"
