@@ -15,6 +15,10 @@ import type {
   AgentResponderFactoryContext,
 } from "../../instances/agent-responder.js";
 import { EchoAgentResponder } from "../../instances/agent-responder.js";
+import {
+  ConversationalAgentResponderFactory,
+  type ConversationalAgentRuntimeBuilder,
+} from "../../instances/conversational-agent-responder.js";
 import { InstanceFactoryImpl } from "../../instances/instance-factory.js";
 
 class CapturingAgentResponder implements AgentResponder {
@@ -36,6 +40,18 @@ class CapturingResponderFactory implements AgentResponderFactory {
   createResponder(context: AgentResponderFactoryContext): AgentResponder {
     this.contexts.push(context);
     return this.responder;
+  }
+}
+
+class CapturingRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
+  readonly contexts: AgentResponderFactoryContext[] = [];
+
+  build(context: AgentResponderFactoryContext): AgentResponder {
+    this.contexts.push(context);
+    return new CapturingAgentResponder({
+      kind: "text",
+      text: "agent-backed-response",
+    });
   }
 }
 
@@ -179,6 +195,20 @@ describe("InstanceFactoryImpl", () => {
     expect(response).toEqual({ kind: "text", text: "factory-response" });
     expect(responderFactory.contexts).toEqual([
       { profileId: "profile-b", role: "coder" },
+    ]);
+  });
+
+  it("can create instances through the Agent-backed conversational responder factory", async () => {
+    const builder = new CapturingRuntimeBuilder();
+    const responderFactory = new ConversationalAgentResponderFactory(builder);
+    const factory = new InstanceFactoryImpl(logger, responderFactory);
+
+    const instance = await factory.create("system-architect", "runner");
+    const response = await instance.processMessage(createTextMessage("hello"));
+
+    expect(response).toEqual({ kind: "text", text: "agent-backed-response" });
+    expect(builder.contexts).toEqual([
+      { profileId: "system-architect", role: "runner" },
     ]);
   });
 });

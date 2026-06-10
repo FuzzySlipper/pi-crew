@@ -58,6 +58,17 @@ export {
   EchoAgentResponderFactory,
 } from "./instances/agent-responder.js";
 export {
+  ConversationalAgentResponder,
+  ConversationalAgentResponderFactory,
+  DefaultConversationalAgentFactory,
+  type ConversationalAgentAdapter,
+  type ConversationalAgentFactory,
+  type ConversationalAgentFactoryInput,
+  type ConversationalAgentResponderConfig,
+  type ConversationalAgentRuntimeBuilder,
+  type ConversationalAgentState,
+} from "./instances/conversational-agent-responder.js";
+export {
   type DeterministicArithmeticRequest,
   type DeterministicArithmeticResult,
   type DeterministicRuntimeTool,
