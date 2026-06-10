@@ -83,6 +83,52 @@ const WorkerPoolConfigSchema = z
   })
   .default({});
 
+const ConversationalAgentSessionConfigSchema = z.object({
+  ownerId: z.string().min(1),
+  sessionId: z.string().min(1),
+  idleTimeoutMs: z.number().int().positive().optional(),
+  maxHistoryMessages: z.number().int().positive(),
+});
+
+const ConversationalAgentChannelConfigSchema = z.object({
+  providerId: z.string().min(1),
+  channelId: z.string().min(1),
+  subscriptionIdentity: z.string().min(1),
+  wakePolicy: z.enum(["subscription", "direct_polling"]).default("subscription"),
+});
+
+const ConversationalAgentRuntimeConfigSchema = z.object({
+  mode: z.literal("agent"),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  baseUrl: z.string().url().optional(),
+  apiKeyEnv: z.string().min(1).optional(),
+  systemPromptSource: z.literal("profile").default("profile"),
+  tools: z.object({ allow: z.array(z.string().min(1)).default([]) }).default({}),
+  toolPolicy: z.object({ mode: z.literal("profile").default("profile") }).default({}),
+});
+
+const ConversationalAgentLifecycleConfigSchema = z.object({
+  singleFlight: z.boolean().default(true),
+  turnTimeoutMs: z.number().int().positive(),
+  onStartup: z.literal("rehydrate_or_create").default("rehydrate_or_create"),
+  onShutdownStatus: z.literal("offline").default("offline"),
+});
+
+const ConversationalAgentConfigSchema = z.object({
+  agentId: z.string().min(1),
+  enabled: z.boolean().default(true),
+  profileId: z.string().min(1),
+  profileIdentity: z.string().min(1),
+  memberIdentity: z.string().min(1),
+  memberRole: z.string().min(1).optional(),
+  displayName: z.string().min(1).optional(),
+  session: ConversationalAgentSessionConfigSchema,
+  channels: z.array(ConversationalAgentChannelConfigSchema).min(1),
+  runtime: ConversationalAgentRuntimeConfigSchema,
+  lifecycle: ConversationalAgentLifecycleConfigSchema,
+});
+
 export const CrewConfigSchema = z.object({
   install: InstallConfigSchema.default({}),
   profiles: ProfilesConfigSchema,
@@ -95,6 +141,7 @@ export const CrewConfigSchema = z.object({
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
+  conversationalAgents: z.array(ConversationalAgentConfigSchema).default([]),
   workerPool: WorkerPoolConfigSchema,
   workers: WorkerRoleMappingConfigSchema.default({
     bindings: DEFAULT_WORKER_ROLE_BINDINGS,

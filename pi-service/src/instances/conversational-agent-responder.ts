@@ -2,7 +2,8 @@
 
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import { Agent } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Api, Model, TextContent } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger, ChannelContent } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
 import type {
@@ -28,6 +29,8 @@ export interface ConversationalAgentFactoryInput {
   readonly profileId: string;
   readonly instanceId: string;
   readonly systemPrompt: string;
+  readonly model?: Model<Api>;
+  readonly tools?: readonly AgentTool[];
 }
 
 export interface ConversationalAgentFactory {
@@ -38,7 +41,9 @@ export interface ConversationalAgentResponderConfig {
   readonly agentFactory?: ConversationalAgentFactory;
   readonly eventBus: EventBus;
   readonly logger: Logger;
+  readonly model?: Model<Api>;
   readonly systemPrompt: string;
+  readonly tools?: readonly AgentTool[];
 }
 
 export interface ConversationalAgentRuntimeBuilder {
@@ -58,7 +63,9 @@ export class DefaultConversationalAgentFactory implements ConversationalAgentFac
     return new Agent({
       sessionId: input.instanceId,
       initialState: {
+        model: input.model,
         systemPrompt: input.systemPrompt,
+        tools: input.tools === undefined ? undefined : [...input.tools],
       },
     });
   }
@@ -68,13 +75,17 @@ export class ConversationalAgentResponder implements AgentResponder {
   readonly #agentFactory: ConversationalAgentFactory;
   readonly #eventBus: EventBus;
   readonly #logger: Logger;
+  readonly #model: Model<Api> | undefined;
   readonly #systemPrompt: string;
+  readonly #tools: readonly AgentTool[] | undefined;
 
   constructor(config: ConversationalAgentResponderConfig) {
     this.#agentFactory = config.agentFactory ?? new DefaultConversationalAgentFactory();
     this.#eventBus = config.eventBus;
     this.#logger = config.logger;
+    this.#model = config.model;
     this.#systemPrompt = config.systemPrompt;
+    this.#tools = config.tools;
   }
 
   async respond(request: AgentResponseRequest): Promise<ChannelContent> {
@@ -82,6 +93,8 @@ export class ConversationalAgentResponder implements AgentResponder {
       profileId: request.profileId,
       instanceId: request.instanceId,
       systemPrompt: this.#systemPrompt,
+      model: this.#model,
+      tools: this.#tools,
     });
     this.#logger.debug("Starting Agent-backed conversational response", {
       profileId: request.profileId,

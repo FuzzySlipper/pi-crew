@@ -45,6 +45,12 @@ export {
   type WorkerPoolGroupConfig,
 } from "./worker-pool-groups.js";
 export {
+  buildConversationalAgentResponderFactory,
+  resolveConversationalAgentRuntime,
+  type ConversationalRuntimeModelConfig,
+  type ResolvedConversationalAgentRuntime,
+} from "./conversational-runtime-assembly.js";
+export {
   DenPoolSourceConfigurationError,
   createDenPoolAssignmentConsumer,
   createDenPoolMemberReconciler,

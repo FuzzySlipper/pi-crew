@@ -181,7 +181,7 @@ export class Crew {
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
     // 4. Instance pool + factory
-    const responderFactory = buildRuntimeResponderFactory(config.runtime, this.#eventBus);
+    const responderFactory = buildRuntimeResponderFactory(config, this.#eventBus, this.#logger, this.#mcpToolRegistry, this.#mcpClient);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
     this.#instancePool = new InstancePoolImpl(
       instanceFactory,
