@@ -1,4 +1,5 @@
 import type { CrewConfig } from "./config.js";
+import type { DenPoolCleanupGroup } from "./den-pool-cleanup.js";
 import type { DenPoolMemberConfig } from "./den-pool-source.js";
 
 export interface WorkerPoolGroupConfig {
@@ -29,6 +30,17 @@ export function resolveWorkerPoolMembers(config: CrewConfig): readonly DenPoolMe
   if (config.workerPool.groups.length === 0) return config.workerPool.members;
 
   return config.workerPool.groups.flatMap((group) => expandWorkerPoolGroup(config, group));
+}
+
+export function resolveWorkerPoolCleanupGroups(config: CrewConfig): readonly DenPoolCleanupGroup[] {
+  return config.workerPool.groups.map((group) => ({
+    profileIdentity: group.profileIdentity,
+    groupId: group.groupId,
+    owner: ownerLabel(group),
+    desiredWorkerIdentities: new Set(
+      expandWorkerPoolGroup(config, group).map((member) => member.workerIdentity),
+    ),
+  }));
 }
 
 export function buildGroupOwnedPoolMemberSelector(

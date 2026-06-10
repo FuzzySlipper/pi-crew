@@ -37,6 +37,7 @@ export {
 } from "./crew-assignment-loops.js";
 export {
   buildGroupOwnedPoolMemberSelector,
+  resolveWorkerPoolCleanupGroups,
   resolveWorkerPoolMembers,
   type GroupOwnedPoolMemberCandidate,
   type GroupOwnedPoolMemberSelector,

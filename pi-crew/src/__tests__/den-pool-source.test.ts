@@ -251,6 +251,45 @@ describe("Den pool member source", () => {
     });
   });
 
+  it("quarantines every available group-owned member when desired size is zero", async () => {
+    const client = fakeClient([
+      rawOk({
+        members: [
+          {
+            worker_identity: "pi-crew-reviewer-1",
+            profile_identity: "pi-crew-reviewer-worker",
+            worker_role: "reviewer",
+            status: "available",
+            metadata: JSON.stringify({ pool_group: "pi-crew-reviewer", owner: "pi-crew" }),
+          },
+        ],
+      }),
+      ok({ summary: "quarantined stale member" }),
+    ]);
+
+    const result = await createDenPoolMemberReconciler({
+      mcpClient: client,
+      assignedBy: "pi-crew",
+      members: [],
+      cleanupGroups: [
+        {
+          profileIdentity: "pi-crew-reviewer-worker",
+          groupId: "pi-crew-reviewer",
+          owner: "pi-crew",
+          desiredWorkerIdentities: new Set(),
+        },
+      ],
+    }).reconcile();
+
+    const recorded = (client as unknown as FakeMcpClient).calls;
+    expect(result.quarantined).toEqual(["pi-crew-reviewer-1"]);
+    expect(recorded.map((call) => call.name)).toEqual(["list_pool_members", "upsert_pool_member"]);
+    expect(recorded[1]?.params).toMatchObject({
+      worker_identity: "pi-crew-reviewer-1",
+      status: "quarantined",
+    });
+  });
+
   it("does not register degraded members that lack profile/model/mcp/completion readiness", async () => {
     const client = fakeClient();
     const reconciler = createDenPoolMemberReconciler({

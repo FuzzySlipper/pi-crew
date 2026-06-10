@@ -22,7 +22,7 @@ import { createCrewAssignmentLoops } from "./crew-assignment-loops.js";
 import type { DenAssignmentLoop } from "./den-assignment-loop.js";
 import { createDenPoolMemberReconciler } from "./den-pool-source.js";
 import { ServiceConsoleLogger, subscribeServiceEventLogs } from "./service-logger.js";
-import { resolveWorkerPoolMembers } from "./worker-pool-groups.js";
+import { resolveWorkerPoolCleanupGroups, resolveWorkerPoolMembers } from "./worker-pool-groups.js";
 
 // ── Health smoke ────────────────────────────────────────────────
 
@@ -118,6 +118,7 @@ async function main(): Promise<void> {
     mcpClient: crew.mcpClient,
     assignedBy: "pi-crew",
     members: workerPoolMembers,
+    cleanupGroups: resolveWorkerPoolCleanupGroups(crew.config),
   }).reconcile();
   if (reconcileResult.degraded.length > 0) {
     logger.warn("worker_pool.reconcile_degraded", { degraded: reconcileResult.degraded });
