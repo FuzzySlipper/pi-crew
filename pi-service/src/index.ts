@@ -194,6 +194,7 @@ export type {
 } from "./workers/delegated-spawn-lifecycle.js";
 export { createDelegatedSpawnTool } from "./workers/delegated-spawn-tool.js";
 export { SessionMaterializedDelegatedChildRunner } from "./workers/session-materialized-delegated-child-runner.js";
+export { LlmDelegatedChildRunner } from "./workers/llm-delegated-child-runner.js";
 export {
   SessionManagerDelegationSessionBridge,
   type SessionManagerDelegationBridgeConfig,

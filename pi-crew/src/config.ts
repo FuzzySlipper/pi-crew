@@ -146,6 +146,11 @@ export const CrewConfigSchema = z.object({
   workers: WorkerRoleMappingConfigSchema.default({
     bindings: DEFAULT_WORKER_ROLE_BINDINGS,
   }),
+  delegation: z.object({
+    llmBaseUrl: z.string().optional(),
+    llmApiKey: z.string().optional(),
+    llmModelName: z.string().optional(),
+  }).default({}),
 });
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;

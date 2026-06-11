@@ -28,6 +28,7 @@ import {
   WorkerRuntime,
   SessionManagerDelegationSessionBridge,
   SessionMaterializedDelegatedChildRunner,
+  LlmDelegatedChildRunner,
   SqliteAuditRepository,
   SqliteSessionRepository,
   SqliteMessageRepository,
@@ -260,7 +261,13 @@ export class Crew {
       delegationSessions: delegationBridge,
       eventBus: this.#eventBus,
       logger: this.#logger,
-      childRunner: new SessionMaterializedDelegatedChildRunner(),
+      childRunner: config.delegation.llmBaseUrl !== undefined
+        ? new LlmDelegatedChildRunner({
+            baseUrl: config.delegation.llmBaseUrl,
+            apiKey: config.delegation.llmApiKey,
+            modelName: config.delegation.llmModelName,
+          })
+        : new SessionMaterializedDelegatedChildRunner(),
     });
     new DelegatedOrphanCleanup({
       delegationSessions: delegationBridge,
