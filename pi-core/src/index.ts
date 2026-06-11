@@ -200,6 +200,13 @@ export {
 // ── Retry ─────────────────────────────────────────────────────
 export { type RetryPolicy, DEFAULT_RETRY_POLICY, retryWithBackoff } from "./retry.js";
 
+// ── Frontmatter extraction ───────────────────────────────────
+export {
+  type FrontmatterExtraction,
+  extractFrontmatter,
+  stripFrontmatter,
+} from "./frontmatter.js";
+
 // ── Test helpers ───────────────────────────────────────────────
 // Co-located in test-helpers/ but exported directly (no nested barrel).
 export { InMemoryRepository } from "./test-helpers/in-memory-repository.js";
