@@ -258,6 +258,7 @@ export class SessionManagerImpl implements SessionManager {
       record.workerBinding?.role,
       record.effectiveRuntime ?? undefined,
       record.id,
+      record.kind,
     );
     const rehydrated: typeof record = {
       ...record,

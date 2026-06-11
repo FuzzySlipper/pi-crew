@@ -8,7 +8,7 @@
  * @module pi-service/instances/agent-responder
  */
 
-import type { ChannelContent, ChannelMessage, EffectiveDelegationRuntime } from "@pi-crew/core";
+import type { ChannelContent, ChannelMessage, EffectiveDelegationRuntime, SessionKind } from "@pi-crew/core";
 
 /** Input passed from an agent instance to its response runtime. */
 export interface AgentResponseRequest {
@@ -29,6 +29,15 @@ export interface AgentResponderFactoryContext {
   readonly role?: string;
   /** Session-local runtime selection; does not mutate the source profile. */
   readonly effectiveRuntime?: EffectiveDelegationRuntime;
+  /**
+   * Session kind requesting this responder.
+   *
+   * DESIGN: Allows responder factories to route differently for worker vs
+   * conversational sessions. Rationale: worker sessions don't need a
+   * conversational agent responder — execution goes through AgentWorkerExecutor.
+   * Undefined for backward compatibility with callers that don't pass kind.
+   */
+  readonly kind?: SessionKind;
 }
 
 /** Creates responder instances for freshly-created agent instances. */

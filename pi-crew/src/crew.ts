@@ -56,6 +56,7 @@ import { loadProfile } from "@pi-crew/profiles";
 
 import { buildDenConnection, createSqliteCursorStore } from "./den-connection-factory.js";
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
+import { SessionKindAwareResponderFactory } from "./session-kind-responder-factory.js";
 import { createDenCompletionPoster } from "./den-completion-poster.js";
 import { createDenAssignmentRunner } from "./den-assignment-runner.js";
 import { createDenPoolAssignmentConsumer } from "./den-pool-source.js";
@@ -184,7 +185,11 @@ export class Crew {
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
     // 4. Instance pool + factory
-    const responderFactory = buildRuntimeResponderFactory(
+    // DESIGN: Wrap the conversational responder factory with a session-kind-aware
+    // router. Rationale: Worker sessions must bypass conversational agent assembly
+    // and get a lightweight echo responder instead. The routing decision is explicit
+    // at the responder factory boundary, not hidden inside the conversational factory.
+    const conversationalFactory = buildRuntimeResponderFactory(
       config,
       this.#eventBus,
       this.#logger,
@@ -192,6 +197,7 @@ export class Crew {
       this.#mcpClient,
       new MessageRepositoryTurnHistory(new SqliteMessageRepository(this.#runtimeDb.handle)),
     );
+    const responderFactory = new SessionKindAwareResponderFactory(conversationalFactory);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
     this.#instancePool = new InstancePoolImpl(
       instanceFactory,

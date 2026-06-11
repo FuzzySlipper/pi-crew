@@ -8,7 +8,7 @@
  * @module pi-service/instances/instance-pool
  */
 
-import { SessionLimitError, type EffectiveDelegationRuntime, type Logger } from "@pi-crew/core";
+import { SessionLimitError, type EffectiveDelegationRuntime, type Logger, type SessionKind } from "@pi-crew/core";
 import type { AgentInstance } from "./agent-instance.js";
 import type { InstanceFactory } from "./instance-factory.js";
 
@@ -48,6 +48,9 @@ export interface InstancePool {
    *
    * @param profileId — Profile to create an instance for.
    * @param role — Optional worker role hint.
+   * @param effectiveRuntime — Optional session-local runtime override.
+   * @param sessionId — Optional session id hint.
+   * @param kind — Optional session kind for responder routing.
    * @returns A fresh, undisposed instance.
    * @throws Error if pool is at capacity.
    */
@@ -56,6 +59,7 @@ export interface InstancePool {
     role?: string,
     effectiveRuntime?: EffectiveDelegationRuntime,
     sessionId?: string,
+    kind?: SessionKind,
   ): Promise<AgentInstance>;
 
   /**
@@ -124,6 +128,7 @@ export class InstancePoolImpl implements InstancePool {
     role?: string,
     effectiveRuntime?: EffectiveDelegationRuntime,
     sessionId?: string,
+    kind?: SessionKind,
   ): Promise<AgentInstance> {
     // Enforce max total
     if (this.entries.size >= this.config.maxTotal) {
@@ -140,7 +145,7 @@ export class InstancePoolImpl implements InstancePool {
       );
     }
 
-    const instance = await this.factory.create(profileId, role, effectiveRuntime, sessionId);
+    const instance = await this.factory.create(profileId, role, effectiveRuntime, sessionId, kind);
 
     this.entries.set(instance.id, {
       instance,

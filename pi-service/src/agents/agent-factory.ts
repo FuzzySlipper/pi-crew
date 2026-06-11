@@ -55,6 +55,7 @@ export class AgentFactoryImpl implements AgentFactory {
       config.workerBinding?.role,
       config.effectiveRuntime,
       sessionId,
+      config.kind,
     );
 
     const now = new Date().toISOString();
