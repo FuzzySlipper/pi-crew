@@ -130,3 +130,13 @@ export {
   WORKER_ONLY_TOOLS,
   isWorkerOnlyTool,
 } from "./conversational-policy.js";
+
+// ── Assignment-manager policy ────────────────────────────────
+
+export {
+  type AssignmentManagerPolicyInput,
+  ASSIGNMENT_MANAGER_SAFE_TOOLS,
+  ASSIGNMENT_MANAGER_DENIED_TOOLS,
+  createAssignmentManagerPolicy,
+  isAssignmentManagerTool,
+} from "./assignment-manager-policy.js";
