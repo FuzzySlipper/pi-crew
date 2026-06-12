@@ -361,6 +361,32 @@ export interface DelegationOrphanDetectedPayload extends Omit<DelegationVisibili
   readonly idleDurationMs: number;
 }
 
+/** Fired when an operator requests a control action on a delegated child session. */
+export interface OperatorControlRequestedPayload {
+  readonly operatorIdentity: string;
+  readonly action: string;
+  readonly childSessionId?: string;
+  readonly parentSessionId?: string;
+  readonly reason?: string;
+  readonly correlation?: string;
+}
+
+/** Fired after an operator control action completes (accepted or rejected). */
+export interface OperatorControlCompletedPayload extends OperatorControlRequestedPayload {
+  readonly accepted: boolean;
+  readonly rejectionReason?: string;
+}
+
+/** Fired when a worker closeout status is assessed from available evidence. */
+export interface WorkerCloseoutAssessedPayload {
+  readonly taskId: number;
+  readonly assignmentId: number;
+  readonly runId: string;
+  readonly closeoutStatus: string;
+  readonly readyForReview: boolean;
+  readonly workerRole: string;
+}
+
 // ── GatewayEvent union ──────────────────────────────────────────
 
 /**
@@ -405,7 +431,10 @@ export type GatewayEvent =
   | { event: "delegation.completed"; payload: DelegationCompletedPayload }
   | { event: "delegation.timeout"; payload: DelegationTimeoutPayload }
   | { event: "delegation.killed"; payload: DelegationKilledPayload }
-  | { event: "delegation.orphan_detected"; payload: DelegationOrphanDetectedPayload };
+  | { event: "delegation.orphan_detected"; payload: DelegationOrphanDetectedPayload }
+  | { event: "operator.control_requested"; payload: OperatorControlRequestedPayload }
+  | { event: "operator.control_completed"; payload: OperatorControlCompletedPayload }
+  | { event: "worker.closeout_assessed"; payload: WorkerCloseoutAssessedPayload };
 
 /**
  * Helper to extract the payload type for a specific event name.

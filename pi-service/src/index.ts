@@ -199,6 +199,10 @@ export {
   SessionManagerDelegationSessionBridge,
   type SessionManagerDelegationBridgeConfig,
 } from "./workers/delegation-session-bridge.js";
+export {
+  DelegationOperatorControls,
+  type DelegationOperatorControlsConfig,
+} from "./workers/delegation-operator-controls.js";
 export type { AgentTool, AgentToolResult } from "./workers/guarded-tool-types.js";
 export {
   DiagnosticsService,

@@ -13,6 +13,7 @@ import type {
   CompletionPacket,
   CompletionPostResult,
   CompletionStatus,
+  ArtifactKind,
   EventBus,
   Logger,
 } from "@pi-crew/core";
@@ -166,6 +167,14 @@ export interface CompletionPacketInput {
     readonly requires: "human" | "dependency" | "review";
     readonly details: string;
   };
+  /**
+   * What kind of artifact this packet represents.
+   * When set, Den Core uses this to determine validation rules:
+   * - code_change (default): branch/head_commit/tests_run required
+   * - den_document, den_artifact, read_only_inventory: no repo metadata required
+   * - mixed: combination of artifact kinds
+   */
+  readonly artifactKind?: ArtifactKind;
 }
 
 /**
@@ -189,5 +198,6 @@ export function buildCompletionPacket(
     blocker: input.blocker,
     role: input.role,
     completedAt: new Date().toISOString(),
+    artifactKind: input.artifactKind,
   };
 }

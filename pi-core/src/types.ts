@@ -151,38 +151,64 @@ export type CompletionStatus = "completed" | "failed" | "blocked" | "exhausted";
 
 /**
  * Machine-checkable completion packet posted by workers.
- *
- * Posted to Den Core via post_structured_completion.
- * Den reconciles against assignment state.
- */
-export interface CompletionPacket {
-  /** Den assignment ID. */
-  readonly assignmentId: string;
-  /** Den worker run ID. */
-  readonly runId: string;
-  /** Den task ID. */
-  readonly taskId: string;
-  /** Completion status. */
-  readonly status: CompletionStatus;
+ /**
+  * Category of artifact the worker produced. Determines validation rules
+  * in Den Core. When absent, Den Core defaults to "code_change" (strictest).
+  *
+  * - code_change: branch/head_commit/tests_run required for completed packets
+  * - den_document: no repo metadata required; artifact is a Den doc slug/id
+  * - den_artifact: no repo metadata required; artifact is a Den record
+  * - read_only_inventory: no repo metadata required; artifact is analysis output
+  * - mixed: combination of artifact kinds
+  */
+ export type ArtifactKind =
+   | "code_change"
+   | "den_document"
+   | "den_artifact"
+   | "read_only_inventory"
+   | "mixed";
 
-  /** Deterministic, machine-checkable artifacts produced. */
-  readonly artifacts: CompletionArtifact[];
+ /**
+  * Posted to Den Core via post_structured_completion.
+  * Den reconciles against assignment state.
+  */
+ export interface CompletionPacket {
+   /** Den assignment ID. */
+   readonly assignmentId: string;
+   /** Den worker run ID. */
+   readonly runId: string;
+   /** Den task ID. */
+   readonly taskId: string;
+   /** Completion status. */
+   readonly status: CompletionStatus;
 
-  /** Evidence of work performed. */
-  readonly filesTouched: string[];
-  readonly toolsUsed: string[];
-  readonly tokensConsumed: number;
-  readonly durationMs: number;
-  readonly turnCount: number;
+   /** Deterministic, machine-checkable artifacts produced. */
+   readonly artifacts: CompletionArtifact[];
 
-  /** Blocker details (required when status is "blocked"). */
-  readonly blocker?: CompletionBlocker;
+   /** Evidence of work performed. */
+   readonly filesTouched: string[];
+   readonly toolsUsed: string[];
+   readonly tokensConsumed: number;
+   readonly durationMs: number;
+   readonly turnCount: number;
 
-  /** Role that produced this packet. */
-  readonly role: string;
-  /** When the completion was posted (ISO-8601). */
-  readonly completedAt: string;
-}
+   /** Blocker details (required when status is "blocked"). */
+   readonly blocker?: CompletionBlocker;
+
+   /** Role that produced this packet. */
+   readonly role: string;
+   /** When the completion was posted (ISO-8601). */
+   readonly completedAt: string;
+
+   /**
+    * What kind of artifact this packet represents. Determines Den Core
+    * validation rules. When absent, Den Core defaults to "code_change"
+    * (requires branch/head_commit/tests_run for completed packets).
+    * Set to "den_document", "den_artifact", or "read_only_inventory"
+    * for non-code tasks to avoid malformed classification.
+    */
+   readonly artifactKind?: ArtifactKind;
+ }
 
 /** A single artifact produced by a worker completion. */
 export interface CompletionArtifact {

@@ -23,6 +23,7 @@ export {
   type CompletionStatus,
   type CompletionPacket,
   type CompletionArtifact,
+  type ArtifactKind,
   type CompletionBlocker,
   type CompletionPostResult,
   DRAIN_MODE_ESSENTIAL_TOOLS,
@@ -53,6 +54,8 @@ export {
   type DelegatedResult,
   type DelegatedPolicyDerivation,
   type DelegationVisibilityIdentity,
+  type DelegatedArtifactHandle,
+  type DelegatedFailureCategory,
 } from "./delegation.js";
 
 // ── Error hierarchy ───────────────────────────────────────────
@@ -116,6 +119,9 @@ export {
   type DelegationTimeoutPayload,
   type DelegationKilledPayload,
   type DelegationOrphanDetectedPayload,
+  type OperatorControlRequestedPayload,
+  type OperatorControlCompletedPayload,
+  type WorkerCloseoutAssessedPayload,
 } from "./events.js";
 
 // ── Hook registry / extensions ───────────────────────────────
@@ -158,6 +164,16 @@ export {
   type ExtensionContext,
   type ExtensionConfigInterest,
 } from "./extension.js";
+
+// ── Delegation operator controls ──────────────────────────────
+export {
+  type OperatorControlAction,
+  type OperatorControlRequest,
+  type OperatorControlResult,
+  type ChildSessionCheckpoint,
+  type OperatorControlPolicy,
+  type UnknownServiceSessionView,
+} from "./delegation-operator-control.js";
 
 // ── Repository ────────────────────────────────────────────────
 export { type Repository } from "./repository.js";
@@ -206,6 +222,15 @@ export {
   extractFrontmatter,
   stripFrontmatter,
 } from "./frontmatter.js";
+
+// ── Skills ───────────────────────────────────────────────────
+export {
+  type SkillFrontmatter,
+  type SkillConfigVar,
+  type SkillRecord,
+  type SkillQuery,
+  parseSkillFrontmatter,
+} from "./skills.js";
 
 // ── Test helpers ───────────────────────────────────────────────
 // Co-located in test-helpers/ but exported directly (no nested barrel).

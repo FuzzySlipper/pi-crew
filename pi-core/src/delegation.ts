@@ -12,6 +12,47 @@ import type { ExecutionPolicy } from "./security.js";
 /** Supported top-level and child session kinds. */
 export type SessionKind = "conversational" | "worker" | "delegated";
 
+/**
+ * Handle to a durable artifact produced by a delegated child.
+ *
+ * DESIGN: Artifacts are references, not payloads. The actual content lives
+ * elsewhere (Den document, Den message, file system, git commit). This keeps
+ * DelegatedResult bounded and avoids duplicating large payloads.
+ * Rationale: parent context flooding is prevented by using handles + safeExcerpt
+ * instead of raw child output.
+ */
+export interface DelegatedArtifactHandle {
+  /** Den document slug, if the artifact is a Den doc. */
+  readonly slug?: string;
+  /** Den message ID, if the artifact is a Den thread message. */
+  readonly messageId?: number;
+  /** File path, if the artifact is a filesystem file. */
+  readonly filePath?: string;
+  /** Git commit SHA, if the artifact is a code change. */
+  readonly commitSha?: string;
+  /** Human-readable description of the artifact. */
+  readonly description: string;
+  /**
+   * Type classification.
+   * - den_document: a Den doc/slug
+   * - den_message: a Den task-thread or channel message
+   * - code_change: a git commit or branch diff
+   * - file: a filesystem file (local or remote)
+   * - inventory_note: a read-only observation or finding
+   */
+  readonly type: "den_document" | "den_message" | "code_change" | "file" | "inventory_note";
+}
+
+/** Failure category for non-success DelegatedResult outcomes. */
+export type DelegatedFailureCategory =
+  | "execution_error"
+  | "missing_artifact"
+  | "policy_denied"
+  | "provider_error"
+  | "no_progress"
+  | "malformed_result"
+  | "budget_exceeded";
+
 /** Lineage carried by every delegated session. */
 export interface DelegationLineage {
   /** Session ID that directly spawned this child. */
@@ -82,6 +123,63 @@ export interface DelegatedResult {
   readonly turnsUsed?: number;
   readonly durationMs?: number;
   readonly error?: string;
+
+  // ── Artifact and evidence fields (#2294) ──────────────────────
+
+  /**
+   * Artifact handles produced by the child.
+   *
+   * DESIGN: Artifacts are handles (slugs, IDs, paths), not payloads.
+   * The parent receives bounded references; deep reads happen via
+   * those handles. This prevents parent context flooding.
+   */
+  readonly artifacts?: readonly DelegatedArtifactHandle[];
+
+  /**
+   * Failure category for non-success outcomes.
+   *
+   * DESIGN: typed categories so parents and operators can distinguish
+   * "missing_artifact" from "execution_error" from "timeout" without
+   * parsing prose. Rationale: missing artifact is a distinct failure
+   * mode, not a malformed implementation packet.
+   */
+  readonly failureCategory?: DelegatedFailureCategory;
+
+  /**
+   * Recovery guidance for parent or operator.
+   *
+   * Design guidance on what the parent should do next (retry, escalate,
+   * adjust policy, provide more context, etc.).
+   */
+  readonly recoveryGuidance?: string;
+
+  /**
+   * Tools used during execution.
+   *
+   * DESIGN: flat string list for diagnostics and budget tracking.
+   * Future versions may include per-tool call counts.
+   */
+  readonly toolsUsed?: readonly string[];
+
+  /**
+   * Whether evidence was checked (e.g., git branch/head verified,
+   * artifact paths confirmed, test results validated).
+   *
+   * DESIGN: boolean flag for proof vs claim. When false, the parent
+   * or operator should verify independently.
+   */
+  readonly evidenceChecked?: boolean;
+
+  /**
+   * Bounded excerpt safe for parent context injection.
+   *
+   * DESIGN: the child's full transcript is never injected into the
+   * parent context. safeExcerpt provides a bounded view (~1000-2000
+   * chars) that fits in a single turn. Rationale: prevents context
+   * flooding while giving the parent enough signal for synthesis.
+   * Max recommended length: 2000 characters.
+   */
+  readonly safeExcerpt?: string;
 }
 
 /** Derived policy and lineage for a child session. */

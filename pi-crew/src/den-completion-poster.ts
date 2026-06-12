@@ -162,6 +162,7 @@ function buildCompletionParams(
   if (defaults?.baseCommit !== undefined) params.base_commit = defaults.baseCommit;
   if (defaults?.headCommit !== undefined) params.head_commit = defaults.headCommit;
   if (defaults?.testsRun !== undefined) params.tests_run = JSON.stringify(defaults.testsRun);
+  if (packet.artifactKind !== undefined) params.artifact_kind = packet.artifactKind;
   return params;
 }
 
