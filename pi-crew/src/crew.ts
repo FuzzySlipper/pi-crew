@@ -271,7 +271,7 @@ export class Crew {
       extensions: [
         new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry),
         new DenDelegationProjectionExtension({ channelProvider: this.#channelProvider,
-          channelId: config.den.channelsSubscriptionChannelId }),
+          channelId: config.den.channelsSubscriptionChannelId, projectToolCalledEvents: true }),
       ],
       context: createServiceExtensionContext({
         config: this.#registry.config,

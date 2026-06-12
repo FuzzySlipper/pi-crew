@@ -53,6 +53,7 @@ const policyWithTools = createExecutionPolicy({
 /** A FakeToolProvider that creates stub AgentTools for testing. */
 class FakeToolProvider implements ToolProvider {
   resolveTools(toolNames: readonly string[]): AgentTool[] {
+    this.lastResolvedTools = toolNames;
     return toolNames.map((name) => ({
       name,
       label: name,
@@ -212,7 +213,7 @@ describe("LlmDelegatedChildRunner — tool surface (#2284)", () => {
 
     expect(result.outcome).toBe("success");
     expect(result.toolsUsed).toBeDefined();
-    expect(result.toolsUsed).toHaveLength(1);
+    expect(result.toolsUsed).toEqual([]);
   }, 30_000);
 
   it("runs with allowed tools when toolProvider is configured", async () => {
@@ -246,9 +247,8 @@ describe("LlmDelegatedChildRunner — tool surface (#2284)", () => {
     const result = await runner.run(input);
 
     expect(result.outcome).toBe("success");
-    expect(result.toolsUsed).toBeDefined();
-    expect(result.toolsUsed).toContain("read_file");
-    expect(result.toolsUsed).toContain("web_search");
+    expect(provider.lastResolvedTools).toContain("read_file");
+    expect(provider.lastResolvedTools).toContain("web_search");
   }, 30_000);
 
   it("intersects spawn allowedTools with policy allowedTools", async () => {
@@ -289,7 +289,7 @@ describe("LlmDelegatedChildRunner — tool surface (#2284)", () => {
     const result = await runner.run(input);
 
     expect(result.outcome).toBe("success");
-    expect(result.toolsUsed).toEqual(["read_file"]);
+    expect(provider.lastResolvedTools).toEqual(["read_file"]);
   }, 60_000);
 
   it("removes denied tools from allowed list", async () => {
@@ -326,9 +326,9 @@ describe("LlmDelegatedChildRunner — tool surface (#2284)", () => {
     const result = await runner.run(input);
 
     expect(result.outcome).toBe("success");
-    expect(result.toolsUsed).toContain("read_file");
-    expect(result.toolsUsed).toContain("search_files");
-    expect(result.toolsUsed).not.toContain("terminal");
+    expect(provider.lastResolvedTools).toContain("read_file");
+    expect(provider.lastResolvedTools).toContain("search_files");
+    expect(provider.lastResolvedTools).not.toContain("terminal");
   }, 30_000);
 
   it("uses spawnRequest allowedTools alone when policy is empty", async () => {
@@ -424,8 +424,7 @@ describe("LlmDelegatedChildRunner — tool surface (#2284)", () => {
     const result = await runner.run(input);
 
     expect(result.outcome).toBe("success");
-    expect(result.toolsUsed).toBeDefined();
-    expect(result.toolsUsed!.length).toBeGreaterThan(0);
+    expect(provider.lastResolvedTools.length).toBeGreaterThan(0);
   }, 30_000);
   it("reports real token counts when provider sends usage data (#2285)", async () => {
     const runner = new LlmDelegatedChildRunner({
@@ -523,8 +522,8 @@ describe("LlmDelegatedChildRunner — result fields (#2294)", () => {
     const result = await runner.run(input);
 
     expect(result.outcome).toBe("success");
-    expect(result.toolsUsed).toContain("read_file");
-    expect(result.toolsUsed).toContain("search_files");
+    expect(provider.lastResolvedTools).toContain("read_file");
+    expect(provider.lastResolvedTools).toContain("search_files");
     expect(result.evidenceChecked).toBe(false);
   }, 30_000);
 });

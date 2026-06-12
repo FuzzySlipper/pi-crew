@@ -187,7 +187,7 @@ function formatToolVisibleMessage(
 
   const summary =
     payload.phase === "completed"
-      ? `Subagent tool completed: ${payload.toolName} (${payload.durationMs ?? 0}ms)`
+      ? `Subagent used tool: ${payload.toolName} completed (${payload.durationMs ?? 0}ms)`
       : payload.phase === "denied"
         ? `Subagent tool denied: ${payload.toolName} — ${payload.reason ?? "policy"}`
         : `Subagent tool called: ${payload.toolName}`;
@@ -198,6 +198,7 @@ function formatToolVisibleMessage(
     details: {
       childSessionId: payload.childSessionId,
       toolName: payload.toolName,
+      toolCallId: payload.toolCallId,
       phase: payload.phase,
       durationMs: payload.durationMs,
       reason: payload.reason,
