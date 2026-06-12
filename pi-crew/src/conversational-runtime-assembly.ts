@@ -229,7 +229,7 @@ function addDelegationTool(
     createDelegatedSpawnTool({
       lifecycle: delegation.lifecycle,
       parentSessionId,
-      parentPolicy: runtime.executionPolicy,
+      parentPolicy: parentPolicyForDelegation(runtime),
       parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
       parentRuntime,
       allowedRuntimes: delegation.allowedRuntimes ?? [parentRuntime],
@@ -237,12 +237,20 @@ function addDelegationTool(
     createDelegatedFanOutTool({
       lifecycle: delegation.lifecycle,
       parentSessionId,
-      parentPolicy: runtime.executionPolicy,
+      parentPolicy: parentPolicyForDelegation(runtime),
       parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
       parentRuntime,
       allowedRuntimes: delegation.allowedRuntimes ?? [parentRuntime],
     }) as unknown as AgentTool,
   ];
+}
+
+function parentPolicyForDelegation(runtime: ResolvedConversationalAgentRuntime): ExecutionPolicy {
+  if (runtime.executionPolicy.allowedTools.length > 0) return runtime.executionPolicy;
+  return {
+    ...runtime.executionPolicy,
+    allowedTools: runtime.tools.map((tool) => tool.name),
+  };
 }
 
 function agentAllowsDelegation(
@@ -376,8 +384,6 @@ function resolveApiKey(
   return value;
 }
 
-// ── Execution policy derivation ─────────────────────────────────
-
 function buildConversationalExecutionPolicy(
   agent: CrewConfig["conversationalAgents"][number],
   profile: Profile,
@@ -388,8 +394,6 @@ function buildConversationalExecutionPolicy(
   };
   return createConversationalPolicy(input);
 }
-
-// ── Tool selection with policy enforcement ──────────────────────
 
 function selectConversationalTools(input: {
   readonly allow: readonly string[];
@@ -405,7 +409,6 @@ function selectConversationalTools(input: {
     .filter((tool) => input.allow.some((set) => toolMatchesSelectedSet(tool.name, set)))
     .filter((tool) => toolAllowedByProfilePolicy(tool.name, input.profileToolPolicy));
 
-  // Apply ExecutionPolicy-based tool filtering
   const afterPolicy = input.sessionToolFilter !== undefined
     ? input.sessionToolFilter.filter(
         input.policy,
