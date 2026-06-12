@@ -363,7 +363,9 @@ describe("DenDelegationProjectionExtension", () => {
 
       expect(channel.sentMessages).toHaveLength(1);
       expect(channel.sentMessages[0]?.channelId).toBe("den-channel-1");
-      expect(textOf(channel.sentMessages[0]!.content)).toContain("delegation.spawned");
+      expect(textOf(channel.sentMessages[0]!.content)).toContain(
+        "Subagent spawned: depth 1, profile coder-child",
+      );
       expect(channel.sentMessages[0]?.content.metadata).toMatchObject({
         eventName: "delegation.spawned",
         childSessionId: "child-1",

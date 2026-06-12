@@ -402,6 +402,7 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
       const message = formatToolVisibleMessage(payload, this.#config.projectToolCalledEvents);
       if (message !== null) {
         this.logProjection(context, message.eventName, {
+          summary: message.summary,
           ...message.details,
           coalescedToolCallCount: state.toolCallCount,
           coalescedCompletedCount: state.completedCount,
@@ -460,7 +461,7 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     const message = format();
     if (message === null) return;
 
-    this.logProjection(context, message.eventName, message.details);
+    this.logProjection(context, message.eventName, { summary: message.summary, ...message.details });
   }
 
   private logProjection(
