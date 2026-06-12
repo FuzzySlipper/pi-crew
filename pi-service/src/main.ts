@@ -11,18 +11,10 @@
  * @module pi-service/main
  */
 
-import {
-  ConfigurationError,
-  FakeEventBus,
-  FakeLogger,
-  InMemoryHookRegistry,
-} from "@pi-crew/core";
+import { ConfigurationError, FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 import { loadConfig, type GatewayConfig } from "./config.js";
 import { createServiceRegistry } from "./di.js";
-import {
-  ExtensionActivator,
-  createServiceExtensionContext,
-} from "./extension-activator.js";
+import { ExtensionActivator, createServiceExtensionContext } from "./extension-activator.js";
 import { Gateway } from "./gateway.js";
 import { AdminServer } from "./admin/admin-server.js";
 import { RuntimeMetricsCollector, renderPrometheusMetrics } from "./diagnostics/runtime-metrics.js";
@@ -163,7 +155,9 @@ async function main(): Promise<void> {
   await gateway.start();
 
   if (config.admin.enabled) {
-    const diagnostics = { projectOverview: () => Promise.resolve(emptyDiagnosticsOverview(startedAt)) };
+    const diagnostics = {
+      projectOverview: () => Promise.resolve(emptyDiagnosticsOverview(startedAt)),
+    };
     const controls = new RemediationControlService({
       diagnostics,
       auditRepository: new InMemoryAuditRepository(),
@@ -171,15 +165,17 @@ async function main(): Promise<void> {
       validateConfig: validateReloadConfig,
       reloadConfig: async (candidateConfig: unknown) => {
         const nextConfig = loadConfig(candidateConfig);
-        return extensionActivator?.reloadConfig(nextConfig) ?? {
-          changedKeys: [],
-          affectedExtensionIds: [],
-          nonReloadableKeys: [],
-          reactivatedExtensionIds: [],
-          skippedExtensionIds: [],
-          status: "unchanged",
-          warnings: ["extension activator unavailable"],
-        };
+        return (
+          extensionActivator?.reloadConfig(nextConfig) ?? {
+            changedKeys: [],
+            affectedExtensionIds: [],
+            nonReloadableKeys: [],
+            reactivatedExtensionIds: [],
+            skippedExtensionIds: [],
+            status: "unchanged",
+            warnings: ["extension activator unavailable"],
+          }
+        );
       },
     });
     adminServer = new AdminServer({
@@ -192,6 +188,11 @@ async function main(): Promise<void> {
       controls,
     });
     await adminServer.start();
+    if (config.admin.bearerToken === null) {
+      console.warn(
+        `WARNING: admin diagnostics auth disabled at http://${config.admin.host}:${String(config.admin.port)}; LAN bind allowed=${String(config.admin.allowLanBind)}`,
+      );
+    }
     console.log(
       `Admin diagnostics running at http://${config.admin.host}:${String(config.admin.port)}/admin/diagnostics/overview`,
     );
@@ -219,8 +220,7 @@ function loadRuntimeConfigFromEnvironment(): GatewayConfig {
     },
     den: {
       coreUrl: process.env["PI_DEN_CORE_URL"] ?? "http://den-srv:3030",
-      requiredAtStartup:
-        process.env["PI_DEN_REQUIRED_AT_STARTUP"]?.toLowerCase() !== "false",
+      requiredAtStartup: process.env["PI_DEN_REQUIRED_AT_STARTUP"]?.toLowerCase() !== "false",
     },
     health: {
       port: Number(process.env["PI_HEALTH_PORT"] ?? 9236),
@@ -235,12 +235,7 @@ function loadRuntimeConfigFromEnvironment(): GatewayConfig {
     },
     logging: {
       level:
-        (process.env["PI_LOG_LEVEL"] as
-          | "debug"
-          | "info"
-          | "warn"
-          | "error"
-          | undefined) ?? "info",
+        (process.env["PI_LOG_LEVEL"] as "debug" | "info" | "warn" | "error" | undefined) ?? "info",
       json: false,
     },
   });
@@ -302,7 +297,8 @@ function emptyDiagnosticsOverview(startedAt: string): DiagnosticsOverview {
     },
     classification: {
       kind: "unknown",
-      summary: "Standalone pi-service main has admin diagnostics enabled without runtime projection wiring.",
+      summary:
+        "Standalone pi-service main has admin diagnostics enabled without runtime projection wiring.",
     },
     denCore: { status: "degraded", lastOkAt: null },
     denChannels: { status: "degraded", lastOkAt: null },

@@ -4,7 +4,10 @@ import type { AddressInfo } from "node:net";
 import type { AdminConfig } from "../config.js";
 import { redactDiagnosticValue } from "../diagnostics/event-journal.js";
 import type { DiagnosticsOverview } from "../diagnostics/types.js";
-import type { RemediationControlService, RemediationRequest } from "./remediation-control-service.js";
+import type {
+  RemediationControlService,
+  RemediationRequest,
+} from "./remediation-control-service.js";
 
 export interface DiagnosticsProjector {
   projectOverview(): Promise<DiagnosticsOverview>;
@@ -167,7 +170,10 @@ export class AdminServer {
       writeJson(res, 200, await this.#controls.resume(request));
       return;
     }
-    if (pathname.startsWith("/admin/control/sessions/") && pathname.endsWith("/recreate-instance")) {
+    if (
+      pathname.startsWith("/admin/control/sessions/") &&
+      pathname.endsWith("/recreate-instance")
+    ) {
       const sessionId = decodeURIComponent(
         pathname.slice("/admin/control/sessions/".length, -"/recreate-instance".length),
       );
@@ -200,6 +206,7 @@ export class AdminServer {
   }
 
   #authorized(req: IncomingMessage): boolean {
+    if (this.#config.bearerToken === null) return true;
     const authorization = req.headers.authorization;
     return authorization === `Bearer ${this.#config.bearerToken}`;
   }
@@ -221,7 +228,9 @@ function pickConnectivity(overview: DiagnosticsOverview) {
 
 function findSession(overview: DiagnosticsOverview, pathname: string) {
   const sessionId = decodeURIComponent(pathname.slice("/admin/diagnostics/sessions/".length));
-  return overview.sessions.find((session) => session.sessionId === sessionId) ?? { error: "not_found" };
+  return (
+    overview.sessions.find((session) => session.sessionId === sessionId) ?? { error: "not_found" }
+  );
 }
 
 function assignmentViews(overview: DiagnosticsOverview) {

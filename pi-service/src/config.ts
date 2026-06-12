@@ -16,10 +16,7 @@ import { isLoopbackHost } from "./admin/admin-server.js";
 
 const DatabaseConfigSchema = z.object({
   /** Absolute path to the SQLite runtime database. */
-  path: z
-    .string()
-    .min(1, "database.path must not be empty")
-    .default("/var/lib/pi-crew/runtime.db"),
+  path: z.string().min(1, "database.path must not be empty").default("/var/lib/pi-crew/runtime.db"),
   /** Enable WAL mode for read concurrency. */
   wal: z.boolean().default(true),
 });
@@ -27,23 +24,20 @@ const DatabaseConfigSchema = z.object({
 const ChannelsUrlSchema = z
   .string()
   .trim()
-  .refine(
-    (value) => {
-      if (value.length === 0) return true;
-      try {
-        const url = new URL(value);
-        return (
-          url.protocol === "ws:" ||
-          url.protocol === "wss:" ||
-          url.protocol === "http:" ||
-          url.protocol === "https:"
-        );
-      } catch {
-        return false;
-      }
-    },
-    "den.channelsUrl must be empty or a valid ws://, wss://, http://, or https:// URL",
-  )
+  .refine((value) => {
+    if (value.length === 0) return true;
+    try {
+      const url = new URL(value);
+      return (
+        url.protocol === "ws:" ||
+        url.protocol === "wss:" ||
+        url.protocol === "http:" ||
+        url.protocol === "https:"
+      );
+    } catch {
+      return false;
+    }
+  }, "den.channelsUrl must be empty or a valid ws://, wss://, http://, or https:// URL")
   .default("");
 
 const DenConfigSchema = z.object({
@@ -128,14 +122,14 @@ const AdminConfigSchema = z
     host: z.string().min(1).default("127.0.0.1"),
     /** Admin server port. */
     port: z.number().int().min(1).max(65535).default(9237),
-    /** Bearer token required for /admin/* routes. Load from environment. */
-    bearerToken: z.string().default(""),
+    /** Bearer token required for /admin/* routes. Use null only for explicit LAN diagnostics. */
+    bearerToken: z.string().nullable().default(""),
     /** Explicit opt-in for non-loopback admin bind hosts. */
     allowLanBind: z.boolean().default(false),
   })
   .default({})
   .superRefine((value, context) => {
-    if (value.enabled && value.bearerToken.length === 0) {
+    if (value.enabled && value.bearerToken === "") {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["bearerToken"],
@@ -241,9 +235,7 @@ export function loadConfig(raw: unknown): GatewayConfig {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new ConfigurationError(
-      `Invalid gateway configuration:\n${issues}`,
-    );
+    throw new ConfigurationError(`Invalid gateway configuration:\n${issues}`);
   }
 
   return result.data;

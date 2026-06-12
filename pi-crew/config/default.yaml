@@ -125,6 +125,15 @@ sessions:
   fallbackProfileId: "system-architect"
 
 # ── Native delegation child runner ───────────────────────────────
+# Routine service-authored delegation projections default to the local
+# append-only log, not Den Channels. Temporarily set channelEnabled true for
+# targeted smoke tests that need channel-visible lifecycle/tool events.
+delegation:
+  projection:
+    channelEnabled: false
+    localLogEnabled: true
+    localLogPath: "/home/agents/pi-crew/delegation-projections.log"
+    projectToolCalledEvents: false
 # Required before conversational agents can run real delegated child sessions.
 # delegation:
 #   llmBaseUrl: "http://192.168.1.23:13305/v1"
@@ -177,6 +186,16 @@ logging:
 
   # Output JSON to stdout instead of human-readable text.
   json: false
+
+# ── Admin diagnostics ─────────────────────────────────────────────
+admin:
+  enabled: false
+  host: "127.0.0.1"
+  port: 9237
+  # Non-empty string preserves bearer-token auth. Explicit null disables admin
+  # auth for high-trust LAN diagnostics only; empty/omitted fails closed when enabled.
+  bearerToken: ""
+  allowLanBind: false
 
 # ── Health check endpoint ─────────────────────────────────────────
 health:

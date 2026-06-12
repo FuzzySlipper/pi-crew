@@ -88,6 +88,45 @@ describe("installed config layout", () => {
     expect(layout.profilesRoot).toBe(join(root, "profiles"));
   });
 
+  it("defaults delegation projection to local log with channel posting disabled", () => {
+    const root = tempRoot();
+    const config = loadCrewConfig(writeInstalledConfig(root));
+
+    expect(config.delegation.projection.channelEnabled).toBe(false);
+    expect(config.delegation.projection.localLogEnabled).toBe(true);
+    expect(config.delegation.projection.projectToolCalledEvents).toBe(false);
+  });
+
+  it("loads explicit delegation projection sink settings", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    mkdirSync(join(root, "profiles"), { recursive: true });
+    writeFileSync(
+      configPath,
+      [
+        "install:",
+        `  root: "${root}"`,
+        "profiles:",
+        `  root: "${join(root, "profiles")}"`,
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "delegation:",
+        "  projection:",
+        "    channelEnabled: true",
+        "    localLogEnabled: false",
+        "    projectToolCalledEvents: true",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const config = loadCrewConfig(configPath);
+    expect(config.delegation.projection.channelEnabled).toBe(true);
+    expect(config.delegation.projection.localLogEnabled).toBe(false);
+    expect(config.delegation.projection.projectToolCalledEvents).toBe(true);
+  });
+
   it("uses installed profiles root for conversational responder assembly", () => {
     const root = tempRoot();
     const profileDir = join(root, "profiles", "installed-profile");

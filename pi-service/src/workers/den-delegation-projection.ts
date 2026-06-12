@@ -14,28 +14,10 @@ import {
   projectDelegationMessageToChannel,
   type DelegationChannelProjectionConfig,
 } from "./den-delegation-channel-projection.js";
+import { appendDelegationProjectionToFile } from "./delegation-projection-file-sink.js";
 
-// ── Rate limiting configuration ──────────────────────────────────
-
-/**
- * Minimum interval (ms) between Channel projections for
- * high-frequency events (turn_visible, tool_visible).
- *
- * DESIGN: turn_visible and tool_visible events can fire multiple times
- * per child execution. Projecting every one to Den Channels would flood
- * the channel. We coalesce them within the cooldown window and emit
- * a compact summary instead.
- *
- * High-signal events (spawned, completed, killed, timeout, orphan_detected)
- * are always projected immediately (no rate limit).
- */
 const DEFAULT_TURN_COOLDOWN_MS = 5_000;
 const DEFAULT_TOOL_COOLDOWN_MS = 5_000;
-
-/**
- * Whether tool_visible events with phase "called" are projected to
- * Den Channels. "completed" phase tool events are higher signal.
- */
 const PROJECT_TOOL_CALLED_EVENTS = false;
 
 // ── Event signal tiers ───────────────────────────────────────────
@@ -224,6 +206,12 @@ export interface DenDelegationProjectionConfig extends DelegationChannelProjecti
 
   /** Whether to project "called" phase tool events. Default: false. */
   readonly projectToolCalledEvents?: boolean;
+  /** Whether to post projection messages into Den Channels. Default: true for direct extension use. */
+  readonly channelEnabled?: boolean;
+  /** Whether to append projection messages to a local text log. Default: false. */
+  readonly localLogEnabled?: boolean;
+  /** Local append-only text log path used when localLogEnabled is true. */
+  readonly localLogPath?: string;
 }
 
 export class DenDelegationProjectionExtension implements ServiceExtension {
@@ -231,7 +219,9 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
   readonly description =
     "Projects delegation lifecycle events (spawned, completed, killed, timeout, turn/tool visible) to Den-visible surface with rate limiting.";
 
-  readonly #config: Required<Omit<DenDelegationProjectionConfig, keyof DelegationChannelProjectionConfig>>;
+  readonly #config: Required<
+    Omit<DenDelegationProjectionConfig, keyof DelegationChannelProjectionConfig>
+  >;
   readonly #channelConfig: DelegationChannelProjectionConfig;
   readonly #unsubscribers: Array<() => void> = [];
   readonly #turnStates = new Map<string, CoalescedTurnState>();
@@ -241,12 +231,16 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     this.#channelConfig = {
       channelProvider: config.channelProvider,
       channelId: config.channelId,
+      channelEnabled: config.channelEnabled ?? true,
     };
     this.#config = {
       loggerEnabled: config.loggerEnabled ?? true,
       turnCooldownMs: config.turnCooldownMs ?? DEFAULT_TURN_COOLDOWN_MS,
       toolCooldownMs: config.toolCooldownMs ?? DEFAULT_TOOL_COOLDOWN_MS,
       projectToolCalledEvents: config.projectToolCalledEvents ?? PROJECT_TOOL_CALLED_EVENTS,
+      channelEnabled: config.channelEnabled ?? true,
+      localLogEnabled: config.localLogEnabled ?? false,
+      localLogPath: config.localLogPath ?? "",
     };
   }
 
@@ -285,12 +279,8 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
           formatOrphanMessage(payload),
         );
       }),
-      eventBus.on("delegation.turn_visible", (payload) =>
-        this.handleTurnVisible(context, payload),
-      ),
-      eventBus.on("delegation.tool_visible", (payload) =>
-        this.handleToolVisible(context, payload),
-      ),
+      eventBus.on("delegation.turn_visible", (payload) => this.handleTurnVisible(context, payload)),
+      eventBus.on("delegation.tool_visible", (payload) => this.handleToolVisible(context, payload)),
     );
 
     logger.info("DenDelegationProjectionExtension activated", {
@@ -298,6 +288,9 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
       turnCooldownMs: this.#config.turnCooldownMs,
       toolCooldownMs: this.#config.toolCooldownMs,
       projectToolCalledEvents: this.#config.projectToolCalledEvents,
+      channelEnabled: this.#config.channelEnabled,
+      localLogEnabled: this.#config.localLogEnabled,
+      localLogPath: this.#config.localLogPath,
     });
 
     return Promise.resolve();
@@ -464,7 +457,10 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     const message = format();
     if (message === null) return;
 
-    this.logProjection(context, message.eventName, { summary: message.summary, ...message.details });
+    this.logProjection(context, message.eventName, {
+      summary: message.summary,
+      ...message.details,
+    });
   }
 
   private logProjection(
@@ -473,10 +469,17 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     details: Record<string, unknown>,
   ): void {
     const summary = typeof details["summary"] === "string" ? details["summary"] : eventName;
+    const message = { eventName, summary, details };
     projectDelegationMessageToChannel({
       ...this.#channelConfig,
       logger: context.logger,
-      message: { eventName, summary, details },
+      message,
+    });
+    appendDelegationProjectionToFile({
+      enabled: this.#config.localLogEnabled,
+      path: this.#config.localLogPath,
+      logger: context.logger,
+      message,
     });
     if (!this.#config.loggerEnabled) return;
 

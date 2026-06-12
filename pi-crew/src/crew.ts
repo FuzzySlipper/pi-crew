@@ -1,4 +1,3 @@
-/** pi-crew composition root — wires all modules into a running gateway. */
 import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
 import { ConfigurationError, FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
@@ -62,8 +61,14 @@ import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
-import { createDeferredDelegationLifecyclePort, createDelegatedChildRunner } from "./delegation-composition.js";
-import { configureConversationalSessionManager, configuredConversationalMemberIdentities } from "./conversational-agent-sessions.js";
+import {
+  createDeferredDelegationLifecyclePort,
+  createDelegatedChildRunner,
+} from "./delegation-composition.js";
+import {
+  configureConversationalSessionManager,
+  configuredConversationalMemberIdentities,
+} from "./conversational-agent-sessions.js";
 import {
   auditEntryToRecord,
   completionDefaultsFromEnv,
@@ -111,7 +116,6 @@ export class Crew {
     const hookRegistry = new InMemoryHookRegistry(this.#logger);
     const toolPolicySessions = new InMemoryToolPolicySessionRegistry();
 
-    // Build the GatewayConfig subset for pi-service
     this.#gatewayConfig = loadConfig({
       admin: config.admin,
       database: config.database,
@@ -144,7 +148,12 @@ export class Crew {
     });
 
     const cursorStore = createSqliteCursorStore(this.#runtimeDb);
-    const denConnection = buildDenConnection(config.den, this.#logger, cursorStore, configuredConversationalMemberIdentities(config));
+    const denConnection = buildDenConnection(
+      config.den,
+      this.#logger,
+      cursorStore,
+      configuredConversationalMemberIdentities(config),
+    );
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
     } satisfies DenChannelsAdapterConfig);
@@ -152,8 +161,6 @@ export class Crew {
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
 
-    // 3b. Den completion poster — posts structured completion packets
-    //     to Den Core via the MCP client (canonical post_worker_completion_packet).
     this.#denCompletionPoster = createDenCompletionPoster({
       mcpClient: this.#mcpClient,
       projectId: "pi-crew",
@@ -252,7 +259,8 @@ export class Crew {
       eventBus: this.#eventBus,
       logger: this.#logger,
       childRunner: createDelegatedChildRunner(config.delegation, {
-        mcpClient: this.#mcpClient, toolRegistry: this.#mcpToolRegistry,
+        mcpClient: this.#mcpClient,
+        toolRegistry: this.#mcpToolRegistry,
       }),
       childRegistry,
     });
@@ -265,8 +273,16 @@ export class Crew {
     this.#extensionActivator = new ExtensionActivator({
       extensions: [
         new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry),
-        new DenDelegationProjectionExtension({ channelProvider: this.#channelProvider,
-          channelId: config.den.channelsSubscriptionChannelId, projectToolCalledEvents: true }),
+        new DenDelegationProjectionExtension({
+          channelProvider: this.#channelProvider,
+          channelId: config.den.channelsSubscriptionChannelId,
+          channelEnabled: config.delegation.projection.channelEnabled,
+          localLogEnabled: config.delegation.projection.localLogEnabled,
+          localLogPath:
+            config.delegation.projection.localLogPath ??
+            `${config.install.root}/delegation-projections.log`,
+          projectToolCalledEvents: config.delegation.projection.projectToolCalledEvents,
+        }),
       ],
       context: createServiceExtensionContext({
         config: this.#registry.config,
@@ -300,7 +316,6 @@ export class Crew {
       },
     });
 
-    // 8. Tool policy enforcer (runtime tool filtering)
     this.#toolPolicyEnforcer = new ToolPolicyEnforcer(this.#eventBus, this.#logger);
 
     this.#logger.info("Crew composition root assembled", {
@@ -313,9 +328,6 @@ export class Crew {
     });
   }
 
-  // ── Lifecycle ───────────────────────────────────────────────
-
-  /** Start the gateway and connect all providers. */
   async start(): Promise<void> {
     if (this.#started) return;
 
@@ -324,7 +336,6 @@ export class Crew {
 
     await this.#channelProvider.connect();
 
-    // Connect MCP client and discover tools
     try {
       const mcpConfig: ServerConfig = {
         name: "den-mcp",
@@ -337,7 +348,6 @@ export class Crew {
       const tools = await this.#mcpClient.connect(mcpConfig);
       this.#mcpToolRegistry.setMcpTools(tools);
     } catch (error: unknown) {
-      // MCP connection is best-effort at startup; gateway still starts
       this.#logger.warn("MCP client connection failed (gateway continues)", {
         error: (error as Error).message,
       });
@@ -345,12 +355,17 @@ export class Crew {
 
     await this.#gateway.start();
     await this.#adminServer?.start();
+    if (this.#gatewayConfig.admin.bearerToken === null)
+      this.#logger.warn("Admin diagnostics auth disabled", {
+        host: this.#gatewayConfig.admin.host,
+        port: this.#gatewayConfig.admin.port,
+        allowLanBind: this.#gatewayConfig.admin.allowLanBind,
+      });
 
     this.#started = true;
     this.#logger.info("Crew started");
   }
 
-  /** Graceful shutdown. */
   async stop(reason: string): Promise<void> {
     if (!this.#started) {
       this.#runtimeDb.close();
@@ -360,28 +375,17 @@ export class Crew {
     this.#logger.info("Crew stopping", { reason });
     await this.#extensionActivator.deactivateAll();
 
-    // Dispose governance
     this.#breadcrumbManager.dispose();
     this.#auditLogger.dispose();
-
-    // Disconnect MCP client
     await this.#mcpClient.disconnect();
-
-    // Disconnect channel provider
     await this.#channelProvider.disconnect();
-
-    // Stop gateway
     await this.#adminServer?.stop();
     await this.#gateway.stop(reason);
-
-    // Close local runtime DB/cache after subscribers have flushed.
     this.#runtimeDb.close();
 
     this.#started = false;
     this.#logger.info("Crew stopped");
   }
-
-  // ── Accessors (for testing and inspection) ─────────────────
 
   get isRunning(): boolean {
     return this.#started;
@@ -441,12 +445,10 @@ export class Crew {
     };
   }
 
-  /** Validated worker role mapping for injecting into WorkerRuntime. */
   get workerRoleMapping(): WorkerRoleMappingConfig {
     return this.#workerRoleMapping;
   }
 
-  /** Build the production LLM-backed worker executor with live MCP tools. */
   createAgentWorkerExecutor(): AgentWorkerExecutor {
     return createCrewAgentWorkerExecutor({
       mcpClient: this.#mcpClient,
@@ -457,7 +459,6 @@ export class Crew {
     });
   }
 
-  /** Build the production Den assignment runner for one concrete pool member. */
   createDenAssignmentRunner(member: DenPoolMemberConfig | undefined): DenAssignmentRunner {
     if (member === undefined) {
       throw new ConfigurationError(
@@ -488,7 +489,6 @@ export class Crew {
   }
 }
 
-// ── Convenience: bootstrap from YAML path ───────────────────────
 export function bootstrap(yamlPath: string): Crew {
   const config = loadCrewConfig(yamlPath);
   return new Crew(config);

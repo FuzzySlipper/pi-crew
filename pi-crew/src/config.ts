@@ -129,6 +129,22 @@ const ConversationalAgentConfigSchema = z.object({
   lifecycle: ConversationalAgentLifecycleConfigSchema,
 });
 
+const DelegationProjectionConfigSchema = z.object({
+  channelEnabled: z.boolean().default(false),
+  localLogEnabled: z.boolean().default(true),
+  localLogPath: z.string().min(1).optional(),
+  projectToolCalledEvents: z.boolean().default(false),
+});
+
+const DelegationConfigSchema = z
+  .object({
+    llmBaseUrl: z.string().optional(),
+    llmApiKey: z.string().optional(),
+    llmModelName: z.string().optional(),
+    projection: DelegationProjectionConfigSchema.default({}),
+  })
+  .default({});
+
 export const CrewConfigSchema = z.object({
   install: InstallConfigSchema.default({}),
   profiles: ProfilesConfigSchema,
@@ -146,11 +162,7 @@ export const CrewConfigSchema = z.object({
   workers: WorkerRoleMappingConfigSchema.default({
     bindings: DEFAULT_WORKER_ROLE_BINDINGS,
   }),
-  delegation: z.object({
-    llmBaseUrl: z.string().optional(),
-    llmApiKey: z.string().optional(),
-    llmModelName: z.string().optional(),
-  }).default({}),
+  delegation: DelegationConfigSchema,
 });
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;

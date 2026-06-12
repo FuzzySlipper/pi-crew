@@ -17,6 +17,24 @@ describe("admin diagnostics config", () => {
     ).toThrow("admin.bearerToken");
   });
 
+  it("accepts explicit null bearer token for disabled LAN diagnostics auth", () => {
+    const config = loadConfig({
+      den: { coreUrl: "http://den-srv:3030", requiredAtStartup: false },
+      admin: { enabled: true, bearerToken: null },
+    });
+
+    expect(config.admin.bearerToken).toBeNull();
+  });
+
+  it("still rejects an empty string bearer token", () => {
+    expect(() =>
+      loadConfig({
+        den: { coreUrl: "http://den-srv:3030", requiredAtStartup: false },
+        admin: { enabled: true, bearerToken: "" },
+      }),
+    ).toThrow("admin.bearerToken");
+  });
+
   it("requires explicit LAN opt-in for non-localhost admin bind", () => {
     expect(() =>
       loadConfig({
@@ -70,6 +88,19 @@ describe("AdminServer", () => {
       expect(text).toContain("unauthorized");
       expect(text).not.toContain(token);
       expect(text).not.toContain("wrong-token");
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("allows diagnostics without Authorization when bearer token is explicitly null", async () => {
+    const server = await startServer(19366, healthyOverview(), null, null);
+    try {
+      const response = await fetch(
+        `http://${server.host}:${String(server.port)}/admin/diagnostics/overview`,
+      );
+      expect(response.status).toBe(200);
+      expect(readPath(await responseJson(response), ["classification", "kind"])).toBe("healthy");
     } finally {
       await server.stop();
     }
@@ -168,13 +199,14 @@ async function startServer(
   port: number,
   overview: DiagnosticsOverview,
   metrics: string | null = null,
+  bearerToken: string | null = token,
 ): Promise<AdminServer> {
   const server = new AdminServer({
     config: {
       enabled: true,
       host: "127.0.0.1",
       port,
-      bearerToken: token,
+      bearerToken,
       allowLanBind: false,
     },
     diagnostics: { projectOverview: () => Promise.resolve(overview) },

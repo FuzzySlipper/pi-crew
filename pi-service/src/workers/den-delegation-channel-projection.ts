@@ -5,6 +5,7 @@ import type { ChannelContent, ChannelProvider, Logger } from "@pi-crew/core";
 export interface DelegationChannelProjectionConfig {
   readonly channelProvider?: ChannelProvider;
   readonly channelId?: string;
+  readonly channelEnabled?: boolean;
 }
 
 export interface DelegationProjectionMessage {
@@ -28,7 +29,12 @@ export function projectDelegationMessageToChannel(input: {
   readonly logger: Logger;
   readonly message: DelegationProjectionMessage;
 }): void {
-  if (input.channelProvider === undefined || input.channelId === undefined) return;
+  if (
+    input.channelEnabled === false ||
+    input.channelProvider === undefined ||
+    input.channelId === undefined
+  )
+    return;
   void input.channelProvider
     .sendMessage(input.channelId, toChannelContent(input.message))
     .catch((cause: unknown) => {
@@ -60,8 +66,7 @@ function renderMessageText(message: DelegationProjectionMessage): string {
 }
 
 function detailLines(details: Readonly<Record<string, unknown>>): string[] {
-  return visibleDetailKeys
-    .flatMap((key) => formatDetail(key, details[key]));
+  return visibleDetailKeys.flatMap((key) => formatDetail(key, details[key]));
 }
 
 function formatDetail(key: string, value: unknown): string[] {
