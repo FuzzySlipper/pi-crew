@@ -193,18 +193,15 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
     expect(calls).toEqual(["http://192.168.1.10:18081/api/channels/604/memberships"]);
   });
 
-  it("allows explicit legacy direct polling fallback when v8 registration is unavailable", async () => {
+  it("uses current HTTP cursor mode without subscription or membership registration", async () => {
     const urls: string[] = [];
     const mockFetch = vi.fn((input: string | URL) => {
       const url = urlFromInput(input);
       urls.push(url);
-      if (url.includes("/api/channels/604/memberships")) {
-        return Promise.resolve(new Response("not found", { status: 404 }));
-      }
       if (url.includes("/api/direct-agent-events")) {
         return Promise.resolve(new Response("[]", { status: 200 }));
       }
-      return Promise.resolve(new Response("ok", { status: 200 }));
+      return Promise.resolve(new Response("not found", { status: 404 }));
     });
     const conn = new DenHttpDirectAgentConnection(
       makeConfig({ allowLegacyDirectPolling: true }),
@@ -217,8 +214,8 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 25));
     await conn.close();
 
-    expect(urls.some((url) => url.includes("/api/channels/604/memberships"))).toBe(true);
-    expect(urls.some((url) => url.includes("/api/direct-agent-events"))).toBe(true);
+    expect(urls).toEqual(["http://192.168.1.10:18081/api/direct-agent-events?projectId=pi-crew&limit=1"]);
+    expect(logger.entries.some((entry) => entry.message.includes("Subscription registration failed"))).toBe(false);
   });
 
   it("releases the runtime subscription on close without leaving membership", async () => {

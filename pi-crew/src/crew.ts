@@ -47,11 +47,9 @@ export {
 } from "./config.js";
 import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
-
 import { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
 import { loadProfile } from "@pi-crew/profiles";
-
 import { buildDenConnection, createSqliteCursorStore } from "./den-connection-factory.js";
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 import { SessionKindAwareResponderFactory } from "./session-kind-responder-factory.js";
@@ -73,7 +71,6 @@ import {
   validateGatewayConfig,
 } from "./crew-helpers.js";
 import type { CompletionPoster } from "@pi-crew/tools";
-
 export class Crew {
   readonly #config: CrewConfig;
   readonly #gatewayConfig: GatewayConfig;
@@ -85,7 +82,6 @@ export class Crew {
   readonly #runtimeDb: RuntimeDb;
   readonly #auditRepository: SqliteAuditRepository;
   readonly #workerRoleMapping: WorkerRoleMappingConfig;
-
   readonly #channelProvider: ChannelProvider;
   readonly #mcpClient: MCPClient;
   readonly #mcpToolRegistry: McpToolRegistry;
@@ -96,17 +92,12 @@ export class Crew {
   readonly #denCompletionPoster: CompletionPoster;
   readonly #extensionActivator: ExtensionActivator;
   readonly #delegatedSpawnLifecycle: DelegatedSpawnLifecycle;
-
   readonly #agentRegistry: AgentRuntimeRegistry;
   readonly #steerFollowUpBridge: SteerFollowUpBridge;
-
   readonly #instancePool: InstancePoolImpl;
-
   #started = false;
-
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
-
     // DESIGN: Validate configured profile IDs before runtime routing.
     // Rationale: SessionManager receives policy, not global fallback magic.
     loadProfile(config.sessions.fallbackProfileId, resolveCrewInstallLayout(config).profilesRoot);
@@ -187,6 +178,10 @@ export class Crew {
       this.#mcpClient,
       new MessageRepositoryTurnHistory(new SqliteMessageRepository(this.#runtimeDb.handle)),
       { lifecycle: conversationalDelegationLifecycle.port },
+      {
+        baseUrl: config.den.channelsUrl,
+        token: config.den.channelsToken,
+      },
     );
     const responderFactory = new SessionKindAwareResponderFactory(conversationalFactory);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);

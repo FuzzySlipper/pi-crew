@@ -94,9 +94,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     this.#pollState.timer = setInterval(() => {
       void this.#poll();
     }, interval);
-
     void this.#poll();
-
     this.#logger.info("Den HTTP direct-agent connection opened", {
       baseUrl: this.#config.baseUrl,
       projectId: this.#config.projectId,
@@ -104,10 +102,8 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       cursor: this.#lastCursor,
     });
   }
-
   async close(): Promise<void> {
     if (!this.#open) return;
-
     if (this.#pollState.timer !== null) {
       clearInterval(this.#pollState.timer);
       this.#pollState.timer = null;
@@ -115,12 +111,10 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     await this.#releaseSubscription();
     this.#pollState.controller.abort();
     await this.#persistCursor();
-
     this.#open = false;
     this.#emit("disconnected", "http-close");
     this.#logger.info("Den HTTP direct-agent connection closed");
   }
-
   async sendMessage(channelId: string, payload: DenOutboundPayload): Promise<DenSendResult> {
     const text = denContentToText(payload.content);
     const sourceId = `http-delivery-${String(Date.now())}`;
@@ -134,7 +128,6 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     );
     return { id: sourceId };
   }
-
   async updateMessage(
     channelId: string,
     messageId: string,
@@ -170,7 +163,6 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     });
     await Promise.resolve();
   }
-
   on<K extends keyof DenConnectionEvents>(event: K, listener: DenConnectionEvents[K]): () => void {
     let set = this.#listeners.get(event);
     if (!set) {
@@ -182,24 +174,23 @@ export class DenHttpDirectAgentConnection implements DenConnection {
       set.delete(listener);
     };
   }
-
   async upsertMembership(input: ChannelMembershipUpsert): Promise<ChannelMembership> {
     return this.#subscriptionClient.upsertMembership(input, this.#pollState.controller.signal);
   }
-
   async upsertSubscription(input: ChannelSubscriptionUpsert): Promise<ChannelSubscription> {
+    if (this.#config.allowLegacyDirectPolling) return { ...input,
+      subscriptionId: `${input.channelId}:${input.subscriptionIdentity}`, status: input.status ?? "active", updatedAt: new Date() };
     return this.#subscriptionClient.upsertSubscription(input, this.#pollState.controller.signal);
   }
-
   async releaseSubscription(input: ChannelSubscriptionRelease): Promise<void> {
+    if (this.#config.allowLegacyDirectPolling) return;
     await this.#subscriptionClient.releaseSubscription(input, this.#pollState.controller.signal);
   }
-
   async getPresence(input: ChannelPresenceQuery): Promise<readonly ChannelPresence[]> {
     return this.#subscriptionClient.getPresence(input, this.#pollState.controller.signal);
   }
-
   async updateSubscriptionStatus(input: ChannelSubscriptionStatusUpdate): Promise<void> {
+    if (this.#config.allowLegacyDirectPolling) return;
     await this.#subscriptionClient.updateSubscriptionStatus(
       input,
       this.#pollState.controller.signal,
@@ -207,6 +198,10 @@ export class DenHttpDirectAgentConnection implements DenConnection {
   }
 
   async #registerSubscription(): Promise<void> {
+    if (this.#config.allowLegacyDirectPolling) {
+      this.#logger.info("Den HTTP direct-agent connection using current cursor mode", { projectId: this.#config.projectId });
+      return;
+    }
     try {
       const result = await this.#subscriptionClient.register(this.#pollState.controller.signal);
       const readback = await this.#subscriptionClient.readSubscriptions(
@@ -248,6 +243,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     }
   }
   async #releaseSubscription(): Promise<void> {
+    if (this.#config.allowLegacyDirectPolling) return;
     try {
       await this.#subscriptionClient.release(this.#pollState.controller.signal);
     } catch (err: unknown) {

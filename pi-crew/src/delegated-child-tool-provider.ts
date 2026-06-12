@@ -83,4 +83,5 @@ const safeDenToolNames = [
   "mcp_den_list_review_findings",
   "mcp_den_list_review_rounds",
   "mcp_den_get_worker_run_status",
+  "den_channels_read_recent",
 ];
