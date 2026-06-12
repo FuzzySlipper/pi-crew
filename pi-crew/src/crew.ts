@@ -2,10 +2,8 @@
 
 import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
 import { ConfigurationError, FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
-
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
 import type { DenChannelsAdapterConfig } from "@pi-crew/channels/den-channels/den-channels-adapter";
-
 import {
   loadConfig,
   Gateway,
@@ -24,10 +22,12 @@ import {
   ToolPolicyExtension,
   AgentRuntimeRegistry,
   DelegatedSpawnLifecycle,
+  DelegatedChildRegistry,
   DelegatedOrphanCleanup,
   WorkerRuntime,
   SessionManagerDelegationSessionBridge,
   SqliteAuditRepository,
+  SqlitePendingChildRepository,
   SqliteSessionRepository,
   SqliteMessageRepository,
   MessageRepositoryTurnHistory,
@@ -37,7 +37,6 @@ import {
   type WorkerRuntimeConfig,
   type AgentWorkerExecutor,
 } from "@pi-crew/service";
-
 import { loadCrewConfig, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
 export {
   CrewConfigSchema,
@@ -251,12 +250,19 @@ export class Crew {
       eventBus: this.#eventBus,
       logger: this.#logger,
     });
+    const childRegistry = new DelegatedChildRegistry({
+      repository: new SqlitePendingChildRepository(this.#runtimeDb.handle),
+      eventBus: this.#eventBus,
+      logger: this.#logger,
+    });
+    void childRegistry.recoverPending({ activeChildSessionIds: [] });
     this.#delegatedSpawnLifecycle = new DelegatedSpawnLifecycle({
       hookRegistry: this.#registry.hookRegistry,
       delegationSessions: delegationBridge,
       eventBus: this.#eventBus,
       logger: this.#logger,
       childRunner: createDelegatedChildRunner(config.delegation),
+      childRegistry,
     });
     conversationalDelegationLifecycle.set(this.#delegatedSpawnLifecycle);
     new DelegatedOrphanCleanup({
@@ -274,12 +280,8 @@ export class Crew {
         delegationSessions: delegationBridge,
       }),
     });
-
     new SessionPresenceBridge(this.#eventBus, this.#channelProvider, this.#logger);
 
-    // 6. Wire channel provider → steer/followUp bridge → session manager routing
-    //    Steer/followUp events with intent metadata are intercepted by the
-    //    bridge before falling through to normal session routing.
     this.#channelProvider.onMessage((message) => {
       if (this.#steerFollowUpBridge.route(message)) return Promise.resolve();
       return this.#sessionManager.routeMessage(this.#channelProvider, message);

@@ -3,7 +3,7 @@ name: "Conversational Orchestrator Test"
 description: >-
   Bounded test orchestrator profile for native pi-crew delegation viability
   checks. It participates as a Den Channels conversational agent and may use
-  only minimal Den read/write tools plus spawn_subagent.
+  only minimal Den read/write tools plus native delegation tools.
 skills:
   - name: den-grounded-orchestration
     description: Use Den task and document context before coordinating work.
@@ -25,3 +25,4 @@ toolPolicy:
     - mcp_den_send_message
     - mcp_den_update_task
     - spawn_subagent
+    - fan_out_subagents

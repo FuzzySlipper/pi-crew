@@ -25,6 +25,8 @@ export interface DenWorkerCorrelationPayload {
   readonly runId?: string;
   readonly taskId?: string;
   readonly profileId?: string;
+  readonly batchId?: string;
+  readonly batchIndex?: string;
 }
 
 /** Fired when a new conversational, worker, or delegated session is created. */

@@ -97,6 +97,7 @@ export {
   type RuntimeDbHealth,
   SqliteSessionRepository,
   SqliteMessageRepository,
+  SqlitePendingChildRepository,
   MessageRepositoryTurnHistory,
   SqliteAuditRepository,
   StartupHydrator,
@@ -193,6 +194,14 @@ export type {
   DelegatedTurnVisibilityInput,
 } from "./workers/delegated-spawn-lifecycle.js";
 export { createDelegatedSpawnTool, type DelegatedSpawnLifecyclePort } from "./workers/delegated-spawn-tool.js";
+export { createDelegatedFanOutTool, type ParentVisibleFanOutResult } from "./workers/delegated-fan-out-tool.js";
+export {
+  DelegatedChildRegistry,
+  InMemoryPendingChildRepository,
+  type DelegatedChildRegistryConfig,
+  type PendingChildRecord,
+  type PendingChildRepository,
+} from "./workers/delegated-child-registry.js";
 export { SessionMaterializedDelegatedChildRunner } from "./workers/session-materialized-delegated-child-runner.js";
 export { LlmDelegatedChildRunner } from "./workers/llm-delegated-child-runner.js";
 export {

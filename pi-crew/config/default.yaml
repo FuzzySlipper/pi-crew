@@ -135,7 +135,7 @@ sessions:
 # multiple long-lived conversational agents. These are not worker pool members.
 # To enable native delegation for a dedicated orchestrator test profile, set
 # runtime.tools.allow to include "delegation" and ensure the profile toolPolicy
-# allows the concrete "spawn_subagent" tool.
+# allows concrete tools such as "spawn_subagent" and "fan_out_subagents".
 # conversationalAgents:
 #   - agentId: "pi-crew-runner"
 #     enabled: true

@@ -25,6 +25,7 @@ import {
 import {
   ConversationalAgentResponder,
   ConversationalAgentResponderFactory,
+  createDelegatedFanOutTool,
   createDelegatedSpawnTool,
   type AgentResponderFactory,
   type AgentResponderFactoryContext,
@@ -233,6 +234,14 @@ function addDelegationTool(
       parentRuntime,
       allowedRuntimes: delegation.allowedRuntimes ?? [parentRuntime],
     }) as unknown as AgentTool,
+    createDelegatedFanOutTool({
+      lifecycle: delegation.lifecycle,
+      parentSessionId,
+      parentPolicy: runtime.executionPolicy,
+      parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
+      parentRuntime,
+      allowedRuntimes: delegation.allowedRuntimes ?? [parentRuntime],
+    }) as unknown as AgentTool,
   ];
 }
 
@@ -241,13 +250,16 @@ function agentAllowsDelegation(
   runtime: ResolvedConversationalAgentRuntime,
 ): boolean {
   const requested = agent.runtime.tools.allow.some((entry) =>
-    entry === "delegation" || entry === "spawn_subagent"
+    entry === "delegation" || entry === "spawn_subagent" || entry === "fan_out_subagents"
   );
   if (!requested) return false;
   if (!toolAllowedByProfilePolicy("spawn_subagent", runtime.profile.toolPolicy)) return false;
+  if (!toolAllowedByProfilePolicy("fan_out_subagents", runtime.profile.toolPolicy)) return false;
   if (runtime.executionPolicy.deniedTools.includes("spawn_subagent")) return false;
+  if (runtime.executionPolicy.deniedTools.includes("fan_out_subagents")) return false;
   return runtime.executionPolicy.allowedTools.length === 0
-    || runtime.executionPolicy.allowedTools.includes("spawn_subagent");
+    || (runtime.executionPolicy.allowedTools.includes("spawn_subagent")
+      && runtime.executionPolicy.allowedTools.includes("fan_out_subagents"));
 }
 
 function parentRuntimeFor(

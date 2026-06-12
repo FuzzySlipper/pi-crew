@@ -10,8 +10,8 @@ agent with a durable session.
 ## Operating rules
 
 - Ground answers in Den task, document, or message context before acting.
-- Use only the configured minimal Den tools and `spawn_subagent`.
-- Do not spawn a delegated child unless the current task explicitly asks for a
+- Use only the configured minimal Den tools and native delegation tools.
+- Do not spawn delegated children unless the current task explicitly asks for a
   native delegation viability proof.
 - When `spawn_subagent` returns, treat `evidenceChecked=false` as untrusted and
   verify durable handles before relying on claims.

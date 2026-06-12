@@ -23,6 +23,7 @@ import type {
   DelegationVisibilityEvent,
   ServiceSessionView,
 } from "../extension-activator.js";
+import type { DelegatedChildRegistry } from "./delegated-child-registry.js";
 
 export interface DelegatedSpawnLifecycleConfig {
   readonly hookRegistry: HookRegistry;
@@ -31,6 +32,7 @@ export interface DelegatedSpawnLifecycleConfig {
   readonly logger: Logger;
   readonly childRunner: DelegatedChildRunner;
   readonly childSessionId?: () => string;
+  readonly childRegistry?: DelegatedChildRegistry;
 }
 
 export interface DelegatedSpawnInput {
@@ -52,6 +54,8 @@ export interface DelegatedSpawnCorrelation {
   readonly runId?: string;
   readonly taskId?: string;
   readonly profileId?: string;
+  readonly batchId?: string;
+  readonly batchIndex?: string;
 }
 
 export interface DelegatedPolicyRequest {
@@ -132,6 +136,7 @@ export class DelegatedSpawnLifecycle {
   readonly #logger: Logger;
   readonly #childRunner: DelegatedChildRunner;
   readonly #childSessionId: () => string;
+  readonly #childRegistry?: DelegatedChildRegistry;
 
   constructor(config: DelegatedSpawnLifecycleConfig) {
     this.#hookRegistry = config.hookRegistry;
@@ -140,6 +145,7 @@ export class DelegatedSpawnLifecycle {
     this.#logger = config.logger;
     this.#childRunner = config.childRunner;
     this.#childSessionId = config.childSessionId ?? nextChildSessionId;
+    this.#childRegistry = config.childRegistry;
   }
 
   async spawn(input: DelegatedSpawnInput): Promise<Result<DelegatedResult, DelegatedSpawnError>> {
@@ -237,6 +243,12 @@ export class DelegatedSpawnLifecycle {
 
     const visibility = this.visibilityIdentity(context, child);
     await this.emitSpawned(visibility, context.spawnRequest, context.effectiveRuntime);
+    await this.#childRegistry?.recordSpawned({
+      lineage: context.lineage,
+      policyId: context.policy.policyId,
+      effectiveRuntime: context.effectiveRuntime,
+      timeoutMs: context.spawnRequest.timeoutMs ?? context.policy.maxDurationMs,
+    });
     const abort = new AbortController();
     const startedAt = Date.now();
     try {
@@ -288,6 +300,7 @@ export class DelegatedSpawnLifecycle {
   }
 
   private async cleanupForResult(childSessionId: string, result: DelegatedResult): Promise<void> {
+    await this.#childRegistry?.recordCompleted(result);
     if (result.outcome === "timeout") {
       await this.#bridge.killChildSession(childSessionId, "timeout");
       await this.#bridge.archiveChildSession(childSessionId, "timeout");

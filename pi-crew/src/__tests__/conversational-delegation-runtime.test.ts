@@ -107,7 +107,9 @@ describe("conversational delegation wiring", () => {
       message: textMessage("delegate this"),
     });
 
-    expect(agentFactory.inputs[0]?.tools?.map((tool) => tool.name)).toContain("spawn_subagent");
+    expect(agentFactory.inputs[0]?.tools?.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(["spawn_subagent", "fan_out_subagents"]),
+    );
     expect(lifecycle.inputs).toHaveLength(1);
     expect(lifecycle.inputs[0]?.parentSessionId).toBe("live-parent-session");
     expect(lifecycle.inputs[0]?.parentDelegationConstraints.maxSpawnDepth).toBe(2);
@@ -134,6 +136,7 @@ function writeProfile(root: string, profileId: string): void {
     "  mode: allow_list",
     "  allow:",
     "    - spawn_subagent",
+    "    - fan_out_subagents",
     "",
   ].join("\n"), "utf-8");
 }

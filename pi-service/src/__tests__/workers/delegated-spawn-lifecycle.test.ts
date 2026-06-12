@@ -20,6 +20,10 @@ import type {
   ServiceSessionView,
 } from "../../extension-activator.js";
 import {
+  DelegatedChildRegistry,
+  InMemoryPendingChildRepository,
+} from "../../workers/delegated-child-registry.js";
+import {
   DelegatedSpawnLifecycle,
   type DelegatedChildRunInput,
   type DelegatedChildRunner,
@@ -298,6 +302,31 @@ describe("DelegatedSpawnLifecycle", () => {
     expect(details["recoveryGuidance"]).toBe("Verify the document slug before continuing.");
     expect(String(details["safeExcerpt"])).not.toContain("RAW_TRANSCRIPT_SHOULD_NOT_APPEAR");
   });
+
+  it("updates the pending-child registry across spawn and completion", async () => {
+    const repository = new InMemoryPendingChildRepository();
+    const registry = new DelegatedChildRegistry({
+      repository,
+      eventBus: new FakeEventBus(),
+      logger: new FakeLogger(),
+    });
+    const lifecycle = createLifecycle({ childRegistry: registry });
+
+    const result = await lifecycle.spawn({
+      parentSessionId: "parent-session",
+      task: "tracked child",
+      parentPolicy,
+      parentDelegationConstraints: parentConstraints,
+      parentRuntime,
+      allowedRuntimes: [parentRuntime],
+    });
+
+    expect(result.ok).toBe(true);
+    const record = await repository.get("child-session-1");
+    expect(record?.status).toBe("completed");
+    expect(record?.policyId).toBe("delegated-child-session-1");
+    expect(record?.effectiveRuntime).toEqual(parentRuntime);
+  });
 });
 
 function createLifecycle(
@@ -306,6 +335,7 @@ function createLifecycle(
     readonly eventBus?: FakeEventBus;
     readonly hookRegistry?: InMemoryHookRegistry;
     readonly runner?: DelegatedChildRunner;
+    readonly childRegistry?: DelegatedChildRegistry;
   } = {},
 ): DelegatedSpawnLifecycle {
   return new DelegatedSpawnLifecycle({
@@ -314,6 +344,7 @@ function createLifecycle(
     eventBus: overrides.eventBus ?? new FakeEventBus(),
     logger: new FakeLogger(),
     childSessionId: () => "child-session-1",
+    childRegistry: overrides.childRegistry,
     childRunner: overrides.runner ?? new VisibilityRunner("success"),
   });
 }
