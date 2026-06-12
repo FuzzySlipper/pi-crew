@@ -5,6 +5,7 @@ import {
   FakeEventBus,
   FakeLogger,
   InMemoryHookRegistry,
+  ok,
   type DelegatedResult,
   type DelegationConstraints,
   type DelegationLineage,
@@ -248,6 +249,55 @@ describe("DelegatedSpawnLifecycle", () => {
       "unsupported_model_selection",
     );
   });
+
+  it("returns a bounded parent-visible DelegatedResult without raw transcript fields", async () => {
+    const longExcerpt = `${"safe child excerpt ".repeat(180)}RAW_TRANSCRIPT_SHOULD_NOT_APPEAR`;
+    const tool = createDelegatedSpawnTool({
+      lifecycle: new StaticLifecycle({
+        outcome: "failure",
+        summary: "child found an issue",
+        policyId: "policy-child",
+        childSessionId: "child-session-99",
+        safeExcerpt: longExcerpt,
+        artifacts: [
+          { type: "den_document", slug: "child-findings", description: "Child findings doc" },
+          { type: "code_change", commitSha: "abc123", description: "Patch commit" },
+        ],
+        failureCategory: "missing_artifact",
+        recoveryGuidance: "Verify the document slug before continuing.",
+        evidenceChecked: false,
+        toolsUsed: ["read_file"],
+        turnsUsed: 3,
+        tokensConsumed: 456,
+        durationMs: 789,
+      }),
+      parentSessionId: "parent-session",
+      parentPolicy,
+      parentDelegationConstraints: parentConstraints,
+      parentRuntime,
+    });
+
+    const result = await tool.execute("tool-call-1", { task: "inspect" }, new AbortController().signal);
+    const content = result.content[0];
+    const text = content?.type === "text" ? content.text : "";
+    const details = isRecord(result.details) && isRecord(result.details["result"])
+      ? result.details["result"]
+      : {};
+
+    expect(text).toContain("Delegated child result");
+    expect(text).toContain("Verify before trusting: evidenceChecked=false");
+    expect(text).toContain("child-findings");
+    expect(text).toContain("missing_artifact");
+    expect(text.length).toBeLessThan(2_700);
+    expect(text).not.toContain("RAW_TRANSCRIPT_SHOULD_NOT_APPEAR");
+    expect(details["artifacts"]).toEqual([
+      { type: "den_document", slug: "child-findings", description: "Child findings doc" },
+      { type: "code_change", commitSha: "abc123", description: "Patch commit" },
+    ]);
+    expect(details["failureCategory"]).toBe("missing_artifact");
+    expect(details["recoveryGuidance"]).toBe("Verify the document slug before continuing.");
+    expect(String(details["safeExcerpt"])).not.toContain("RAW_TRANSCRIPT_SHOULD_NOT_APPEAR");
+  });
 });
 
 function createLifecycle(
@@ -266,6 +316,14 @@ function createLifecycle(
     childSessionId: () => "child-session-1",
     childRunner: overrides.runner ?? new VisibilityRunner("success"),
   });
+}
+
+class StaticLifecycle {
+  constructor(private readonly result: DelegatedResult) {}
+
+  spawn(): Promise<ReturnType<typeof ok<DelegatedResult>>> {
+    return Promise.resolve(ok(this.result));
+  }
 }
 
 class VisibilityRunner implements DelegatedChildRunner {
