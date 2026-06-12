@@ -221,7 +221,6 @@ export class Crew {
         })
       : null;
 
-    // 5. SQLite session store + agent factory + session manager
     const agentFactory = new AgentFactoryImpl(
       this.#instancePool,
       sessionStore,
@@ -257,7 +256,9 @@ export class Crew {
       delegationSessions: delegationBridge,
       eventBus: this.#eventBus,
       logger: this.#logger,
-      childRunner: createDelegatedChildRunner(config.delegation),
+      childRunner: createDelegatedChildRunner(config.delegation, {
+        mcpClient: this.#mcpClient, toolRegistry: this.#mcpToolRegistry,
+      }),
       childRegistry,
     });
     conversationalDelegationLifecycle.set(this.#delegatedSpawnLifecycle);
@@ -287,7 +288,6 @@ export class Crew {
       return this.#sessionManager.routeMessage(this.#channelProvider, message);
     });
 
-    // 7. Governance: breadcrumbs + audit log
     this.#breadcrumbManager = new BreadcrumbManager(
       this.#eventBus,
       this.#channelProvider,

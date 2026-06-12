@@ -7,6 +7,7 @@ import {
   type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import type { CrewConfig } from "./config.js";
+import { createDelegatedChildToolProvider, type DelegatedChildToolProviderDeps } from "./delegated-child-tool-provider.js";
 
 export interface DeferredDelegationLifecyclePort {
   readonly port: DelegatedSpawnLifecyclePort;
@@ -32,11 +33,13 @@ export function createDeferredDelegationLifecyclePort(): DeferredDelegationLifec
 
 export function createDelegatedChildRunner(
   config: CrewConfig["delegation"],
+  deps?: DelegatedChildToolProviderDeps,
 ): DelegatedChildRunner {
   if (config.llmBaseUrl === undefined) return new SessionMaterializedDelegatedChildRunner();
   return new LlmDelegatedChildRunner({
     baseUrl: config.llmBaseUrl,
     apiKey: config.llmApiKey,
     modelName: config.llmModelName,
+    ...(deps === undefined ? {} : { toolProvider: createDelegatedChildToolProvider(deps) }),
   });
 }

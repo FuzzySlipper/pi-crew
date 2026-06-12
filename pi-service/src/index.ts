@@ -205,6 +205,7 @@ export {
 } from "./workers/delegated-child-registry.js";
 export { SessionMaterializedDelegatedChildRunner } from "./workers/session-materialized-delegated-child-runner.js";
 export { LlmDelegatedChildRunner } from "./workers/llm-delegated-child-runner.js";
+export type { ToolProvider } from "./workers/llm-delegated-child-runner.js";
 export {
   SessionManagerDelegationSessionBridge,
   type SessionManagerDelegationBridgeConfig,

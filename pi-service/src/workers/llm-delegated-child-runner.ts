@@ -85,6 +85,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     const startedAt = Date.now();
     let accumulatedTokens = 0;
     let accumulatedTurnCount = 0;
+    const toolStartTimes = new Map<string, number>();
     let lastTurnTimestamp = startedAt;
     let maxIterations = this.#resolveMaxIterations(input);
 
@@ -130,6 +131,27 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
           if (msg.role === "assistant" && msg.usage?.totalTokens !== undefined) {
             accumulatedTokens += msg.usage.totalTokens;
           }
+        }
+
+        if (event.type === "tool_execution_start") {
+          toolStartTimes.set(event.toolCallId, Date.now());
+          input.emitToolVisible({
+            toolName: event.toolName,
+            toolCallId: event.toolCallId,
+            phase: "called",
+          }).catch(() => {});
+        }
+
+        if (event.type === "tool_execution_end") {
+          const started = toolStartTimes.get(event.toolCallId);
+          toolStartTimes.delete(event.toolCallId);
+          input.emitToolVisible({
+            toolName: event.toolName,
+            toolCallId: event.toolCallId,
+            phase: event.isError ? "denied" : "completed",
+            durationMs: started === undefined ? undefined : Date.now() - started,
+            reason: event.isError ? "tool execution failed" : undefined,
+          }).catch(() => {});
         }
 
         if (event.type === "turn_end") {
