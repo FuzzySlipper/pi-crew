@@ -1,5 +1,4 @@
 /** pi-crew composition root — wires all modules into a running gateway. */
-
 import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
 import { ConfigurationError, FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
@@ -23,6 +22,7 @@ import {
   AgentRuntimeRegistry,
   DelegatedSpawnLifecycle,
   DelegatedChildRegistry,
+  DenDelegationProjectionExtension,
   DelegatedOrphanCleanup,
   WorkerRuntime,
   SessionManagerDelegationSessionBridge,
@@ -115,7 +115,6 @@ export class Crew {
     // Rationale: avoid hardcoded role-to-profile switches in WorkerRuntime.
     this.#workerRoleMapping = config.workers;
 
-    // 1. Infrastructure
     this.#logger = logger ?? new FakeLogger();
     this.#eventBus = eventBus ?? new FakeEventBus();
     const hookRegistry = new InMemoryHookRegistry(this.#logger);
@@ -153,14 +152,12 @@ export class Crew {
       sessionStore,
     });
 
-    // 2. Channel provider (Den Channels adapter).
     const cursorStore = createSqliteCursorStore(this.#runtimeDb);
     const denConnection = buildDenConnection(config.den, this.#logger, cursorStore, configuredConversationalMemberIdentities(config));
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
     } satisfies DenChannelsAdapterConfig);
 
-    // 3. MCP client + tool registry
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
 
@@ -177,7 +174,6 @@ export class Crew {
     this.#agentRegistry = new AgentRuntimeRegistry();
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
-    // 4. Instance pool + factory
     const conversationalDelegationLifecycle = createDeferredDelegationLifecyclePort();
     // DESIGN: Wrap the conversational responder factory with a session-kind-aware
     // router. Rationale: Worker sessions must bypass conversational agent assembly
@@ -271,7 +267,11 @@ export class Crew {
       logger: this.#logger,
     }).activate();
     this.#extensionActivator = new ExtensionActivator({
-      extensions: [new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry)],
+      extensions: [
+        new ToolPolicyExtension(this.#registry.toolPolicySessionRegistry),
+        new DenDelegationProjectionExtension({ channelProvider: this.#channelProvider,
+          channelId: config.den.channelsSubscriptionChannelId }),
+      ],
       context: createServiceExtensionContext({
         config: this.#registry.config,
         logger: this.#registry.logger,

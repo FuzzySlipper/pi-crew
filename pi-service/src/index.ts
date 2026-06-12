@@ -194,6 +194,7 @@ export type {
   DelegatedTurnVisibilityInput,
 } from "./workers/delegated-spawn-lifecycle.js";
 export { createDelegatedSpawnTool, type DelegatedSpawnLifecyclePort } from "./workers/delegated-spawn-tool.js";
+export { DenDelegationProjectionExtension } from "./workers/den-delegation-projection.js";
 export { createDelegatedFanOutTool, type ParentVisibleFanOutResult } from "./workers/delegated-fan-out-tool.js";
 export {
   DelegatedChildRegistry,
