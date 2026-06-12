@@ -124,9 +124,18 @@ sessions:
   # a visible fallback when no existing session matches the channel.
   fallbackProfileId: "system-architect"
 
+# ── Native delegation child runner ───────────────────────────────
+# Required before conversational agents can run real delegated child sessions.
+# delegation:
+#   llmBaseUrl: "http://192.168.1.23:13305/v1"
+#   llmModelName: "Qwen3.6-35B-A3B-MTP-GGUF"
+
 # ── Non-pooled conversational agents (ordinary Den Channels members) ──
 # Configure stable member/session/subscription identities here when deploying
 # multiple long-lived conversational agents. These are not worker pool members.
+# To enable native delegation for a dedicated orchestrator test profile, set
+# runtime.tools.allow to include "delegation" and ensure the profile toolPolicy
+# allows the concrete "spawn_subagent" tool.
 # conversationalAgents:
 #   - agentId: "pi-crew-runner"
 #     enabled: true
