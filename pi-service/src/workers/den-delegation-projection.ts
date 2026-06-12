@@ -349,6 +349,7 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     // Always project on error
     if (payload.phase === "errored") {
       this.logProjection(context, "delegation.turn_visible", {
+        summary: `Subagent turn errored: ${payload.childSessionId} turn ${payload.turnNumber}`,
         childSessionId: payload.childSessionId,
         turnNumber: payload.turnNumber,
         phase: "errored",
@@ -363,6 +364,7 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     if (now - state.lastProjectedAt >= cooldownMs) {
       // Use the coalesced state for the projection
       this.logProjection(context, "delegation.turn_visible", {
+        summary: `Subagent turn ${payload.phase}: ${payload.childSessionId} turn ${payload.turnNumber}`,
         childSessionId: payload.childSessionId,
         turnNumber: payload.turnNumber,
         phase: payload.phase,
