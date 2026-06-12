@@ -77,6 +77,7 @@ export class InstanceFactoryImpl implements InstanceFactory {
     });
 
     const responder = this.responderFactory.createResponder({
+      ...(sessionId !== undefined ? { sessionId } : {}),
       profileId,
       role,
       ...(effectiveRuntime ? { effectiveRuntime } : {}),

@@ -25,6 +25,7 @@ export interface AgentResponder {
 
 /** Context used to create a responder for one fresh agent instance. */
 export interface AgentResponderFactoryContext {
+  readonly sessionId?: string;
   readonly profileId: string;
   readonly role?: string;
   /** Session-local runtime selection; does not mutate the source profile. */

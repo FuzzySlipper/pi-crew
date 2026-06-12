@@ -3,7 +3,14 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getModels, getProviders, Type } from "@earendil-works/pi-ai";
 import type { Api, KnownProvider, Model, TextContent } from "@earendil-works/pi-ai";
-import { ConfigurationError, type EventBus, type ExecutionPolicy, type Logger } from "@pi-crew/core";
+import {
+  ConfigurationError,
+  type DelegationConstraints,
+  type EffectiveDelegationRuntime,
+  type EventBus,
+  type ExecutionPolicy,
+  type Logger,
+} from "@pi-crew/core";
 import {
   type MCPClient,
   type ToolCallContentBlock,
@@ -18,10 +25,13 @@ import {
 import {
   ConversationalAgentResponder,
   ConversationalAgentResponderFactory,
+  createDelegatedSpawnTool,
   type AgentResponderFactory,
   type AgentResponderFactoryContext,
+  type ConversationalAgentFactory,
   type ConversationalAgentRuntimeBuilder,
   type ConversationalTurnHistory,
+  type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import {
   type ConversationalPolicyInput,
@@ -59,9 +69,17 @@ export interface ResolveConversationalAgentRuntimeInput {
   readonly sessionToolFilter?: SessionToolFilter;
 }
 
+export interface ConversationalDelegationRuntimeConfig {
+  readonly lifecycle: DelegatedSpawnLifecyclePort;
+  readonly parentDelegationConstraints?: DelegationConstraints;
+  readonly allowedRuntimes?: readonly EffectiveDelegationRuntime[];
+}
+
 export interface BuildConversationalAgentResponderFactoryInput extends ResolveConversationalAgentRuntimeInput {
   readonly eventBus?: EventBus;
   readonly history?: ConversationalTurnHistory;
+  readonly agentFactory?: ConversationalAgentFactory;
+  readonly delegation?: ConversationalDelegationRuntimeConfig;
 }
 
 export interface BuildConversationalAgentResponderFactoryForAgentsInput {
@@ -73,6 +91,8 @@ export interface BuildConversationalAgentResponderFactoryForAgentsInput {
   readonly eventBus: EventBus;
   readonly history?: ConversationalTurnHistory;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly agentFactory?: ConversationalAgentFactory;
+  readonly delegation?: ConversationalDelegationRuntimeConfig;
 }
 
 class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
@@ -82,10 +102,17 @@ class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBu
     private readonly eventBus: EventBus,
   ) {}
 
-  build(): ConversationalAgentResponder {
+  build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
     const filter = new SessionToolFilter(this.eventBus, this.logger);
     const runtime = resolveConversationalAgentRuntime({ ...this.input, sessionToolFilter: filter });
-    return createResponder(runtime, this.logger, this.eventBus, this.input.history);
+    const tools = addDelegationTool(runtime, this.input.agent, context, this.input.delegation);
+    return createResponder(
+      { ...runtime, tools },
+      this.logger,
+      this.eventBus,
+      this.input.history,
+      this.input.agentFactory,
+    );
   }
 }
 
@@ -96,7 +123,14 @@ class ProfileMappedConversationalRuntimeBuilder implements ConversationalAgentRu
     const agent = selectAgentForContext(this.input.agents, context.profileId);
     const filter = new SessionToolFilter(this.input.eventBus, this.input.logger);
     const runtime = resolveConversationalAgentRuntime({ ...this.input, agent, sessionToolFilter: filter });
-    return createResponder(runtime, this.input.logger, this.input.eventBus, this.input.history);
+    const tools = addDelegationTool(runtime, agent, context, this.input.delegation);
+    return createResponder(
+      { ...runtime, tools },
+      this.input.logger,
+      this.input.eventBus,
+      this.input.history,
+      this.input.agentFactory,
+    );
   }
 }
 
@@ -164,8 +198,10 @@ function createResponder(
   logger: Logger,
   eventBus: EventBus,
   history?: ConversationalTurnHistory,
+  agentFactory?: ConversationalAgentFactory,
 ): ConversationalAgentResponder {
   return new ConversationalAgentResponder({
+    ...(agentFactory !== undefined ? { agentFactory } : {}),
     eventBus,
     history,
     logger,
@@ -176,6 +212,53 @@ function createResponder(
     temperature: runtime.model.temperature,
     tools: runtime.tools,
   });
+}
+
+function addDelegationTool(
+  runtime: ResolvedConversationalAgentRuntime,
+  agent: CrewConfig["conversationalAgents"][number],
+  context: AgentResponderFactoryContext,
+  delegation: ConversationalDelegationRuntimeConfig | undefined,
+): readonly AgentTool[] {
+  if (delegation === undefined || !agentAllowsDelegation(agent, runtime)) return runtime.tools;
+  const parentSessionId = context.sessionId ?? agent.session.sessionId;
+  const parentRuntime = parentRuntimeFor(agent, runtime);
+  return [
+    ...runtime.tools,
+    createDelegatedSpawnTool({
+      lifecycle: delegation.lifecycle,
+      parentSessionId,
+      parentPolicy: runtime.executionPolicy,
+      parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
+      parentRuntime,
+      allowedRuntimes: delegation.allowedRuntimes ?? [parentRuntime],
+    }) as unknown as AgentTool,
+  ];
+}
+
+function agentAllowsDelegation(
+  agent: CrewConfig["conversationalAgents"][number],
+  runtime: ResolvedConversationalAgentRuntime,
+): boolean {
+  const requested = agent.runtime.tools.allow.some((entry) =>
+    entry === "delegation" || entry === "spawn_subagent"
+  );
+  if (!requested) return false;
+  if (!toolAllowedByProfilePolicy("spawn_subagent", runtime.profile.toolPolicy)) return false;
+  if (runtime.executionPolicy.deniedTools.includes("spawn_subagent")) return false;
+  return runtime.executionPolicy.allowedTools.length === 0
+    || runtime.executionPolicy.allowedTools.includes("spawn_subagent");
+}
+
+function parentRuntimeFor(
+  agent: CrewConfig["conversationalAgents"][number],
+  runtime: ResolvedConversationalAgentRuntime,
+): EffectiveDelegationRuntime {
+  return {
+    profileId: agent.profileId,
+    provider: runtime.model.provider,
+    model: runtime.model.modelName,
+  };
 }
 
 function selectAgentForContext(

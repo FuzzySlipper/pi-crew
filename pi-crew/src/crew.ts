@@ -27,8 +27,6 @@ import {
   DelegatedOrphanCleanup,
   WorkerRuntime,
   SessionManagerDelegationSessionBridge,
-  SessionMaterializedDelegatedChildRunner,
-  LlmDelegatedChildRunner,
   SqliteAuditRepository,
   SqliteSessionRepository,
   SqliteMessageRepository,
@@ -67,6 +65,7 @@ import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
+import { createDeferredDelegationLifecyclePort, createDelegatedChildRunner } from "./delegation-composition.js";
 import { configureConversationalSessionManager, configuredConversationalMemberIdentities } from "./conversational-agent-sessions.js";
 import {
   auditEntryToRecord,
@@ -146,8 +145,6 @@ export class Crew {
       this.#registry.eventBus,
     );
 
-    // 1b. Local runtime persistence (#1866). Den remains workflow
-    // source-of-truth; this DB stores hot sessions/audit/cache locally.
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
     const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
@@ -178,14 +175,11 @@ export class Crew {
       completionDefaults: completionDefaultsFromEnv(process.env),
     });
 
-    // 3c. Agent runtime registry and steer/followUp bridge
-    //     Routes mid-assignment interaction from Den Channels direct-agent
-    //     events with intent=steer or intent=follow_up to the correct
-    //     active supervised Agent.
     this.#agentRegistry = new AgentRuntimeRegistry();
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
     // 4. Instance pool + factory
+    const conversationalDelegationLifecycle = createDeferredDelegationLifecyclePort();
     // DESIGN: Wrap the conversational responder factory with a session-kind-aware
     // router. Rationale: Worker sessions must bypass conversational agent assembly
     // and get a lightweight echo responder instead. The routing decision is explicit
@@ -197,6 +191,7 @@ export class Crew {
       this.#mcpToolRegistry,
       this.#mcpClient,
       new MessageRepositoryTurnHistory(new SqliteMessageRepository(this.#runtimeDb.handle)),
+      { lifecycle: conversationalDelegationLifecycle.port },
     );
     const responderFactory = new SessionKindAwareResponderFactory(conversationalFactory);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
@@ -261,14 +256,9 @@ export class Crew {
       delegationSessions: delegationBridge,
       eventBus: this.#eventBus,
       logger: this.#logger,
-      childRunner: config.delegation.llmBaseUrl !== undefined
-        ? new LlmDelegatedChildRunner({
-            baseUrl: config.delegation.llmBaseUrl,
-            apiKey: config.delegation.llmApiKey,
-            modelName: config.delegation.llmModelName,
-          })
-        : new SessionMaterializedDelegatedChildRunner(),
+      childRunner: createDelegatedChildRunner(config.delegation),
     });
+    conversationalDelegationLifecycle.set(this.#delegatedSpawnLifecycle);
     new DelegatedOrphanCleanup({
       delegationSessions: delegationBridge,
       eventBus: this.#eventBus,

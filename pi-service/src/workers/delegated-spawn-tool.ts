@@ -1,17 +1,23 @@
 /** Agent tool adapter for service-level delegated spawn lifecycle. */
 
 import type {
+  DelegatedResult,
   DelegationConstraints,
   DelegationLineage,
   EffectiveDelegationRuntime,
   ExecutionPolicy,
+  Result,
 } from "@pi-crew/core";
 import type { AgentTool, AgentToolResult } from "./guarded-tool-types.js";
 import type {
   DelegatedSpawnCorrelation,
   DelegatedSpawnError,
-  DelegatedSpawnLifecycle,
+  DelegatedSpawnInput,
 } from "./delegated-spawn-lifecycle.js";
+
+export interface DelegatedSpawnLifecyclePort {
+  spawn(input: DelegatedSpawnInput): Promise<Result<DelegatedResult, DelegatedSpawnError>>;
+}
 
 interface ParsedSpawnParams {
   readonly task: string;
@@ -19,7 +25,7 @@ interface ParsedSpawnParams {
 }
 
 export function createDelegatedSpawnTool(options: {
-  readonly lifecycle: DelegatedSpawnLifecycle;
+  readonly lifecycle: DelegatedSpawnLifecyclePort;
   readonly parentSessionId: string;
   readonly parentPolicy: ExecutionPolicy;
   readonly parentDelegationConstraints: DelegationConstraints;
