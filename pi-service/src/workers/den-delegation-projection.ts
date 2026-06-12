@@ -391,8 +391,8 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     const now = Date.now();
     const state = this.updateToolCoalescing(payload);
 
-    // Always project denials
-    if (payload.phase === "denied") {
+    // Always project terminal tool outcomes so called/completed pairs are visible.
+    if (payload.phase === "denied" || payload.phase === "completed") {
       this.projectOrCoalesce(context, "delegation.tool_visible", payload, () =>
         formatToolVisibleMessage(payload),
       );
