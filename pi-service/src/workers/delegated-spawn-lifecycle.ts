@@ -15,8 +15,17 @@ import type {
   Logger,
   Result,
 } from "@pi-crew/core";
-import { createChildDelegationLineage, err, ok } from "@pi-crew/core";
+import { createChildDelegationLineage } from "@pi-crew/core";
 import { deriveChildExecutionPolicy } from "@pi-crew/tools";
+import {
+  basePayload,
+  fail,
+  normalizeSpawnRequest,
+  resolveEffectiveRuntime,
+  stringifyCause,
+  withTimeout,
+} from "./delegated-spawn-lifecycle-helpers.js";
+import { validateDelegatedReviewResult } from "./delegated-review-result-validation.js";
 import type {
   DelegatedSessionCreateRequest,
   DelegationSessionBridge,
@@ -158,7 +167,10 @@ export class DelegatedSpawnLifecycle {
     const childCount = await this.#bridge.countChildSessions(input.parentSessionId);
     const maxChildren = input.parentDelegationConstraints.maxConcurrentChildren;
     if (maxChildren !== undefined && childCount >= maxChildren) {
-      return fail("max_concurrent_children_exceeded", "Parent session already has maximum active children");
+      return fail(
+        "max_concurrent_children_exceeded",
+        "Parent session already has maximum active children",
+      );
     }
 
     const spawnRequest = normalizeSpawnRequest(input);
@@ -231,7 +243,11 @@ export class DelegatedSpawnLifecycle {
         },
       } satisfies DelegatedSessionCreateRequest);
     } catch (cause) {
-      return fail("child_session_create_failed", "Delegated child session creation failed", stringifyCause(cause));
+      return fail(
+        "child_session_create_failed",
+        "Delegated child session creation failed",
+        stringifyCause(cause),
+      );
     }
 
     const bridgePolicy = await this.#bridge.getParentExecutionPolicy(child.sessionId);
@@ -264,30 +280,40 @@ export class DelegatedSpawnLifecycle {
         emitTurnVisible: (input) => this.emitTurnVisible(visibility, input),
         emitToolVisible: (input) => this.emitToolVisible(visibility, input),
       });
-      const result = await withTimeout({
-        runPromise,
-        timeoutMs: context.spawnRequest.timeoutMs ?? context.policy.maxDurationMs,
-        childSessionId: child.sessionId,
-        policyId: context.policy.policyId,
-        effectiveRuntime: context.effectiveRuntime,
-        startedAt,
-        abort,
-      });
+      const result = validateDelegatedReviewResult(
+        await withTimeout({
+          runPromise,
+          timeoutMs: context.spawnRequest.timeoutMs ?? context.policy.maxDurationMs,
+          childSessionId: child.sessionId,
+          policyId: context.policy.policyId,
+          effectiveRuntime: context.effectiveRuntime,
+          startedAt,
+          abort,
+        }),
+        context.spawnRequest,
+      );
       await this.cleanupForResult(child.sessionId, result);
       await this.emitCompleted(visibility, result);
-      return ok(result);
+      return { ok: true, value: result };
     } catch (cause) {
       await this.#bridge.killChildSession(child.sessionId, "child execution failed");
       await this.#bridge.archiveChildSession(child.sessionId, "child execution failed");
-      return fail("child_execution_failed", "Delegated child execution failed", stringifyCause(cause));
+      return fail(
+        "child_execution_failed",
+        "Delegated child execution failed",
+        stringifyCause(cause),
+      );
     }
   }
 
-  private visibilityIdentity(context: {
-    readonly input: DelegatedSpawnInput;
-    readonly lineage: DelegationLineage;
-    readonly policy: ExecutionPolicy;
-  }, child: ServiceSessionView): VisibilityIdentity {
+  private visibilityIdentity(
+    context: {
+      readonly input: DelegatedSpawnInput;
+      readonly lineage: DelegationLineage;
+      readonly policy: ExecutionPolicy;
+    },
+    child: ServiceSessionView,
+  ): VisibilityIdentity {
     return {
       childSessionId: child.sessionId,
       lineage: context.lineage,
@@ -311,8 +337,14 @@ export class DelegatedSpawnLifecycle {
       await this.#bridge.archiveChildSession(childSessionId, "killed");
       return;
     }
-    await this.#bridge.releaseChildSession(childSessionId, result.outcome === "success" ? "completed" : "failed");
-    await this.#bridge.archiveChildSession(childSessionId, result.outcome === "success" ? "completed" : "failed");
+    await this.#bridge.releaseChildSession(
+      childSessionId,
+      result.outcome === "success" ? "completed" : "failed",
+    );
+    await this.#bridge.archiveChildSession(
+      childSessionId,
+      result.outcome === "success" ? "completed" : "failed",
+    );
   }
 
   private async emitSpawned(
@@ -349,7 +381,10 @@ export class DelegatedSpawnLifecycle {
     await this.emitBridgeVisibility("delegation.tool_visible", visibility, payload);
   }
 
-  private async emitCompleted(visibility: VisibilityIdentity, result: DelegatedResult): Promise<void> {
+  private async emitCompleted(
+    visibility: VisibilityIdentity,
+    result: DelegatedResult,
+  ): Promise<void> {
     if (result.outcome === "timeout") {
       const elapsedMs = result.durationMs ?? 0;
       const timeoutPayload = { ...basePayload(visibility), timeoutMs: elapsedMs, elapsedMs };
@@ -390,99 +425,6 @@ export class DelegatedSpawnLifecycle {
       metadata,
     } satisfies DelegationVisibilityEvent);
   }
-}
-
-function normalizeSpawnRequest(input: DelegatedSpawnInput): DelegationSpawnRequest {
-  return {
-    task: input.spawnRequest?.task ?? input.task,
-    modelSelection: input.spawnRequest?.modelSelection,
-    allowedTools: input.spawnRequest?.allowedTools,
-    deniedTools: input.spawnRequest?.deniedTools,
-    maxSpawnDepth: input.spawnRequest?.maxSpawnDepth,
-    timeoutMs: input.spawnRequest?.timeoutMs,
-  };
-}
-
-function resolveEffectiveRuntime(
-  parentRuntime: EffectiveDelegationRuntime,
-  allowedRuntimes: readonly EffectiveDelegationRuntime[],
-  requested: DelegationSpawnRequest["modelSelection"],
-): Result<EffectiveDelegationRuntime, DelegatedSpawnError> {
-  const candidate: EffectiveDelegationRuntime = {
-    profileId: requested?.profileId ?? parentRuntime.profileId,
-    provider: requested?.provider ?? parentRuntime.provider,
-    model: requested?.model ?? parentRuntime.model,
-  };
-  if (allowedRuntimes.some((runtime) => sameRuntime(runtime, candidate))) return ok({ ...candidate });
-  return fail("unsupported_model_selection", "Requested child model/profile/provider is not allowed");
-}
-
-function sameRuntime(left: EffectiveDelegationRuntime, right: EffectiveDelegationRuntime): boolean {
-  return left.profileId === right.profileId && left.provider === right.provider && left.model === right.model;
-}
-
-async function withTimeout(input: {
-  readonly runPromise: Promise<DelegatedResult>;
-  readonly timeoutMs: number;
-  readonly childSessionId: string;
-  readonly policyId: string;
-  readonly effectiveRuntime: EffectiveDelegationRuntime;
-  readonly startedAt: number;
-  readonly abort: AbortController;
-}): Promise<DelegatedResult> {
-  if (input.timeoutMs <= 0) return timeoutResult(input);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      input.runPromise,
-      new Promise<DelegatedResult>((resolve) => {
-        timer = setTimeout(() => {
-          input.abort.abort();
-          resolve(timeoutResult(input));
-        }, input.timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
-function timeoutResult(input: {
-  readonly childSessionId: string;
-  readonly policyId: string;
-  readonly effectiveRuntime: EffectiveDelegationRuntime;
-  readonly startedAt: number;
-}): DelegatedResult {
-  return {
-    outcome: "timeout",
-    summary: "Delegated child exceeded its execution timeout",
-    policyId: input.policyId,
-    childSessionId: input.childSessionId,
-    effectiveRuntime: input.effectiveRuntime,
-    durationMs: Date.now() - input.startedAt,
-  };
-}
-
-function fail(
-  code: DelegatedSpawnErrorCode,
-  message: string,
-  detail?: string,
-): Result<never, DelegatedSpawnError> {
-  return err({ code, message, detail });
-}
-
-function stringifyCause(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
-}
-
-function basePayload(visibility: VisibilityIdentity): DelegationVisibilityPayload {
-  return {
-    ...visibility.correlation,
-    childSessionId: visibility.childSessionId,
-    lineage: visibility.lineage,
-    policyId: visibility.policyId,
-    spawnRequestId: visibility.spawnRequestId,
-  };
 }
 
 function nextChildSessionId(): string {

@@ -51,7 +51,46 @@ export type DelegatedFailureCategory =
   | "provider_error"
   | "no_progress"
   | "malformed_result"
+  | "insufficient_evidence"
   | "budget_exceeded";
+
+export type DelegatedExpectedResultSchema = "review";
+
+export interface DelegatedRequiredEvidence {
+  readonly taskIds?: readonly string[];
+  readonly requireEvidenceHandles?: boolean;
+}
+
+export type DelegatedReviewDecision =
+  | "accepted"
+  | "changes_requested"
+  | "blocked"
+  | "insufficient_evidence";
+
+export type DelegatedReviewStatus = DelegatedReviewDecision;
+
+export interface DelegatedReviewFinding {
+  readonly taskId?: string;
+  readonly severity: "blocker" | "major" | "minor" | "info";
+  readonly category: string;
+  readonly summary: string;
+  readonly location?: string;
+}
+
+export interface DelegatedReviewTaskDecision {
+  readonly taskId: string;
+  readonly decision: DelegatedReviewDecision;
+  readonly summary: string;
+  readonly evidenceHandles: readonly DelegatedArtifactHandle[];
+  readonly findings?: readonly DelegatedReviewFinding[];
+}
+
+export interface DelegatedReviewResult {
+  readonly status: DelegatedReviewStatus;
+  readonly evidenceHandles: readonly DelegatedArtifactHandle[];
+  readonly taskDecisions: readonly DelegatedReviewTaskDecision[];
+  readonly findings?: readonly DelegatedReviewFinding[];
+}
 
 /** Lineage carried by every delegated session. */
 export interface DelegationLineage {
@@ -110,6 +149,10 @@ export interface DelegationSpawnRequest {
   readonly maxSpawnDepth?: number;
   /** Hard timeout for the delegated session in milliseconds. */
   readonly timeoutMs?: number;
+  /** Optional harness-enforced expected result schema. */
+  readonly expectedResultSchema?: DelegatedExpectedResultSchema;
+  /** Evidence contract required by the parent for this child result. */
+  readonly requiredEvidence?: DelegatedRequiredEvidence;
 }
 
 /** Result a delegated session produces for its parent. */
@@ -180,6 +223,9 @@ export interface DelegatedResult {
    * Max recommended length: 2000 characters.
    */
   readonly safeExcerpt?: string;
+
+  /** Structured child review result when review-mode delegation is requested. */
+  readonly review?: DelegatedReviewResult;
 }
 
 /** Derived policy and lineage for a child session. */

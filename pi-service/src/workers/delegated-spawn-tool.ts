@@ -5,6 +5,7 @@ import type {
   DelegatedArtifactHandle,
   DelegationConstraints,
   DelegationLineage,
+  DelegationRequiredEvidence,
   EffectiveDelegationRuntime,
   ExecutionPolicy,
   Result,
@@ -23,6 +24,8 @@ export interface DelegatedSpawnLifecyclePort {
 interface ParsedSpawnParams {
   readonly task: string;
   readonly modelSelection?: EffectiveDelegationRuntime;
+  readonly expectedResultSchema?: "review";
+  readonly requiredEvidence?: DelegationRequiredEvidence;
 }
 
 interface ParentVisibleDelegatedResult {
@@ -40,6 +43,7 @@ interface ParentVisibleDelegatedResult {
   readonly turnsUsed?: number;
   readonly durationMs?: number;
   readonly error?: string;
+  readonly review?: DelegatedResult["review"];
 }
 
 const MAX_SAFE_EXCERPT_CHARS = 1_600;
@@ -70,7 +74,12 @@ export function createDelegatedSpawnTool(options: {
         parentRuntime: options.parentRuntime,
         allowedRuntimes: options.allowedRuntimes,
         correlation: options.correlation,
-        spawnRequest: { task: parsed.task, modelSelection: parsed.modelSelection },
+        spawnRequest: {
+          task: parsed.task,
+          modelSelection: parsed.modelSelection,
+          expectedResultSchema: parsed.expectedResultSchema,
+          requiredEvidence: parsed.requiredEvidence,
+        },
       });
       if (!spawnResult.ok) return toolFailure(spawnResult.error);
       const parentVisibleResult = toParentVisibleResult(spawnResult.value);
@@ -86,14 +95,37 @@ function parseSpawnParams(params: unknown): ParsedSpawnParams {
   if (!isRecord(params)) return { task: "delegated child task" };
   const task = typeof params["task"] === "string" ? params["task"] : "delegated child task";
   const selection = params["modelSelection"];
-  return { task, modelSelection: isRuntimeSelection(selection) ? selection : undefined };
+  const expected = params["expectedResultSchema"];
+  const required = params["requiredEvidence"];
+  return {
+    task,
+    modelSelection: isRuntimeSelection(selection) ? selection : undefined,
+    expectedResultSchema: expected === "review" ? "review" : undefined,
+    requiredEvidence: isRequiredEvidence(required) ? required : undefined,
+  };
+}
+
+function isRequiredEvidence(value: unknown): value is DelegationRequiredEvidence {
+  if (!isRecord(value)) return false;
+  const taskIds = value["taskIds"];
+  const requireEvidenceHandles = value["requireEvidenceHandles"];
+  return (
+    (taskIds === undefined || isStringArray(taskIds)) &&
+    (requireEvidenceHandles === undefined || typeof requireEvidenceHandles === "boolean")
+  );
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
 function isRuntimeSelection(value: unknown): value is EffectiveDelegationRuntime {
   if (!isRecord(value)) return false;
-  return typeof value["profileId"] === "string"
-    && (value["provider"] === undefined || typeof value["provider"] === "string")
-    && (value["model"] === undefined || typeof value["model"] === "string");
+  return (
+    typeof value["profileId"] === "string" &&
+    (value["provider"] === undefined || typeof value["provider"] === "string") &&
+    (value["model"] === undefined || typeof value["model"] === "string")
+  );
 }
 
 function toParentVisibleResult(result: DelegatedResult): ParentVisibleDelegatedResult {
@@ -112,13 +144,13 @@ function toParentVisibleResult(result: DelegatedResult): ParentVisibleDelegatedR
     ...(result.turnsUsed === undefined ? {} : { turnsUsed: result.turnsUsed }),
     ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
     ...(result.error === undefined ? {} : { error: result.error }),
+    ...(result.review === undefined ? {} : { review: result.review }),
   };
 }
 
 function formatParentVisibleResult(result: ParentVisibleDelegatedResult): string {
-  const trustWarning = result.evidenceChecked === false
-    ? "\nVerify before trusting: evidenceChecked=false"
-    : "";
+  const trustWarning =
+    result.evidenceChecked === false ? "\nVerify before trusting: evidenceChecked=false" : "";
   return `Delegated child result${trustWarning}\n${JSON.stringify(result, null, 2)}`;
 }
 

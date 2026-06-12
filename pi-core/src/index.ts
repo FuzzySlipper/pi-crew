@@ -56,6 +56,13 @@ export {
   type DelegationVisibilityIdentity,
   type DelegatedArtifactHandle,
   type DelegatedFailureCategory,
+  type DelegatedExpectedResultSchema,
+  type DelegatedRequiredEvidence,
+  type DelegatedReviewDecision,
+  type DelegatedReviewStatus,
+  type DelegatedReviewFinding,
+  type DelegatedReviewTaskDecision,
+  type DelegatedReviewResult,
 } from "./delegation.js";
 
 // ── Error hierarchy ───────────────────────────────────────────
@@ -217,11 +224,7 @@ export {
 export { type RetryPolicy, DEFAULT_RETRY_POLICY, retryWithBackoff } from "./retry.js";
 
 // ── Frontmatter extraction ───────────────────────────────────
-export {
-  type FrontmatterExtraction,
-  extractFrontmatter,
-  stripFrontmatter,
-} from "./frontmatter.js";
+export { type FrontmatterExtraction, extractFrontmatter, stripFrontmatter } from "./frontmatter.js";
 
 // ── Skills ───────────────────────────────────────────────────
 export {
