@@ -168,73 +168,13 @@ export const WorkerRoleMappingConfigSchema = z
     }
   });
 
-const DEFAULT_DRAIN_ESSENTIAL_TOOLS = [
-  "context_status",
-  "post_structured_completion",
-  "request_checkpoint",
-];
-
 export const DEFAULT_WORKER_ROLE_BINDINGS: WorkerRoleBinding[] = [
-  {
-    role: "packet-auditor",
-    profileId: "packet-auditor-worker",
-    config: {
-      executionMode: "llmAgent",
-      systemPromptSource: "packet-auditor-worker",
-      mcpToolSet: ["den"],
-      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
-    },
-  },
-  {
-    role: "packet_auditor",
-    profileId: "packet-auditor-worker",
-    config: {
-      executionMode: "llmAgent",
-      systemPromptSource: "packet-auditor-worker",
-      mcpToolSet: ["den"],
-      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
-    },
-  },
-  {
-    role: "coder",
-    profileId: "coder-worker",
-    config: {
-      executionMode: "llmAgent",
-      systemPromptSource: "coder-worker",
-      mcpToolSet: ["filesystem", "terminal", "git", "den", "delegation"],
-      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
-    },
-  },
-  {
-    role: "reviewer",
-    profileId: "reviewer-worker",
-    config: {
-      executionMode: "llmAgent",
-      systemPromptSource: "reviewer-worker",
-      mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"],
-      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
-    },
-  },
-  {
-    role: "validator",
-    profileId: "validator-worker",
-    config: {
-      executionMode: "llmAgent",
-      systemPromptSource: "validator-worker",
-      mcpToolSet: ["filesystem_readonly", "terminal", "den"],
-      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
-    },
-  },
-  {
-    role: "drift_checker",
-    profileId: "drift-checker-worker",
-    config: {
-      executionMode: "llmAgent",
-      systemPromptSource: "drift-checker-worker",
-      mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"],
-      drainEssentialTools: DEFAULT_DRAIN_ESSENTIAL_TOOLS,
-    },
-  },
+  { role: "packet-auditor", profileId: "packet-auditor-worker" },
+  { role: "packet_auditor", profileId: "packet-auditor-worker" },
+  { role: "coder", profileId: "coder-worker" },
+  { role: "reviewer", profileId: "reviewer-worker" },
+  { role: "validator", profileId: "validator-worker" },
+  { role: "drift_checker", profileId: "drift-checker-worker" },
 ];
 
 // ── Convenience loader ──────────────────────────────────────────

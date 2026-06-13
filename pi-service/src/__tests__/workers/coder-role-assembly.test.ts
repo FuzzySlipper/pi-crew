@@ -45,13 +45,18 @@ describe("CoderRoleAssembly", () => {
     expect(prompt).toContain("Den");
   });
 
-  it("selects filesystem terminal git and Den MCP tool sets by default", () => {
-    expect(CoderRoleAssembly.selectMcpToolSets(makeInput())).toEqual([
-      "filesystem",
-      "terminal",
-      "git",
-      "den",
-    ]);
+  it("selects MCP tool sets from profile tool policy", () => {
+    expect(
+      CoderRoleAssembly.selectMcpToolSets(
+        makeInput({
+          roleConfig: undefined,
+          profileToolPolicy: {
+            mode: "allow_list",
+            allow: ["filesystem", "terminal", "git", "den", "context_status"],
+          },
+        }),
+      ),
+    ).toEqual(["filesystem", "terminal", "git", "den"]);
   });
 
   it("uses configured MCP tool sets when supplied by role config", () => {
@@ -69,11 +74,7 @@ describe("CoderRoleAssembly", () => {
   it("keeps context status and structured completion as drain essentials", () => {
     const tools = CoderRoleAssembly.drainEssentialTools(makeInput());
 
-    expect(tools).toEqual([
-      "context_status",
-      "post_structured_completion",
-      "request_checkpoint",
-    ]);
+    expect(tools).toEqual(["context_status", "post_structured_completion", "request_checkpoint"]);
   });
 
   it("includes Den assignment context in the initial user message", () => {

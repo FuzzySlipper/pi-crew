@@ -242,40 +242,16 @@ workers:
   bindings:
     - role: "packet-auditor"
       profileId: "packet-auditor-worker"
-      config:
-        executionMode: "llmAgent"
-        systemPromptSource: "packet-auditor-worker"
-        mcpToolSet: ["den"]
     - role: "packet_auditor"
       profileId: "packet-auditor-worker"
-      config:
-        executionMode: "llmAgent"
-        systemPromptSource: "packet-auditor-worker"
-        mcpToolSet: ["den"]
     - role: "coder"
       profileId: "coder-worker"
-      config:
-        executionMode: "llmAgent"
-        systemPromptSource: "coder-worker"
-        mcpToolSet: ["filesystem", "terminal", "git", "den", "delegation"]
     - role: "reviewer"
       profileId: "reviewer-worker"
-      config:
-        executionMode: "llmAgent"
-        systemPromptSource: "reviewer-worker"
-        mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"]
     - role: "validator"
       profileId: "validator-worker"
-      config:
-        executionMode: "llmAgent"
-        systemPromptSource: "validator-worker"
-        mcpToolSet: ["filesystem_readonly", "terminal", "den"]
     - role: "drift_checker"
       profileId: "drift-checker-worker"
-      config:
-        executionMode: "llmAgent"
-        systemPromptSource: "drift-checker-worker"
-        mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"]
 
 # ── Cron (DEFERRED — not required for this task) ──────────────────
 # cron:

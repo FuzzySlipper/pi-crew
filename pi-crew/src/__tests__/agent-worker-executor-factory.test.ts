@@ -118,6 +118,13 @@ describe("createCrewWorkerModelConfigSource", () => {
         'name: "Coder Worker"',
         "modelConfig:",
         "  temperature: 0.2",
+        "toolPolicy:",
+        "  mode: allow_list",
+        "  allow:",
+        "    - filesystem",
+        "    - terminal",
+        "    - git",
+        "    - den",
         "",
       ].join("\n"),
     );
@@ -153,6 +160,10 @@ describe("createCrewWorkerModelConfigSource", () => {
       temperature: 0.1,
       maxTokens: 2048,
       apiKey: "secret-from-env",
+    });
+    expect(source.getProfileToolPolicy("coder-worker")).toEqual({
+      mode: "allow_list",
+      allow: ["filesystem", "terminal", "git", "den"],
     });
   });
 });

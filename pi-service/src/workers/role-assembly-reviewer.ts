@@ -16,11 +16,7 @@ import type {
 } from "./worker-role-assembly.js";
 
 const ROLE = "reviewer";
-const DEFAULT_MCP_TOOL_SETS = [
-  "filesystem_readonly",
-  "git_diff_log",
-  "den",
-] as const;
+const DEFAULT_MCP_TOOL_SETS = ["filesystem_readonly", "git_diff_log", "den"] as const;
 const DEFAULT_DRAIN_ESSENTIAL_TOOLS = [
   "context_status",
   "post_structured_completion",
@@ -66,15 +62,11 @@ export const ReviewerRoleAssembly: WorkerRoleAssembly = {
   },
 
   selectMcpToolSets(input: WorkerRoleInput): string[] {
-    return input.roleConfig?.mcpToolSet !== undefined
-      ? [...input.roleConfig.mcpToolSet]
-      : [...DEFAULT_MCP_TOOL_SETS];
+    return selectMcpToolSets(input, [...DEFAULT_MCP_TOOL_SETS]);
   },
 
   drainEssentialTools(input: WorkerRoleInput): string[] {
-    return input.roleConfig?.drainEssentialTools !== undefined
-      ? [...input.roleConfig.drainEssentialTools]
-      : [...DEFAULT_DRAIN_ESSENTIAL_TOOLS];
+    return selectDrainEssentialTools(input);
   },
 
   buildInitialMessages(input: WorkerRoleInput): AgentMessage[] {
@@ -103,3 +95,23 @@ export const ReviewerRoleAssembly: WorkerRoleAssembly = {
     return undefined;
   },
 };
+
+function selectMcpToolSets(input: WorkerRoleInput, fallback: readonly string[]): string[] {
+  if (input.roleConfig?.mcpToolSet !== undefined) return [...input.roleConfig.mcpToolSet];
+  const policy = input.profileToolPolicy;
+  if (policy?.mode === "allow_list" && policy.allow !== undefined) {
+    return policy.allow.filter((entry) => !DEFAULT_DRAIN_ESSENTIAL_TOOLS.includes(entry));
+  }
+  return [...fallback];
+}
+
+function selectDrainEssentialTools(input: WorkerRoleInput): string[] {
+  if (input.roleConfig?.drainEssentialTools !== undefined) {
+    return [...input.roleConfig.drainEssentialTools];
+  }
+  const allowed = input.profileToolPolicy?.allow ?? [];
+  const profileEssentials = allowed.filter((entry) =>
+    DEFAULT_DRAIN_ESSENTIAL_TOOLS.includes(entry),
+  );
+  return profileEssentials.length > 0 ? profileEssentials : [...DEFAULT_DRAIN_ESSENTIAL_TOOLS];
+}

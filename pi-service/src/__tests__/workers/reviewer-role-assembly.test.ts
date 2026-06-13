@@ -46,12 +46,18 @@ describe("ReviewerRoleAssembly", () => {
     expect(prompt).toContain("looks_good");
   });
 
-  it("selects read-only filesystem git diff/log and Den MCP tool sets", () => {
-    expect(ReviewerRoleAssembly.selectMcpToolSets(makeInput())).toEqual([
-      "filesystem_readonly",
-      "git_diff_log",
-      "den",
-    ]);
+  it("selects MCP tool sets from profile tool policy", () => {
+    expect(
+      ReviewerRoleAssembly.selectMcpToolSets(
+        makeInput({
+          roleConfig: undefined,
+          profileToolPolicy: {
+            mode: "allow_list",
+            allow: ["filesystem_readonly", "git_diff_log", "den", "context_status"],
+          },
+        }),
+      ),
+    ).toEqual(["filesystem_readonly", "git_diff_log", "den"]);
   });
 
   it("uses configured MCP tool sets when supplied by role config", () => {

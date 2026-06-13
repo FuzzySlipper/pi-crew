@@ -10,10 +10,7 @@ import {
   type KnownProvider,
   type Model,
 } from "@earendil-works/pi-ai";
-import type {
-  DelegationConstraints,
-  EffectiveDelegationRuntime,
-} from "@pi-crew/core";
+import type { DelegationConstraints, EffectiveDelegationRuntime } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
 import type { AgentLike, SteerableAgent } from "./agent-supervisor.js";
 import type { AgentTool } from "./guarded-tool-types.js";
@@ -23,6 +20,7 @@ import type {
   WorkerExecutor,
 } from "./worker-runtime.js";
 import type { WorkerRoleConfig } from "./worker-role-config.js";
+import type { WorkerProfileToolPolicy } from "./worker-role-assembly.js";
 import type { WorkerRoleInput } from "./worker-role-assembly.js";
 import type { DelegatedSpawnLifecycle } from "./delegated-spawn-lifecycle.js";
 import { createDelegatedSpawnTool } from "./delegated-spawn-tool.js";
@@ -40,6 +38,7 @@ export interface WorkerModelConfig {
 
 export interface WorkerModelConfigSource {
   getProfileModelConfig(profileId: string): WorkerModelConfig | undefined;
+  getProfileToolPolicy?(profileId: string): WorkerProfileToolPolicy | undefined;
 }
 
 export interface AgentWorkerAdapter extends AgentLike, SteerableAgent {
@@ -70,9 +69,7 @@ export interface AgentWorkerToolProviderInput {
   readonly toolSets: readonly string[];
 }
 
-export type AgentWorkerToolProvider = (
-  input: AgentWorkerToolProviderInput,
-) => AgentTool[];
+export type AgentWorkerToolProvider = (input: AgentWorkerToolProviderInput) => AgentTool[];
 
 export interface AgentWorkerExecutorConfig {
   readonly agentFactory?: AgentWorkerFactory;
@@ -97,11 +94,12 @@ export class DefaultAgentWorkerFactory implements AgentWorkerFactory {
   create(input: AgentWorkerFactoryInput): AgentWorkerAdapter {
     const agent = new Agent({
       getApiKey: () => input.apiKey ?? (input.usesCustomBaseUrl === true ? "unused" : undefined),
-      streamFn: (model, context, options) => streamSimple(model, context, {
-        ...options,
-        temperature: input.temperature ?? options?.temperature,
-        maxTokens: input.maxTokens ?? options?.maxTokens,
-      }),
+      streamFn: (model, context, options) =>
+        streamSimple(model, context, {
+          ...options,
+          temperature: input.temperature ?? options?.temperature,
+          maxTokens: input.maxTokens ?? options?.maxTokens,
+        }),
       sessionId: input.sessionId,
       initialState: {
         model: input.model,
@@ -131,9 +129,9 @@ export class AgentWorkerExecutor implements WorkerExecutor {
 
   async execute(context: WorkerExecutionContext): Promise<WorkerExecutionResult> {
     const roleConfig = context.roleConfig;
-    if (roleConfig?.executionMode !== "llmAgent") {
+    if (roleConfig?.executionMode === "legacyExecutor") {
       throw new ConfigurationError(
-        "AgentWorkerExecutor requires worker role config executionMode=llmAgent; refusing deterministic/legacy fallback",
+        "AgentWorkerExecutor requires llmAgent worker execution; refusing deterministic/legacy fallback",
       );
     }
 
@@ -144,7 +142,12 @@ export class AgentWorkerExecutor implements WorkerExecutor {
       );
     }
 
-    const roleInput = context.buildWorkerRoleInput();
+    const baseRoleInput = context.buildWorkerRoleInput();
+    const profileToolPolicy = this.#modelConfigSource?.getProfileToolPolicy?.(
+      baseRoleInput.profileId,
+    );
+    const roleInput: WorkerRoleInput =
+      profileToolPolicy === undefined ? baseRoleInput : { ...baseRoleInput, profileToolPolicy };
     const modelConfig = resolveWorkerModelConfig(
       roleConfig,
       this.#modelConfigSource?.getProfileModelConfig(roleInput.profileId),
@@ -152,7 +155,12 @@ export class AgentWorkerExecutor implements WorkerExecutor {
     );
     const model = resolvePiModel(modelConfig);
     const toolSets = assembly.selectMcpToolSets(roleInput);
-    const delegatedSpawnTool = this.#createDelegatedSpawnTool(context, roleInput, toolSets, modelConfig);
+    const delegatedSpawnTool = this.#createDelegatedSpawnTool(
+      context,
+      roleInput,
+      toolSets,
+      modelConfig,
+    );
     const rawTools = [
       ...this.#toolProvider({ roleInput, toolSets }),
       ...(delegatedSpawnTool === undefined ? [] : [delegatedSpawnTool]),
@@ -285,7 +293,8 @@ export class AgentWorkerExecutor implements WorkerExecutor {
       lifecycle: this.#delegatedSpawnLifecycle,
       parentSessionId: context.session.id,
       parentPolicy: buildWorkerPolicy(context.binding, context.roleConfig),
-      parentDelegationConstraints: context.session.delegationConstraints ?? this.#delegatedSpawnConstraints,
+      parentDelegationConstraints:
+        context.session.delegationConstraints ?? this.#delegatedSpawnConstraints,
       parentLineage: context.session.delegation,
       parentRuntime,
       allowedRuntimes: this.#delegatedSpawnAllowedRuntimes ?? [parentRuntime],
@@ -303,10 +312,7 @@ function isStaticControlTool(tool: AgentTool): boolean {
   return tool.name === "post_structured_completion" || tool.name === "context_status";
 }
 
-function markCompletionTool(
-  tools: readonly AgentTool[],
-  markPosted: () => void,
-): AgentTool[] {
+function markCompletionTool(tools: readonly AgentTool[], markPosted: () => void): AgentTool[] {
   return tools.map((tool) => {
     if (tool.name !== "post_structured_completion") return tool;
     const originalTool = tool;
@@ -322,12 +328,12 @@ function markCompletionTool(
 }
 
 function resolveWorkerModelConfig(
-  roleConfig: WorkerRoleConfig,
+  roleConfig: WorkerRoleConfig | undefined,
   profileConfig: WorkerModelConfig | undefined,
   role: string,
 ): ResolvedWorkerModelConfig {
-  const provider = roleConfig.modelProvider ?? profileConfig?.provider;
-  const modelName = roleConfig.modelName ?? profileConfig?.modelName;
+  const provider = roleConfig?.modelProvider ?? profileConfig?.provider;
+  const modelName = roleConfig?.modelName ?? profileConfig?.modelName;
   if (provider === undefined || modelName === undefined) {
     throw new ConfigurationError(
       `LLM Agent worker role "${role}" requires modelProvider and modelName from role config or profile modelConfig`,
@@ -336,11 +342,11 @@ function resolveWorkerModelConfig(
   return {
     provider,
     modelName,
-    modelBaseUrl: roleConfig.modelBaseUrl ?? profileConfig?.modelBaseUrl,
-    temperature: roleConfig.temperature ?? profileConfig?.temperature,
-    maxTokens: roleConfig.maxTokens ?? profileConfig?.maxTokens,
+    modelBaseUrl: roleConfig?.modelBaseUrl ?? profileConfig?.modelBaseUrl,
+    temperature: roleConfig?.temperature ?? profileConfig?.temperature,
+    maxTokens: roleConfig?.maxTokens ?? profileConfig?.maxTokens,
     apiKey: profileConfig?.apiKey,
-    usesCustomBaseUrl: (roleConfig.modelBaseUrl ?? profileConfig?.modelBaseUrl) !== undefined,
+    usesCustomBaseUrl: (roleConfig?.modelBaseUrl ?? profileConfig?.modelBaseUrl) !== undefined,
   };
 }
 
@@ -365,9 +371,7 @@ function resolvePiModel(config: ResolvedWorkerModelConfig): Model<Api> {
 }
 
 function asKnownProvider(provider: string): KnownProvider | null {
-  return getProviders().includes(provider as KnownProvider)
-    ? (provider as KnownProvider)
-    : null;
+  return getProviders().includes(provider as KnownProvider) ? (provider as KnownProvider) : null;
 }
 
 function createOpenAiCompatibleModel(

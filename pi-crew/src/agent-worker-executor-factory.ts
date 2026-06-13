@@ -2,6 +2,7 @@
 
 import type { Logger } from "@pi-crew/core";
 import { loadProfile } from "@pi-crew/profiles";
+import type { ToolPolicy } from "@pi-crew/profiles";
 import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ToolCallContentBlock } from "@pi-crew/mcp";
 import {
@@ -51,6 +52,18 @@ class FilesystemWorkerModelConfigSource implements WorkerModelConfigSource {
       };
     } catch (error: unknown) {
       this.logger.warn("Worker profile model config unavailable", {
+        profileId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    }
+  }
+
+  getProfileToolPolicy(profileId: string): ToolPolicy | undefined {
+    try {
+      return loadProfile(profileId, this.profilesRoot).toolPolicy;
+    } catch (error: unknown) {
+      this.logger.warn("Worker profile tool policy unavailable", {
         profileId,
         error: error instanceof Error ? error.message : String(error),
       });

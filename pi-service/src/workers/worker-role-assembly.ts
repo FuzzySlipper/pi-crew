@@ -25,6 +25,12 @@ import type {
 import type { WorkerBinding, WorkerTargetPacketRef } from "../sessions/types.js";
 import type { WorkerRoleConfig } from "./worker-role-config.js";
 
+export interface WorkerProfileToolPolicy {
+  readonly mode?: "allow_all" | "allow_list" | "deny_list";
+  readonly allow?: readonly string[];
+  readonly deny?: readonly string[];
+}
+
 // ── Input ────────────────────────────────────────────────────────
 
 /**
@@ -44,6 +50,8 @@ export interface WorkerRoleInput {
   readonly profileId: string;
   /** Optional per-role overrides from the role mapping config. */
   readonly roleConfig?: WorkerRoleConfig;
+  /** Optional profile-owned tool policy loaded from the selected profile. */
+  readonly profileToolPolicy?: WorkerProfileToolPolicy;
   /**
    * Target packet reference for roles that audit or validate an
    * existing completion packet (packet-auditor, validator).
@@ -73,9 +81,7 @@ export interface WorkerRoleHooks {
   ) => Promise<BeforeToolCallResult | undefined>;
 
   /** Post-execution result scrub / classification. */
-  readonly afterToolCall?: (
-    ctx: AfterToolCallContext,
-  ) => Promise<AfterToolCallResult | undefined>;
+  readonly afterToolCall?: (ctx: AfterToolCallContext) => Promise<AfterToolCallResult | undefined>;
 }
 
 // ── Assembly interface ───────────────────────────────────────────

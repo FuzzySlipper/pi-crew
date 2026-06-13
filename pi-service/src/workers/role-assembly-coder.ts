@@ -62,15 +62,11 @@ export const CoderRoleAssembly: WorkerRoleAssembly = {
   },
 
   selectMcpToolSets(input: WorkerRoleInput): string[] {
-    return input.roleConfig?.mcpToolSet !== undefined
-      ? [...input.roleConfig.mcpToolSet]
-      : [...DEFAULT_MCP_TOOL_SETS];
+    return selectMcpToolSets(input, [...DEFAULT_MCP_TOOL_SETS]);
   },
 
   drainEssentialTools(input: WorkerRoleInput): string[] {
-    return input.roleConfig?.drainEssentialTools !== undefined
-      ? [...input.roleConfig.drainEssentialTools]
-      : [...DEFAULT_DRAIN_ESSENTIAL_TOOLS];
+    return selectDrainEssentialTools(input);
   },
 
   buildInitialMessages(input: WorkerRoleInput): AgentMessage[] {
@@ -99,3 +95,23 @@ export const CoderRoleAssembly: WorkerRoleAssembly = {
     return undefined;
   },
 };
+
+function selectMcpToolSets(input: WorkerRoleInput, fallback: readonly string[]): string[] {
+  if (input.roleConfig?.mcpToolSet !== undefined) return [...input.roleConfig.mcpToolSet];
+  const policy = input.profileToolPolicy;
+  if (policy?.mode === "allow_list" && policy.allow !== undefined) {
+    return policy.allow.filter((entry) => !DEFAULT_DRAIN_ESSENTIAL_TOOLS.includes(entry));
+  }
+  return [...fallback];
+}
+
+function selectDrainEssentialTools(input: WorkerRoleInput): string[] {
+  if (input.roleConfig?.drainEssentialTools !== undefined) {
+    return [...input.roleConfig.drainEssentialTools];
+  }
+  const allowed = input.profileToolPolicy?.allow ?? [];
+  const profileEssentials = allowed.filter((entry) =>
+    DEFAULT_DRAIN_ESSENTIAL_TOOLS.includes(entry),
+  );
+  return profileEssentials.length > 0 ? profileEssentials : [...DEFAULT_DRAIN_ESSENTIAL_TOOLS];
+}
