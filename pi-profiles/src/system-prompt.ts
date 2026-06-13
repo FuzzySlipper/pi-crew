@@ -70,9 +70,7 @@ export interface PromptAssemblyOptions {
  * The result is a single string suitable for passing as the
  * `system` message to an LLM provider.
  */
-export function assembleSystemPrompt(
-  options: PromptAssemblyOptions,
-): string {
+export function assembleSystemPrompt(options: PromptAssemblyOptions): string {
   const { profile, blackboard, runtime } = options;
   const sections: string[] = [];
 
@@ -97,20 +95,32 @@ export function assembleSystemPrompt(
       }
     }
     if (ctxLines.length > 0) {
-      sections.push(
-        ["## Runtime Context", ...ctxLines].join("\n"),
-      );
+      sections.push(["## Runtime Context", ...ctxLines].join("\n"));
     }
   }
 
-  // ── 3. Skills listing ───────────────────────────────────────
+  // ── 3. Skills listing and bounded instructions ────────────────
   if (profile.skills.length > 0) {
     const skillLines = profile.skills.map(
       (s) => `- **${s.name}** (v${s.version}): ${s.description}`,
     );
-    sections.push(
-      ["## Available Skills", ...skillLines].join("\n"),
-    );
+    sections.push(["## Available Skills", ...skillLines].join("\n"));
+    const loadedSkillSections = profile.skills
+      .filter((skill) => skill.content !== undefined && skill.content.trim().length > 0)
+      .map((skill) =>
+        [
+          `## Skill: ${skill.name}`,
+          `Description: ${skill.description}`,
+          skill.sourcePath === undefined ? undefined : `Source: ${skill.sourcePath}`,
+          "",
+          skill.content,
+        ]
+          .filter((line): line is string => line !== undefined)
+          .join("\n"),
+      );
+    if (loadedSkillSections.length > 0) {
+      sections.push(["## Loaded Skill Instructions", ...loadedSkillSections].join("\n\n"));
+    }
   }
 
   // ── 4. Blackboard headings (headings only, not content) ─────
@@ -136,9 +146,7 @@ export function assembleSystemPrompt(
     if (tp.deny !== undefined && tp.deny.length > 0) {
       policyLines.push(`Denied: ${tp.deny.join(", ")}`);
     }
-    sections.push(
-      ["## Tool Policy", ...policyLines].join("\n"),
-    );
+    sections.push(["## Tool Policy", ...policyLines].join("\n"));
   }
 
   return sections.join("\n\n");

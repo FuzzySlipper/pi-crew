@@ -27,6 +27,12 @@ export interface Skill {
 
   /** Semver string for the skill definition. */
   version: string;
+
+  /** Optional bounded skill instructions loaded from SKILL.md. */
+  content?: string;
+
+  /** Filesystem path for loaded SKILL.md content. */
+  sourcePath?: string;
 }
 
 // ── ModelConfig ─────────────────────────────────────────────────

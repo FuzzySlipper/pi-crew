@@ -17,7 +17,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { ConfigurationError } from "@pi-crew/core";
-import type { Profile, Skill, ModelConfig, ToolPolicy, RuntimeConfig } from "./profile.js";
+import type { Profile, ModelConfig, ToolPolicy, RuntimeConfig } from "./profile.js";
+import { resolveProfileSkills } from "./skill-loading.js";
 
 // ── ProfileSource interface ─────────────────────────────────────
 
@@ -51,12 +52,14 @@ interface RawProfileDefinition {
   readonly doc: Record<string, unknown>;
   readonly prompt: string | undefined;
   readonly source: string;
+  readonly profileDir?: string;
 }
 
 interface ResolvedProfileDefinition {
   readonly id: string;
   readonly doc: Record<string, unknown>;
   readonly prompt: string | undefined;
+  readonly profileDir?: string;
 }
 
 /**
@@ -78,7 +81,7 @@ export class FilesystemProfileSource implements ProfileSource {
     const resolved = new Map<string, ResolvedProfileDefinition>();
     return [...definitions.keys()].sort().map((id) => {
       const definition = this.resolveDefinition(id, definitions, resolved, []);
-      return parseProfile(definition);
+      return parseProfile(definition, join(dirname(this.profilesDir), "skills"));
     });
   }
 
@@ -152,7 +155,7 @@ export class FilesystemProfileSource implements ProfileSource {
     if (prompt.trim() === "") {
       throw new ConfigurationError(`Directory profile "${profileId}" soul.md must not be empty`);
     }
-    return { id: profileId, doc, prompt, source: yamlPath };
+    return { id: profileId, doc, prompt, source: yamlPath, profileDir };
   }
 
   private parseProfileYaml(path: string, profileId: string): Record<string, unknown> {
@@ -188,7 +191,12 @@ export class FilesystemProfileSource implements ProfileSource {
     const nextStack = [...stack, id];
     const merged =
       parentId === undefined
-        ? { id, doc: stripExtends(definition.doc), prompt: definition.prompt }
+        ? {
+            id,
+            doc: stripExtends(definition.doc),
+            prompt: definition.prompt,
+            profileDir: definition.profileDir,
+          }
         : this.resolveChildDefinition(definition, parentId, definitions, resolved, nextStack);
     resolved.set(id, merged);
     return merged;
@@ -210,6 +218,7 @@ export class FilesystemProfileSource implements ProfileSource {
       id: child.id,
       doc: mergeProfileDocs(parent.doc, childDoc),
       prompt: mergePrompts(parent.prompt, parentId, child.prompt, child.id),
+      profileDir: child.profileDir,
     };
   }
 
@@ -331,12 +340,18 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 // ── Validators ──────────────────────────────────────────────────
 
-function parseProfile(definition: ResolvedProfileDefinition): Profile {
+function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: string): Profile {
   const doc = definition.doc;
   const name = expectString(doc, "name", definition.id);
   const description = expectString(doc, "description", definition.id);
   const systemPrompt = definition.prompt ?? expectString(doc, "systemPrompt", definition.id);
-  const skills: Skill[] = parseSkills(doc, definition.id);
+  const skills = resolveProfileSkills({
+    profileId: definition.id,
+    raw: doc["skills"],
+    globalSkillsDir,
+    profileSkillsDir:
+      definition.profileDir === undefined ? undefined : join(definition.profileDir, "skills"),
+  });
   const modelConfig: ModelConfig | undefined = parseModelConfig(doc, definition.id);
   const runtimeConfig: RuntimeConfig | undefined = parseRuntimeConfig(doc, definition.id);
   const toolPolicy: ToolPolicy | undefined = parseToolPolicy(doc, definition.id);
@@ -364,37 +379,6 @@ function expectString(doc: Record<string, unknown>, key: string, profileId: stri
     );
   }
   return value;
-}
-
-function parseSkills(doc: Record<string, unknown>, profileId: string): Skill[] {
-  const raw = doc["skills"];
-  if (raw === undefined || raw === null) {
-    return [];
-  }
-  if (!Array.isArray(raw)) {
-    throw new ConfigurationError(`Profile "${profileId}" field "skills" must be an array`);
-  }
-  return raw.map((item, index) => parseSkill(item, profileId, index));
-}
-
-function parseSkill(item: unknown, profileId: string, index: number): Skill {
-  if (item === null || typeof item !== "object" || Array.isArray(item)) {
-    throw new ConfigurationError(
-      `Profile "${profileId}" skill[${String(index)}] must be an object`,
-    );
-  }
-  const s = item as Record<string, unknown>;
-  const name = typeof s["name"] === "string" ? s["name"] : undefined;
-  const description = typeof s["description"] === "string" ? s["description"] : "";
-  const version = typeof s["version"] === "string" ? s["version"] : "0.1.0";
-
-  if (name === undefined || name.trim() === "") {
-    throw new ConfigurationError(
-      `Profile "${profileId}" skill[${String(index)}] is missing required field "name"`,
-    );
-  }
-
-  return { name, description, version };
 }
 
 function parseModelConfig(

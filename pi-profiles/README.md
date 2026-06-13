@@ -63,6 +63,45 @@ Inheritance is deterministic and fail-closed:
 - `soul.md` prompts compose as parent prompt plus child prompt with explicit section markers.
 - Missing parents, inheritance cycles, missing/empty `soul.md`, malformed profile YAML, and invalid merged profiles throw `ConfigurationError` during startup/load.
 
+## Filesystem skills
+
+Profiles can load pi-crew-native SKILL.md files from installed skill directories:
+
+```text
+skills/
+  den-task-evidence-contract/
+    SKILL.md
+profiles/
+  coder-worker/
+    profile.yaml
+    soul.md
+    skills/
+      local-coder-procedure/
+        SKILL.md
+```
+
+The global `skills/` directory is the sibling of the configured `profiles/` directory. For the installed service this is `/home/agents/pi-crew/skills/`; profile-local skills live under `/home/agents/pi-crew/profiles/<profile>/skills/`.
+
+Skill selection uses the existing `skills` field while preserving inline metadata compatibility:
+
+```yaml
+# load all global plus this profile's local skills
+skills: all
+
+# or load a named subset, failing closed if any name is missing
+skills:
+  - den-task-evidence-contract
+  - local-coder-procedure
+
+# existing inline metadata still works and does not require SKILL.md files
+skills:
+  - name: implementation
+    description: Implement scoped code changes.
+    version: "0.1.0"
+```
+
+Profile-local skills override global skills with the same frontmatter `name`. Loaded SKILL.md bodies are injected into the assembled system prompt under `## Loaded Skill Instructions` with bounded content; inline metadata-only skills continue to appear only in `## Available Skills`.
+
 ## Avoiding redundant profile copies
 
 Put shared worker defaults in a base profile such as `base-worker`:
