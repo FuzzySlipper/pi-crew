@@ -27,6 +27,11 @@ import {
 } from "@earendil-works/pi-ai";
 import type { DelegatedResult, EffectiveDelegationRuntime, ExecutionPolicy } from "@pi-crew/core";
 import type { DelegatedChildRunInput, DelegatedChildRunner } from "./delegated-spawn-lifecycle.js";
+import {
+  appendReviewResultInstructions,
+  attachExtractedReviewResult,
+  latestAssistantText,
+} from "./delegated-review-result-extraction.js";
 
 const USAGE_ACCUMULATION_INTERVAL_MS = 50;
 
@@ -103,7 +108,8 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
       const tools = this.#resolveTools(toolFilter);
 
       const agent = new Agent({
-        getApiKey: () => this.#config.apiKey ?? (this.#config.baseUrl !== undefined ? "unused" : undefined),
+        getApiKey: () =>
+          this.#config.apiKey ?? (this.#config.baseUrl !== undefined ? "unused" : undefined),
         streamFn: (m, context, options) =>
           streamSimple(m, context, {
             ...options,
@@ -113,7 +119,11 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         sessionId: input.childSession.sessionId,
         initialState: {
           model,
-          systemPrompt: buildChildSystemPrompt(input.effectiveRuntime, toolFilter),
+          systemPrompt: buildChildSystemPrompt(
+            input.effectiveRuntime,
+            toolFilter,
+            input.spawnRequest,
+          ),
           tools: tools.length > 0 ? tools : undefined,
         },
       });
@@ -137,23 +147,27 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         if (event.type === "tool_execution_start") {
           actualToolsUsed.add(event.toolName);
           toolStartTimes.set(event.toolCallId, Date.now());
-          input.emitToolVisible({
-            toolName: event.toolName,
-            toolCallId: event.toolCallId,
-            phase: "called",
-          }).catch(() => {});
+          input
+            .emitToolVisible({
+              toolName: event.toolName,
+              toolCallId: event.toolCallId,
+              phase: "called",
+            })
+            .catch(() => {});
         }
 
         if (event.type === "tool_execution_end") {
           const started = toolStartTimes.get(event.toolCallId);
           toolStartTimes.delete(event.toolCallId);
-          input.emitToolVisible({
-            toolName: event.toolName,
-            toolCallId: event.toolCallId,
-            phase: event.isError ? "denied" : "completed",
-            durationMs: started === undefined ? undefined : Date.now() - started,
-            reason: event.isError ? "tool execution failed" : undefined,
-          }).catch(() => {});
+          input
+            .emitToolVisible({
+              toolName: event.toolName,
+              toolCallId: event.toolCallId,
+              phase: event.isError ? "denied" : "completed",
+              durationMs: started === undefined ? undefined : Date.now() - started,
+              reason: event.isError ? "tool execution failed" : undefined,
+            })
+            .catch(() => {});
         }
 
         if (event.type === "turn_end") {
@@ -163,12 +177,14 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
           lastTurnTimestamp = now;
 
           // Emit progress on each turn (#2286)
-          input.emitTurnVisible({
-            turnNumber: accumulatedTurnCount,
-            phase: "completed" as const,
-            durationMs: turnDuration,
-            error: undefined,
-          }).catch(() => {});
+          input
+            .emitTurnVisible({
+              turnNumber: accumulatedTurnCount,
+              phase: "completed" as const,
+              durationMs: turnDuration,
+              error: undefined,
+            })
+            .catch(() => {});
 
           // Enforce max iterations (#2286)
           if (maxIterations > 0 && accumulatedTurnCount >= maxIterations) {
@@ -179,7 +195,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
 
       const taskMessage: AgentMessage = {
         role: "user",
-        content: input.spawnRequest.task,
+        content: appendReviewResultInstructions(input.spawnRequest.task, input.spawnRequest),
         timestamp: Date.now(),
       };
 
@@ -199,18 +215,24 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         error: undefined,
       });
 
-      return {
-        outcome: "success",
-        summary: `Delegated child completed task: ${input.spawnRequest.task.slice(0, 200)}`,
-        policyId: input.policy.policyId,
-        childSessionId: input.childSession.sessionId,
-        effectiveRuntime: input.effectiveRuntime,
-        turnsUsed: accumulatedTurnCount > 0 ? accumulatedTurnCount : 1,
-        tokensConsumed: accumulatedTokens,
-        durationMs,
-        toolsUsed: [...actualToolsUsed],
-        evidenceChecked: false,
-      };
+      const assistantText = latestAssistantText(agent.state.messages);
+      return attachExtractedReviewResult(
+        {
+          outcome: "success",
+          summary: `Delegated child completed task: ${input.spawnRequest.task.slice(0, 200)}`,
+          policyId: input.policy.policyId,
+          childSessionId: input.childSession.sessionId,
+          effectiveRuntime: input.effectiveRuntime,
+          turnsUsed: accumulatedTurnCount > 0 ? accumulatedTurnCount : 1,
+          tokensConsumed: accumulatedTokens,
+          durationMs,
+          toolsUsed: [...actualToolsUsed],
+          evidenceChecked: false,
+          safeExcerpt: assistantText,
+        },
+        input.spawnRequest,
+        assistantText,
+      );
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -271,9 +293,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     }
 
     // Remove denied tools (union of both sources)
-    const spawnDenied = spawnAllowedTools !== undefined
-      ? inputDeniedTools()
-      : [];
+    const spawnDenied = spawnAllowedTools !== undefined ? inputDeniedTools() : [];
     const policyDenied = policy.deniedTools ?? [];
     const denySet = new Set([...spawnDenied, ...policyDenied]);
 
@@ -365,14 +385,13 @@ function inputDeniedTools(): string[] {
 }
 
 function asKnownProvider(provider: string): KnownProvider | null {
-  return getProviders().includes(provider as KnownProvider)
-    ? (provider as KnownProvider)
-    : null;
+  return getProviders().includes(provider as KnownProvider) ? (provider as KnownProvider) : null;
 }
 
 function buildChildSystemPrompt(
   runtime: EffectiveDelegationRuntime,
   toolFilter: ChildToolFilterResult,
+  spawnRequest: { readonly expectedResultSchema?: string; readonly requiredEvidence?: unknown },
 ): string {
   const parts: string[] = [
     "You are a delegated subagent executing a specific task.",
@@ -388,6 +407,15 @@ function buildChildSystemPrompt(
 
   if (toolFilter.deniedToolNames.length > 0) {
     parts.push(`\nDenied tools: ${toolFilter.deniedToolNames.join(", ")}`);
+  }
+
+  if (
+    spawnRequest.expectedResultSchema === "review" ||
+    spawnRequest.requiredEvidence !== undefined
+  ) {
+    parts.push(
+      "\nReview-mode output is mandatory: final answer must contain exactly one <delegated_review_result> JSON object with status, evidenceHandles, taskDecisions, and optional findings. Do not rely on prose summaries for review results.",
+    );
   }
 
   return parts.filter(Boolean).join("\n");
