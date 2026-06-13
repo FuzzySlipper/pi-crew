@@ -40,10 +40,13 @@ export function resolveEffectiveRuntime(
   allowedRuntimes: readonly EffectiveDelegationRuntime[],
   requested: DelegationSpawnRequest["modelSelection"],
 ): Result<EffectiveDelegationRuntime, DelegatedSpawnError> {
+  const profileId = requested?.profileId ?? parentRuntime.profileId;
+  const profileChanged =
+    requested?.profileId !== undefined && requested.profileId !== parentRuntime.profileId;
   const candidate: EffectiveDelegationRuntime = {
-    profileId: requested?.profileId ?? parentRuntime.profileId,
-    provider: requested?.provider ?? parentRuntime.provider,
-    model: requested?.model ?? parentRuntime.model,
+    profileId,
+    provider: requested?.provider ?? (profileChanged ? undefined : parentRuntime.provider),
+    model: requested?.model ?? (profileChanged ? undefined : parentRuntime.model),
   };
   if (allowedRuntimes.length === 0) return ok({ ...candidate });
   if (allowedRuntimes.some((runtime) => sameRuntime(runtime, candidate)))

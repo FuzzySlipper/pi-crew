@@ -110,6 +110,9 @@ function formatCompletedMessage(payload: DelegationCompletedPayload): ProjectedM
     summary: `Subagent completed: ${payload.result.outcome} — ${payload.result.summary.slice(0, 200)}`,
     details: {
       childSessionId: payload.childSessionId,
+      profileId: payload.result.effectiveRuntime?.profileId,
+      provider: payload.result.effectiveRuntime?.provider,
+      model: payload.result.effectiveRuntime?.model,
       outcome: payload.result.outcome,
       failureCategory: payload.result.failureCategory,
       tokensConsumed: payload.result.tokensConsumed,

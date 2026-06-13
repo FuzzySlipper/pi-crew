@@ -65,6 +65,7 @@ export interface DelegatedChildRuntimeResolution {
   readonly model?: Model<Api>;
   readonly tools?: readonly AgentTool[];
   readonly apiKey?: string;
+  readonly effectiveRuntime?: EffectiveDelegationRuntime;
 }
 
 export interface DelegatedChildRuntimeResolver {
@@ -127,10 +128,11 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         policy: input.policy,
         toolFilter,
       });
-      const model = runtimeResolution?.model ?? this.#resolveModel(input.effectiveRuntime);
+      const resolvedRuntime = runtimeResolution?.effectiveRuntime ?? input.effectiveRuntime;
+      const model = runtimeResolution?.model ?? this.#resolveModel(resolvedRuntime);
       const tools = [...(runtimeResolution?.tools ?? this.#resolveTools(toolFilter))];
       const systemPrompt = buildChildSystemPrompt(
-        input.effectiveRuntime,
+        resolvedRuntime,
         toolFilter,
         input.spawnRequest,
         runtimeResolution?.systemPrompt,
@@ -248,7 +250,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         summary: `Delegated child completed task: ${input.spawnRequest.task.slice(0, 200)}`,
         policyId: input.policy.policyId,
         childSessionId: input.childSession.sessionId,
-        effectiveRuntime: input.effectiveRuntime,
+        effectiveRuntime: resolvedRuntime,
         turnsUsed: accumulatedTurnCount > 0 ? accumulatedTurnCount : 1,
         tokensConsumed: accumulatedTokens,
         durationMs,

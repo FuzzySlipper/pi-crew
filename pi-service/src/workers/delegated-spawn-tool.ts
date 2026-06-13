@@ -33,6 +33,7 @@ interface ParentVisibleDelegatedResult {
   readonly summary: string;
   readonly childSessionId: string;
   readonly policyId: string;
+  readonly effectiveRuntime?: DelegatedResult["effectiveRuntime"];
   readonly safeExcerpt?: string;
   readonly artifacts?: readonly DelegatedArtifactHandle[];
   readonly evidenceChecked?: boolean;
@@ -181,6 +182,7 @@ function toParentVisibleResult(result: DelegatedResult): ParentVisibleDelegatedR
     summary: result.summary,
     childSessionId: result.childSessionId,
     policyId: result.policyId,
+    ...(result.effectiveRuntime === undefined ? {} : { effectiveRuntime: result.effectiveRuntime }),
     ...(result.safeExcerpt === undefined ? {} : { safeExcerpt: truncate(result.safeExcerpt) }),
     ...(result.artifacts === undefined ? {} : { artifacts: result.artifacts }),
     ...(result.evidenceChecked === undefined ? {} : { evidenceChecked: result.evidenceChecked }),

@@ -85,6 +85,11 @@ describe("createProfileBackedDelegatedChildRuntimeResolver", () => {
     expect(resolution.systemPrompt).toContain("PROFILE_SENTINEL_CODER_CHILD_PROMPT");
     expect(resolution.model?.id).toBe("coder-profile-model");
     expect(resolution.model?.provider).toBe("den-router");
+    expect(resolution.effectiveRuntime).toEqual({
+      profileId: "coder-child",
+      provider: "den-router",
+      model: "coder-profile-model",
+    });
     expect(toolProvider.resolvedNames).toEqual(["read_file", "terminal"]);
     expect(resolution.tools?.map((tool) => tool.name)).toEqual(["read_file", "terminal"]);
   });
