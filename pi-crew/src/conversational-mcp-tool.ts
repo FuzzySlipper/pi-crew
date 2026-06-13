@@ -20,7 +20,7 @@ export function createConversationalMcpAgentTool(
     label: tool.name,
     name: tool.name,
     description: tool.description,
-    parameters: tool.inputSchema,
+    parameters: schemaWithDefaultedDenArgsOptional(tool.name, tool.inputSchema),
     execute: async (_toolCallId, params) => {
       const normalized = withDefaultDenArgs(tool.name, paramsToRecord(params), defaults);
       const result = await mcpClient.callTool(tool.name, normalized);
@@ -36,6 +36,19 @@ export function createConversationalMcpAgentTool(
       };
     },
   };
+}
+
+function schemaWithDefaultedDenArgsOptional(
+  toolName: string,
+  schema: AgentTool["parameters"],
+): AgentTool["parameters"] {
+  if (!isDenWriteTool(toolName) || !isRecord(schema)) return schema;
+  const required = schema["required"];
+  if (!Array.isArray(required)) return schema;
+  return {
+    ...schema,
+    required: required.filter((field) => field !== "sender" && field !== "project_id"),
+  } as AgentTool["parameters"];
 }
 
 function withDefaultDenArgs(
@@ -82,4 +95,8 @@ function stripMcpPrefix(toolName: string): string {
   if (toolName.startsWith("mcp_den_")) return toolName.slice("mcp_den_".length);
   if (toolName.startsWith("den_")) return toolName.slice("den_".length);
   return toolName;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

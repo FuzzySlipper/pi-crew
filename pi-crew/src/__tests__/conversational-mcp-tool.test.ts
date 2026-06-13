@@ -4,18 +4,22 @@ import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import { createConversationalMcpAgentTool } from "../conversational-mcp-tool.js";
 
 describe("createConversationalMcpAgentTool", () => {
-  it("preserves MCP input schema so models see required Den arguments", () => {
+  it("preserves MCP input schema properties while allowing runtime-defaulted Den arguments", () => {
     const schema = {
       type: "object",
       required: ["project_id", "sender", "content"],
-      properties: { sender: { type: "string" } },
+      properties: { sender: { type: "string" }, content: { type: "string" } },
     };
     const tool = createConversationalMcpAgentTool(mcpTool("send_message", schema), makeClient(), {
       sender: "pi-orchestrator",
       projectId: "pi-crew",
     });
 
-    expect(tool.parameters).toBe(schema);
+    expect(tool.parameters).toMatchObject({
+      type: "object",
+      required: ["content"],
+      properties: schema.properties,
+    });
   });
 
   it("fills sender and project_id defaults for Den write tools", async () => {
