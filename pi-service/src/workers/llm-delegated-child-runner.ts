@@ -173,6 +173,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
           tools: tools.length > 0 ? tools : undefined,
         },
       });
+      let drainModeEntered = false;
 
       // Subscribe to Agent events for token usage, turn tracking,
       // and progress visibility (#2285, #2286)
@@ -232,9 +233,26 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
             })
             .catch(() => {});
 
-          // Enforce max iterations (#2286)
-          if (maxIterations > 0 && accumulatedTurnCount >= maxIterations) {
-            agent.abort();
+          // Enter drain mode at the iteration cap instead of aborting the run.
+          // DESIGN: Aborting immediately after a tool-heavy turn can leave no
+          // final assistant text to extract, causing implementation/review
+          // evidence validation to fail as "missing structured result" even
+          // after useful work. Rationale: one no-tool finalization turn gives
+          // the child a bounded chance to emit the required contract while
+          // preventing additional tool use.
+          if (
+            maxIterations > 0 &&
+            accumulatedTurnCount >= maxIterations &&
+            !drainModeEntered &&
+            turnHadToolResults(event)
+          ) {
+            drainModeEntered = true;
+            agent.state.tools = [];
+            agent.steer({
+              role: "user",
+              content: buildDrainModePrompt(input.spawnRequest),
+              timestamp: Date.now(),
+            });
           }
         }
       });
@@ -390,6 +408,26 @@ function buildChildTaskPrompt(
     appendReviewResultInstructions(task, spawnRequest),
     spawnRequest,
   );
+}
+
+export function buildDrainModePrompt(spawnRequest: DelegatedChildRunInput["spawnRequest"]): string {
+  const contract =
+    spawnRequest.expectedResultSchema === "implementation"
+      ? "Return exactly one <delegated_implementation_result>...</delegated_implementation_result> JSON object using the evidence you already gathered."
+      : spawnRequest.expectedResultSchema === "review"
+        ? "Return exactly one <delegated_review_result>...</delegated_review_result> JSON object using the evidence you already gathered."
+        : "Return your final answer using the evidence you already gathered.";
+  return [
+    "You are at the delegated child iteration budget.",
+    "Do not call more tools; the tool surface has been removed for drain mode.",
+    contract,
+    "If evidence is incomplete, return a structured blocked or insufficient_evidence result with the handles/checks you do have rather than continuing to investigate.",
+  ].join("\n");
+}
+
+function turnHadToolResults(event: AgentEvent): boolean {
+  const toolResults = (event as { readonly toolResults?: readonly unknown[] }).toolResults;
+  return Array.isArray(toolResults) && toolResults.length > 0;
 }
 
 /** Extract denied tools from the spawn request's deniedTools. */
