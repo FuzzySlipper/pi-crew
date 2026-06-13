@@ -178,6 +178,29 @@ describe("delegated review result validation", () => {
     expect(result.value.failureCategory).toBeUndefined();
     expect(bridge.operations).toContain("release:child-session-1:completed");
   });
+
+  it("does not run review validation for implementation-mode required evidence", async () => {
+    const lifecycle = createLifecycle({
+      bridge: new FakeDelegationBridge(),
+      runner: new StaticRunner(childResult({ outcome: "success" })),
+    });
+    const result = await lifecycle.spawn({
+      parentSessionId: "parent-session",
+      task: "implement #2401",
+      parentPolicy,
+      parentDelegationConstraints: parentConstraints,
+      parentRuntime,
+      spawnRequest: {
+        task: "implement #2401",
+        expectedResultSchema: "implementation",
+        requiredEvidence: { taskIds: ["2401"], requireBranch: true },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.safeExcerpt).not.toContain("missing structured review result");
+  });
 });
 
 async function spawnReview(result: DelegatedResult): Promise<{

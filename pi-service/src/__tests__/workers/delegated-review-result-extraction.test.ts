@@ -22,6 +22,16 @@ describe("delegated review result extraction", () => {
     expect(prompt).toContain("taskDecisions");
   });
 
+  it("does not add review instructions for implementation-mode required evidence", () => {
+    const prompt = appendReviewResultInstructions("implement #2401", {
+      task: "implement #2401",
+      expectedResultSchema: "implementation",
+      requiredEvidence: { taskIds: ["2401"], requireBranch: true },
+    });
+
+    expect(prompt).toBe("implement #2401");
+  });
+
   it("extracts tagged structured review JSON from assistant text", () => {
     const review = extractReviewResult(
       `Reviewed.\n<delegated_review_result>${validReviewJson()}</delegated_review_result>`,

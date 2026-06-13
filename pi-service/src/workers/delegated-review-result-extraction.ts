@@ -8,8 +8,7 @@ export function appendReviewResultInstructions(
   task: string,
   spawnRequest: DelegationSpawnRequest,
 ): string {
-  if (spawnRequest.expectedResultSchema !== "review" && spawnRequest.requiredEvidence === undefined)
-    return task;
+  if (!requiresReviewResult(spawnRequest)) return task;
   const taskIds = spawnRequest.requiredEvidence?.taskIds ?? [];
   const taskLine =
     taskIds.length > 0
@@ -24,8 +23,7 @@ export function attachExtractedReviewResult(
   text: string | undefined,
 ): DelegatedResult {
   if (result.review !== undefined) return result;
-  if (spawnRequest.expectedResultSchema !== "review" && spawnRequest.requiredEvidence === undefined)
-    return result;
+  if (!requiresReviewResult(spawnRequest)) return result;
   const review = text === undefined ? null : extractReviewResult(text);
   if (review === null) {
     return {
@@ -48,6 +46,13 @@ export function extractReviewResult(text: string): DelegatedReviewResult | null 
   const tagged = extractTaggedJson(text);
   const parsed = parseJsonObject(tagged ?? text.trim());
   return isReviewResult(parsed) ? parsed : null;
+}
+
+function requiresReviewResult(spawnRequest: DelegationSpawnRequest): boolean {
+  return (
+    spawnRequest.expectedResultSchema === "review" ||
+    (spawnRequest.expectedResultSchema === undefined && spawnRequest.requiredEvidence !== undefined)
+  );
 }
 
 export function latestAssistantText(messages: unknown): string | undefined {

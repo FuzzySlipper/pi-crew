@@ -63,6 +63,12 @@ export {
   type DelegatedReviewFinding,
   type DelegatedReviewTaskDecision,
   type DelegatedReviewResult,
+  type DelegatedImplementationStatus,
+  type DelegatedCheckStatus,
+  type DelegatedWorkdirState,
+  type DelegatedImplementationCheck,
+  type DelegatedImplementationWorkdirStatus,
+  type DelegatedImplementationResult,
 } from "./delegation.js";
 
 // ── Error hierarchy ───────────────────────────────────────────

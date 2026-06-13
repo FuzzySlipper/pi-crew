@@ -54,11 +54,16 @@ export type DelegatedFailureCategory =
   | "insufficient_evidence"
   | "budget_exceeded";
 
-export type DelegatedExpectedResultSchema = "review";
+export type DelegatedExpectedResultSchema = "review" | "implementation";
 
 export interface DelegatedRequiredEvidence {
   readonly taskIds?: readonly string[];
   readonly requireEvidenceHandles?: boolean;
+  readonly requireBranch?: boolean;
+  readonly requireHeadCommit?: boolean;
+  readonly requireTests?: boolean;
+  readonly requireWorkdirStatus?: boolean;
+  readonly allowNoCodeChange?: boolean;
 }
 
 export type DelegatedReviewDecision =
@@ -90,6 +95,42 @@ export interface DelegatedReviewResult {
   readonly evidenceHandles: readonly DelegatedArtifactHandle[];
   readonly taskDecisions: readonly DelegatedReviewTaskDecision[];
   readonly findings?: readonly DelegatedReviewFinding[];
+}
+
+export type DelegatedImplementationStatus =
+  | "implemented"
+  | "no_code_change"
+  | "blocked"
+  | "failed"
+  | "insufficient_evidence";
+
+export type DelegatedCheckStatus = "passed" | "failed" | "not_run";
+
+export type DelegatedWorkdirState = "clean" | "dirty_expected" | "dirty_unexpected";
+
+export interface DelegatedImplementationCheck {
+  readonly command: string;
+  readonly status: DelegatedCheckStatus;
+  readonly summary: string;
+}
+
+export interface DelegatedImplementationWorkdirStatus {
+  readonly state: DelegatedWorkdirState;
+  readonly summary: string;
+  readonly dirtyFiles?: readonly string[];
+}
+
+export interface DelegatedImplementationResult {
+  readonly status: DelegatedImplementationStatus;
+  readonly taskId?: string;
+  readonly branch?: string;
+  readonly headCommit?: string;
+  readonly noCodeChangeRationale?: string;
+  readonly changedFiles?: readonly string[];
+  readonly artifactHandles: readonly DelegatedArtifactHandle[];
+  readonly checks: readonly DelegatedImplementationCheck[];
+  readonly workdirStatus?: DelegatedImplementationWorkdirStatus;
+  readonly denHandoffHandles?: readonly DelegatedArtifactHandle[];
 }
 
 /** Lineage carried by every delegated session. */
@@ -226,6 +267,9 @@ export interface DelegatedResult {
 
   /** Structured child review result when review-mode delegation is requested. */
   readonly review?: DelegatedReviewResult;
+
+  /** Structured child implementation result when implementation-mode delegation is requested. */
+  readonly implementation?: DelegatedImplementationResult;
 }
 
 /** Derived policy and lineage for a child session. */

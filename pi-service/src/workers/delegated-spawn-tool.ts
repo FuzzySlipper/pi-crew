@@ -24,7 +24,7 @@ export interface DelegatedSpawnLifecyclePort {
 interface ParsedSpawnParams {
   readonly task: string;
   readonly modelSelection?: EffectiveDelegationRuntime;
-  readonly expectedResultSchema?: "review";
+  readonly expectedResultSchema?: "review" | "implementation";
   readonly requiredEvidence?: DelegationRequiredEvidence;
 }
 
@@ -44,9 +44,44 @@ interface ParentVisibleDelegatedResult {
   readonly durationMs?: number;
   readonly error?: string;
   readonly review?: DelegatedResult["review"];
+  readonly implementation?: DelegatedResult["implementation"];
 }
 
 const MAX_SAFE_EXCERPT_CHARS = 1_600;
+
+function spawnSubagentParameters(): AgentTool["parameters"] {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["task"],
+    properties: {
+      task: { type: "string", description: "Specific delegated child task/objective." },
+      modelSelection: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          profileId: { type: "string" },
+          provider: { type: "string" },
+          model: { type: "string" },
+        },
+      },
+      expectedResultSchema: { type: "string", enum: ["review", "implementation"] },
+      requiredEvidence: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          taskIds: { type: "array", items: { type: "string" } },
+          requireEvidenceHandles: { type: "boolean" },
+          requireBranch: { type: "boolean" },
+          requireHeadCommit: { type: "boolean" },
+          requireTests: { type: "boolean" },
+          requireWorkdirStatus: { type: "boolean" },
+          allowNoCodeChange: { type: "boolean" },
+        },
+      },
+    },
+  } as AgentTool["parameters"];
+}
 
 export function createDelegatedSpawnTool(options: {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
@@ -62,7 +97,7 @@ export function createDelegatedSpawnTool(options: {
     label: "Spawn subagent",
     name: "spawn_subagent",
     description: "Spawn one delegated child session and return its structured result.",
-    parameters: { type: "object", additionalProperties: true },
+    parameters: spawnSubagentParameters(),
     execute: async (_toolCallId, params): Promise<AgentToolResult> => {
       const parsed = parseSpawnParams(params);
       const spawnResult = await options.lifecycle.spawn({
@@ -100,7 +135,8 @@ function parseSpawnParams(params: unknown): ParsedSpawnParams {
   return {
     task,
     modelSelection: isRuntimeSelection(selection) ? selection : undefined,
-    expectedResultSchema: expected === "review" ? "review" : undefined,
+    expectedResultSchema:
+      expected === "review" || expected === "implementation" ? expected : undefined,
     requiredEvidence: isRequiredEvidence(required) ? required : undefined,
   };
 }
@@ -109,9 +145,19 @@ function isRequiredEvidence(value: unknown): value is DelegationRequiredEvidence
   if (!isRecord(value)) return false;
   const taskIds = value["taskIds"];
   const requireEvidenceHandles = value["requireEvidenceHandles"];
+  const requireBranch = value["requireBranch"];
+  const requireHeadCommit = value["requireHeadCommit"];
+  const requireTests = value["requireTests"];
+  const requireWorkdirStatus = value["requireWorkdirStatus"];
+  const allowNoCodeChange = value["allowNoCodeChange"];
   return (
     (taskIds === undefined || isStringArray(taskIds)) &&
-    (requireEvidenceHandles === undefined || typeof requireEvidenceHandles === "boolean")
+    (requireEvidenceHandles === undefined || typeof requireEvidenceHandles === "boolean") &&
+    (requireBranch === undefined || typeof requireBranch === "boolean") &&
+    (requireHeadCommit === undefined || typeof requireHeadCommit === "boolean") &&
+    (requireTests === undefined || typeof requireTests === "boolean") &&
+    (requireWorkdirStatus === undefined || typeof requireWorkdirStatus === "boolean") &&
+    (allowNoCodeChange === undefined || typeof allowNoCodeChange === "boolean")
   );
 }
 
@@ -145,6 +191,7 @@ function toParentVisibleResult(result: DelegatedResult): ParentVisibleDelegatedR
     ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
     ...(result.error === undefined ? {} : { error: result.error }),
     ...(result.review === undefined ? {} : { review: result.review }),
+    ...(result.implementation === undefined ? {} : { implementation: result.implementation }),
   };
 }
 

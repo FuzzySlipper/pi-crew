@@ -32,7 +32,8 @@ export function validateDelegatedReviewResult(
 
 function requiresReviewValidation(spawnRequest: DelegationSpawnRequest): boolean {
   return (
-    spawnRequest.expectedResultSchema === "review" || spawnRequest.requiredEvidence !== undefined
+    spawnRequest.expectedResultSchema === "review" ||
+    (spawnRequest.expectedResultSchema === undefined && spawnRequest.requiredEvidence !== undefined)
   );
 }
 

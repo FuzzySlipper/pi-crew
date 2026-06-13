@@ -25,6 +25,7 @@ import {
   stringifyCause,
   withTimeout,
 } from "./delegated-spawn-lifecycle-helpers.js";
+import { validateDelegatedImplementationResult } from "./delegated-implementation-result-validation.js";
 import { validateDelegatedReviewResult } from "./delegated-review-result-validation.js";
 import type {
   DelegatedSessionCreateRequest,
@@ -280,16 +281,17 @@ export class DelegatedSpawnLifecycle {
         emitTurnVisible: (input) => this.emitTurnVisible(visibility, input),
         emitToolVisible: (input) => this.emitToolVisible(visibility, input),
       });
-      const result = validateDelegatedReviewResult(
-        await withTimeout({
-          runPromise,
-          timeoutMs: context.spawnRequest.timeoutMs ?? context.policy.maxDurationMs,
-          childSessionId: child.sessionId,
-          policyId: context.policy.policyId,
-          effectiveRuntime: context.effectiveRuntime,
-          startedAt,
-          abort,
-        }),
+      const rawResult = await withTimeout({
+        runPromise,
+        timeoutMs: context.spawnRequest.timeoutMs ?? context.policy.maxDurationMs,
+        childSessionId: child.sessionId,
+        policyId: context.policy.policyId,
+        effectiveRuntime: context.effectiveRuntime,
+        startedAt,
+        abort,
+      });
+      const result = validateDelegatedImplementationResult(
+        validateDelegatedReviewResult(rawResult, context.spawnRequest),
         context.spawnRequest,
       );
       await this.cleanupForResult(child.sessionId, result);

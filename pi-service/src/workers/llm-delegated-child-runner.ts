@@ -28,6 +28,10 @@ import {
 import type { DelegatedResult, EffectiveDelegationRuntime, ExecutionPolicy } from "@pi-crew/core";
 import type { DelegatedChildRunInput, DelegatedChildRunner } from "./delegated-spawn-lifecycle.js";
 import {
+  appendImplementationResultInstructions,
+  attachExtractedImplementationResult,
+} from "./delegated-implementation-result-extraction.js";
+import {
   appendReviewResultInstructions,
   attachExtractedReviewResult,
   latestAssistantText,
@@ -195,7 +199,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
 
       const taskMessage: AgentMessage = {
         role: "user",
-        content: appendReviewResultInstructions(input.spawnRequest.task, input.spawnRequest),
+        content: buildChildTaskPrompt(input.spawnRequest.task, input.spawnRequest),
         timestamp: Date.now(),
       };
 
@@ -216,20 +220,21 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
       });
 
       const assistantText = latestAssistantText(agent.state.messages);
-      return attachExtractedReviewResult(
-        {
-          outcome: "success",
-          summary: `Delegated child completed task: ${input.spawnRequest.task.slice(0, 200)}`,
-          policyId: input.policy.policyId,
-          childSessionId: input.childSession.sessionId,
-          effectiveRuntime: input.effectiveRuntime,
-          turnsUsed: accumulatedTurnCount > 0 ? accumulatedTurnCount : 1,
-          tokensConsumed: accumulatedTokens,
-          durationMs,
-          toolsUsed: [...actualToolsUsed],
-          evidenceChecked: false,
-          safeExcerpt: assistantText,
-        },
+      const baseResult: DelegatedResult = {
+        outcome: "success",
+        summary: `Delegated child completed task: ${input.spawnRequest.task.slice(0, 200)}`,
+        policyId: input.policy.policyId,
+        childSessionId: input.childSession.sessionId,
+        effectiveRuntime: input.effectiveRuntime,
+        turnsUsed: accumulatedTurnCount > 0 ? accumulatedTurnCount : 1,
+        tokensConsumed: accumulatedTokens,
+        durationMs,
+        toolsUsed: [...actualToolsUsed],
+        evidenceChecked: false,
+        safeExcerpt: assistantText,
+      };
+      return attachExtractedImplementationResult(
+        attachExtractedReviewResult(baseResult, input.spawnRequest, assistantText),
         input.spawnRequest,
         assistantText,
       );
@@ -376,6 +381,16 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
   }
 }
 
+function buildChildTaskPrompt(
+  task: string,
+  spawnRequest: DelegatedChildRunInput["spawnRequest"],
+): string {
+  return appendImplementationResultInstructions(
+    appendReviewResultInstructions(task, spawnRequest),
+    spawnRequest,
+  );
+}
+
 /** Extract denied tools from the spawn request's deniedTools. */
 function inputDeniedTools(): string[] {
   // This exists as a helper to be replaced with actual spawn request denied
@@ -415,6 +430,12 @@ function buildChildSystemPrompt(
   ) {
     parts.push(
       "\nReview-mode output is mandatory: final answer must contain exactly one <delegated_review_result> JSON object with status, evidenceHandles, taskDecisions, and optional findings. Do not rely on prose summaries for review results.",
+    );
+  }
+
+  if (spawnRequest.expectedResultSchema === "implementation") {
+    parts.push(
+      "\nImplementation-mode output is mandatory: final answer must contain exactly one <delegated_implementation_result> JSON object with status, taskId, branch/headCommit or noCodeChangeRationale, changedFiles/artifactHandles, checks, workdirStatus, and optional denHandoffHandles. Do not rely on prose summaries for implementation results.",
     );
   }
 

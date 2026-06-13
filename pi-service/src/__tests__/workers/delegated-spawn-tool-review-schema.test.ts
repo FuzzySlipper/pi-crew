@@ -61,6 +61,53 @@ describe("createDelegatedSpawnTool review schema", () => {
       requiredEvidence: { taskIds: ["2344", "2345"], requireEvidenceHandles: true },
     });
     expect(result.details).toMatchObject({ ok: true });
+    expect(tool.parameters).toMatchObject({
+      required: ["task"],
+      properties: { expectedResultSchema: { enum: ["review", "implementation"] } },
+    });
+  });
+
+  it("passes implementation result expectations and exposes implementation result details", async () => {
+    const lifecycle = new CapturingLifecycle();
+    const tool = createDelegatedSpawnTool({
+      lifecycle,
+      parentSessionId: "parent-session",
+      parentPolicy: policy,
+      parentDelegationConstraints: { maxSpawnDepth: 1 },
+      parentRuntime: runtime,
+    });
+
+    const result = await tool.execute(
+      "call-1",
+      {
+        task: "implement #2401",
+        expectedResultSchema: "implementation",
+        requiredEvidence: {
+          taskIds: ["2401"],
+          requireBranch: true,
+          requireHeadCommit: true,
+          requireTests: true,
+          requireWorkdirStatus: true,
+        },
+      },
+      new AbortController().signal,
+    );
+
+    expect(lifecycle.inputs[0]?.spawnRequest).toMatchObject({
+      task: "implement #2401",
+      expectedResultSchema: "implementation",
+      requiredEvidence: {
+        taskIds: ["2401"],
+        requireBranch: true,
+        requireHeadCommit: true,
+        requireTests: true,
+        requireWorkdirStatus: true,
+      },
+    });
+    expect(result.details).toMatchObject({
+      ok: true,
+      result: { implementation: { status: "implemented", headCommit: "abc123" } },
+    });
   });
 });
 
@@ -87,6 +134,18 @@ class CapturingLifecycle {
               evidenceHandles: [{ type: "den_message", messageId: 14424, description: "packet" }],
             },
           ],
+        },
+        implementation: {
+          status: "implemented",
+          taskId: "2401",
+          branch: "feature/delegated-coding",
+          headCommit: "abc123",
+          changedFiles: ["pi-core/src/delegation.ts"],
+          artifactHandles: [
+            { type: "code_change", commitSha: "abc123", description: "implementation commit" },
+          ],
+          checks: [{ command: "npm test -- delegated", status: "passed", summary: "passed" }],
+          workdirStatus: { state: "clean", summary: "clean" },
         },
       }),
     );
