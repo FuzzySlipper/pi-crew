@@ -21,7 +21,7 @@ class FakeConversationalAgent implements ConversationalAgentAdapter {
   aborted = false;
 
   constructor(
-    private readonly responseText: string,
+    private readonly response: string | AssistantMessage,
     private readonly emitFullLifecycle = false,
   ) {}
 
@@ -34,7 +34,8 @@ class FakeConversationalAgent implements ConversationalAgentAdapter {
 
   async prompt(messages: AgentMessage[]): Promise<void> {
     this.prompts.push(messages);
-    const assistantMessage = createAssistantMessage(this.responseText);
+    const assistantMessage =
+      typeof this.response === "string" ? createAssistantMessage(this.response) : this.response;
     this.state.messages = [...messages, assistantMessage];
     await this.emit(...this.lifecycleEvents(assistantMessage));
   }
@@ -110,8 +111,8 @@ class CapturingConversationalAgentFactory implements ConversationalAgentFactory 
   readonly agent: FakeConversationalAgent;
   readonly created: ConversationalAgentFactoryInput[] = [];
 
-  constructor(responseText: string, emitFullLifecycle = false) {
-    this.agent = new FakeConversationalAgent(responseText, emitFullLifecycle);
+  constructor(response: string | AssistantMessage, emitFullLifecycle = false) {
+    this.agent = new FakeConversationalAgent(response, emitFullLifecycle);
   }
 
   create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
@@ -137,6 +138,32 @@ function createAssistantMessage(text: string): AssistantMessage {
     },
     stopReason: "stop",
     timestamp: Date.parse("2026-06-10T00:00:00.000Z"),
+  };
+}
+
+type ErrorAssistantMessage = AssistantMessage & {
+  readonly errorMessage: string;
+  readonly stopReason: "error";
+};
+
+function createErrorAssistantMessage(errorMessage: string): ErrorAssistantMessage {
+  return {
+    role: "assistant",
+    content: [],
+    api: "openai-completions",
+    provider: "test-provider",
+    model: "test-model",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "error",
+    timestamp: Date.parse("2026-06-10T00:00:00.000Z"),
+    errorMessage,
   };
 }
 
@@ -218,6 +245,30 @@ describe("ConversationalAgentResponder", () => {
         },
       ],
     ]);
+  });
+
+  it("returns model errors as visible channel text instead of blank messages", async () => {
+    const factory = new CapturingConversationalAgentFactory(
+      createErrorAssistantMessage("402 insufficient credits"),
+    );
+    const responder = new ConversationalAgentResponder({
+      agentFactory: factory,
+      eventBus: new FakeEventBus(),
+      logger: new FakeLogger(),
+      systemPrompt: "System prompt",
+    });
+
+    const response = await responder.respond({
+      sessionId: "sess-conv-error",
+      profileId: "pi-orchestrator",
+      instanceId: "inst-conv-error",
+      message: createTextMessage("ping"),
+    });
+
+    expect(response).toEqual({
+      kind: "text",
+      text: "pi-orchestrator model call failed: 402 insufficient credits",
+    });
   });
 
   it("emits typed conversation turn lifecycle events without worker correlation", async () => {

@@ -151,7 +151,7 @@ export class ConversationalAgentResponder implements AgentResponder {
       const history = await this.#loadHistory(request.sessionId);
       await agent.prompt([...history, userMessage]);
       await agent.waitForIdle();
-      const response = responseFromMessages(agent.state.messages);
+      const response = responseFromMessages(agent.state.messages, request.profileId);
       await this.#appendTurn(request.sessionId, userMessage, agent.state.messages);
       this.#logger.debug("Completed Agent-backed conversational response", {
         profileId: request.profileId,
@@ -297,7 +297,10 @@ function contentToText(content: AgentResponseRequest["message"]["content"]): str
   return "[non-text content]";
 }
 
-function responseFromMessages(messages: readonly AgentMessage[]): ChannelContent {
+function responseFromMessages(
+  messages: readonly AgentMessage[],
+  profileId = "agent",
+): ChannelContent {
   const assistant = lastAssistantMessage(messages);
   if (assistant === undefined) {
     throw new ConfigurationError("Conversational Agent completed without an assistant response");
@@ -306,6 +309,10 @@ function responseFromMessages(messages: readonly AgentMessage[]): ChannelContent
     .filter(isTextContent)
     .map((part) => part.text)
     .join("");
+  const errorMessage = assistantErrorMessage(assistant);
+  if (errorMessage !== undefined) {
+    return { kind: "text", text: `${profileId} model call failed: ${errorMessage}` };
+  }
   return { kind: "text", text };
 }
 
@@ -321,6 +328,18 @@ function lastAssistantMessage(messages: readonly AgentMessage[]): AssistantMessa
 
 function isAssistantMessage(message: AgentMessage | undefined): message is AssistantMessage {
   return message?.role === "assistant";
+}
+
+function assistantErrorMessage(message: AssistantMessage): string | undefined {
+  const details = message as AssistantMessage & {
+    readonly stopReason?: unknown;
+    readonly errorMessage?: unknown;
+  };
+  if (details.stopReason !== "error") return undefined;
+  if (typeof details.errorMessage === "string" && details.errorMessage.trim().length > 0) {
+    return details.errorMessage.trim();
+  }
+  return "unknown model error";
 }
 
 function isTextContent(part: AssistantMessage["content"][number]): part is TextContent {
