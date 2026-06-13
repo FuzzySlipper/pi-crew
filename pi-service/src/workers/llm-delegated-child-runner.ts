@@ -17,14 +17,7 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import {
-  getModels,
-  getProviders,
-  streamSimple,
-  type Api,
-  type KnownProvider,
-  type Model,
-} from "@earendil-works/pi-ai";
+import { streamSimple } from "@earendil-works/pi-ai";
 import type { DelegatedResult, EffectiveDelegationRuntime, ExecutionPolicy } from "@pi-crew/core";
 import type { DelegatedChildRunInput, DelegatedChildRunner } from "./delegated-spawn-lifecycle.js";
 import {
@@ -36,6 +29,7 @@ import {
   attachExtractedReviewResult,
   latestAssistantText,
 } from "./delegated-review-result-extraction.js";
+import { resolveDelegatedChildModel } from "./llm-delegated-child-model-resolution.js";
 
 const USAGE_ACCUMULATION_INTERVAL_MS = 50;
 
@@ -335,49 +329,8 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     return 10;
   }
 
-  #resolveModel(runtime: EffectiveDelegationRuntime): Model<Api> {
-    const baseUrl = this.#config.baseUrl;
-    const modelName = this.#config.modelName ?? runtime.model ?? "delegated-child";
-
-    if (baseUrl !== undefined) {
-      return {
-        id: modelName,
-        name: modelName,
-        api: "openai-completions",
-        provider: runtime.provider ?? "custom",
-        baseUrl,
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 131_072,
-        maxTokens: 2048,
-        compat: {
-          supportsDeveloperRole: false,
-          supportsStore: false,
-          supportsReasoningEffort: false,
-          supportsUsageInStreaming: true,
-          maxTokensField: "max_tokens",
-          supportsStrictMode: false,
-          thinkingFormat: "qwen",
-        },
-      };
-    }
-
-    const provider = runtime.provider;
-    if (provider !== undefined) {
-      const knownProvider = asKnownProvider(provider);
-      if (knownProvider !== null) {
-        const model = getModels(knownProvider).find((candidate) => candidate.id === modelName);
-        if (model !== undefined) return model;
-      }
-    }
-
-    // DESIGN: fallback to OpenAI-compatible with the provided provider/model.
-    // Rationale: if no baseUrl and no known provider, we cannot resolve.
-    // This should not happen in production but provides a safe path.
-    throw new Error(
-      `Cannot resolve LLM model for delegated child: provider=${provider ?? "undefined"} model=${modelName}`,
-    );
+  #resolveModel(runtime: EffectiveDelegationRuntime) {
+    return resolveDelegatedChildModel(runtime, this.#config);
   }
 }
 
@@ -397,10 +350,6 @@ function inputDeniedTools(): string[] {
   // field lookup when the parent explicitly denies tools. In v1, deniedTools
   // are primarily from policy.
   return [];
-}
-
-function asKnownProvider(provider: string): KnownProvider | null {
-  return getProviders().includes(provider as KnownProvider) ? (provider as KnownProvider) : null;
 }
 
 function buildChildSystemPrompt(
