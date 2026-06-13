@@ -56,9 +56,21 @@ export function latestAssistantText(messages: unknown): string | undefined {
     const candidate = messages[index];
     if (!isRecord(candidate) || candidate["role"] !== "assistant") continue;
     const content = candidate["content"];
-    if (typeof content === "string" && content.trim() !== "") return content;
+    const text = contentToText(content);
+    if (text !== undefined && text.trim() !== "") return text;
   }
   return undefined;
+}
+
+function contentToText(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return undefined;
+  const parts = content.flatMap((block) => {
+    if (!isRecord(block) || block["type"] !== "text") return [];
+    const text = block["text"];
+    return typeof text === "string" ? [text] : [];
+  });
+  return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
 function extractTaggedJson(text: string): string | null {

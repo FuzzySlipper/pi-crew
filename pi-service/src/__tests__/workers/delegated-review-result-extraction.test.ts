@@ -60,7 +60,7 @@ describe("delegated review result extraction", () => {
     const text = latestAssistantText([
       { role: "assistant", content: "old" },
       { role: "toolResult", content: "tool" },
-      { role: "assistant", content: "latest" },
+      { role: "assistant", content: [{ type: "text", text: "latest" }] },
     ]);
 
     expect(text).toBe("latest");
