@@ -1,7 +1,7 @@
 /** Tests for delegated child drain-mode prompting. */
 
 import { describe, expect, it } from "vitest";
-import { buildDrainModePrompt } from "../../workers/llm-delegated-child-runner.js";
+import { buildDrainModePrompt } from "../../workers/delegated-child-drain-mode.js";
 
 describe("buildDrainModePrompt", () => {
   it("forces implementation children to finalize without more tools", () => {

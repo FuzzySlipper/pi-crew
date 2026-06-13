@@ -18,7 +18,13 @@ import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { streamSimple, type Api, type Model } from "@earendil-works/pi-ai";
-import type { DelegatedResult, EffectiveDelegationRuntime, ExecutionPolicy } from "@pi-crew/core";
+import type {
+  DelegatedImplementationResult,
+  DelegatedResult,
+  DelegatedReviewResult,
+  EffectiveDelegationRuntime,
+  ExecutionPolicy,
+} from "@pi-crew/core";
 import type {
   DelegatedChildRunInput,
   DelegatedChildRunner,
@@ -33,6 +39,8 @@ import {
   attachExtractedReviewResult,
   latestAssistantText,
 } from "./delegated-review-result-extraction.js";
+import { buildDrainModePrompt, turnHadToolResults } from "./delegated-child-drain-mode.js";
+import { createDelegatedResultPostTools } from "./delegated-result-post-tools.js";
 import { resolveDelegatedChildModel } from "./llm-delegated-child-model-resolution.js";
 
 const USAGE_ACCUMULATION_INTERVAL_MS = 50;
@@ -147,7 +155,21 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
       });
       const resolvedRuntime = runtimeResolution?.effectiveRuntime ?? input.effectiveRuntime;
       const model = runtimeResolution?.model ?? this.#resolveModel(resolvedRuntime);
-      const tools = [...(runtimeResolution?.tools ?? this.#resolveTools(toolFilter))];
+      let postedImplementation: DelegatedImplementationResult | undefined;
+      let postedReview: DelegatedReviewResult | undefined;
+      const resultPostTools = createDelegatedResultPostTools({
+        expectedResultSchema: input.spawnRequest.expectedResultSchema,
+        onImplementation: (result) => {
+          postedImplementation = result;
+        },
+        onReview: (result) => {
+          postedReview = result;
+        },
+      });
+      const tools = [
+        ...(runtimeResolution?.tools ?? this.#resolveTools(toolFilter)),
+        ...resultPostTools,
+      ];
       const systemPrompt = buildChildSystemPrompt(
         resolvedRuntime,
         toolFilter,
@@ -175,12 +197,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
       });
       let drainModeEntered = false;
 
-      // Subscribe to Agent events for token usage, turn tracking,
-      // and progress visibility (#2285, #2286)
-      // DESIGN (#2286): The Agent loop handles multi-turn automatically.
-      // We subscribe to turn_end events to track iteration count,
-      // emit progress to the parent, and enforce hard bounds
-      // (maxIterations, no-progress detection).
+      // Track Agent events for token usage, visibility, and bounded execution.
       const unsubscribe = agent.subscribe((event: AgentEvent, signal: AbortSignal) => {
         if (signal.aborted) return;
 
@@ -290,8 +307,17 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         tokensConsumed: accumulatedTokens,
         durationMs,
         toolsUsed: [...actualToolsUsed],
-        evidenceChecked: false,
+        evidenceChecked: postedImplementation !== undefined || postedReview !== undefined,
         safeExcerpt: assistantText,
+        implementation: postedImplementation,
+        review: postedReview,
+        artifacts:
+          postedImplementation !== undefined
+            ? [
+                ...postedImplementation.artifactHandles,
+                ...(postedImplementation.denHandoffHandles ?? []),
+              ]
+            : postedReview?.evidenceHandles,
       };
       return attachExtractedImplementationResult(
         attachExtractedReviewResult(baseResult, input.spawnRequest, assistantText),
@@ -408,26 +434,6 @@ function buildChildTaskPrompt(
     appendReviewResultInstructions(task, spawnRequest),
     spawnRequest,
   );
-}
-
-export function buildDrainModePrompt(spawnRequest: DelegatedChildRunInput["spawnRequest"]): string {
-  const contract =
-    spawnRequest.expectedResultSchema === "implementation"
-      ? "Return exactly one <delegated_implementation_result>...</delegated_implementation_result> JSON object using the evidence you already gathered."
-      : spawnRequest.expectedResultSchema === "review"
-        ? "Return exactly one <delegated_review_result>...</delegated_review_result> JSON object using the evidence you already gathered."
-        : "Return your final answer using the evidence you already gathered.";
-  return [
-    "You are at the delegated child iteration budget.",
-    "Do not call more tools; the tool surface has been removed for drain mode.",
-    contract,
-    "If evidence is incomplete, return a structured blocked or insufficient_evidence result with the handles/checks you do have rather than continuing to investigate.",
-  ].join("\n");
-}
-
-function turnHadToolResults(event: AgentEvent): boolean {
-  const toolResults = (event as { readonly toolResults?: readonly unknown[] }).toolResults;
-  return Array.isArray(toolResults) && toolResults.length > 0;
 }
 
 /** Extract denied tools from the spawn request's deniedTools. */
