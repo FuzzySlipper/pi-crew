@@ -98,8 +98,17 @@ export interface DelegatedChildRunInput {
   emitToolVisible(input: DelegatedToolVisibilityInput): Promise<void>;
 }
 
+export interface DelegatedChildRuntimeResolveInput {
+  readonly policy: ExecutionPolicy;
+  readonly spawnRequest: DelegationSpawnRequest;
+  readonly effectiveRuntime: EffectiveDelegationRuntime;
+}
+
 export interface DelegatedChildRunner {
   run(input: DelegatedChildRunInput): Promise<DelegatedResult>;
+  resolveEffectiveRuntime?(
+    input: DelegatedChildRuntimeResolveInput,
+  ): Promise<EffectiveDelegationRuntime>;
 }
 
 export type DelegatedSpawnErrorCode =
@@ -200,8 +209,14 @@ export class DelegatedSpawnLifecycle {
       return fail("policy_derivation_denied", policyResult.error.message, policyResult.error.code);
     }
 
+    const effectiveRuntime = await this.resolveChildEffectiveRuntime({
+      policy: policyResult.value.policy,
+      spawnRequest,
+      effectiveRuntime: runtimeResult.value,
+    });
+
     const gate = await this.#hookRegistry.fire("before_session_create", {
-      profileId: runtimeResult.value.profileId,
+      profileId: effectiveRuntime.profileId,
       kind: "delegated",
       channelBindings: [],
       delegation: lineage,
@@ -213,11 +228,17 @@ export class DelegatedSpawnLifecycle {
       input,
       lineage,
       spawnRequest,
-      effectiveRuntime: runtimeResult.value,
+      effectiveRuntime,
       policy: policyResult.value.policy,
       delegationConstraints: policyResult.value.delegationConstraints,
     });
     return childResult;
+  }
+
+  private async resolveChildEffectiveRuntime(
+    input: DelegatedChildRuntimeResolveInput,
+  ): Promise<EffectiveDelegationRuntime> {
+    return this.#childRunner.resolveEffectiveRuntime?.(input) ?? input.effectiveRuntime;
   }
 
   private async createRunAndCleanup(context: {

@@ -93,6 +93,66 @@ describe("createProfileBackedDelegatedChildRuntimeResolver", () => {
     expect(toolProvider.resolvedNames).toEqual(["read_file", "terminal"]);
     expect(resolution.tools?.map((tool) => tool.name)).toEqual(["read_file", "terminal"]);
   });
+
+  it("lets an explicit spawn model override the profile model after policy resolution", async () => {
+    const profilesRoot = mkdtempSync(join(tmpdir(), "pi-profile-backed-override-"));
+    mkdirSync(join(profilesRoot, "reviewer-child"));
+    writeFileSync(
+      join(profilesRoot, "reviewer-child", "profile.yaml"),
+      [
+        "name: Reviewer Child",
+        "description: Delegated reviewer profile",
+        "skills: []",
+        "modelConfig:",
+        "  provider: den-router",
+        "  model: profile-review-model",
+        "  baseUrl: http://127.0.0.1:18082/v1",
+        "toolPolicy:",
+        "  mode: allow_all",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(join(profilesRoot, "reviewer-child", "soul.md"), "Reviewer prompt.");
+
+    const registry = new ToolRegistry(new FakeLogger());
+    registry.setMcpTools([mcpTool("get_task")]);
+    const resolver = createProfileBackedDelegatedChildRuntimeResolver({
+      profilesRoot,
+      toolRegistry: registry,
+      toolProvider: new CapturingToolProvider(),
+      fallbackBaseUrl: "http://127.0.0.1:9999/v1",
+    });
+
+    const resolution = await resolver.resolve({
+      effectiveRuntime: {
+        profileId: "reviewer-child",
+        provider: "override-provider",
+        model: "override-model",
+      },
+      spawnRequest: {
+        task: "confirm override",
+        modelSelection: {
+          profileId: "reviewer-child",
+          provider: "override-provider",
+          model: "override-model",
+        },
+      },
+      policy: createExecutionPolicy({
+        policyId: "delegated-review-policy",
+        rootPath: "/workspace",
+        allowedTools: [],
+      }),
+      toolFilter: { allowedToolNames: [], deniedToolNames: [] },
+    });
+
+    expect(resolution.model?.id).toBe("override-model");
+    expect(resolution.model?.provider).toBe("override-provider");
+    expect(resolution.effectiveRuntime).toEqual({
+      profileId: "reviewer-child",
+      provider: "override-provider",
+      model: "override-model",
+    });
+  });
 });
 
 function mcpTool(name: string) {

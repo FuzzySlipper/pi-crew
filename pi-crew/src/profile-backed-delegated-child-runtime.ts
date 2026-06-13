@@ -32,8 +32,14 @@ class ProfileBackedDelegatedChildRuntimeResolver implements DelegatedChildRuntim
     const model = resolveDelegatedChildModel(
       {
         profileId: profile.id,
-        provider: modelConfig?.provider ?? input.effectiveRuntime.provider,
-        model: modelConfig?.model ?? input.effectiveRuntime.model,
+        provider:
+          input.spawnRequest.modelSelection?.provider ??
+          modelConfig?.provider ??
+          input.effectiveRuntime.provider,
+        model:
+          input.spawnRequest.modelSelection?.model ??
+          modelConfig?.model ??
+          input.effectiveRuntime.model,
       },
       {
         baseUrl: modelConfig?.baseUrl ?? this.deps.fallbackBaseUrl,

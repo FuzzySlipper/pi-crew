@@ -19,7 +19,11 @@ import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { streamSimple, type Api, type Model } from "@earendil-works/pi-ai";
 import type { DelegatedResult, EffectiveDelegationRuntime, ExecutionPolicy } from "@pi-crew/core";
-import type { DelegatedChildRunInput, DelegatedChildRunner } from "./delegated-spawn-lifecycle.js";
+import type {
+  DelegatedChildRunInput,
+  DelegatedChildRunner,
+  DelegatedChildRuntimeResolveInput,
+} from "./delegated-spawn-lifecycle.js";
 import {
   appendImplementationResultInstructions,
   attachExtractedImplementationResult,
@@ -102,6 +106,19 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
 
   constructor(config: LlmDelegatedChildRunnerConfig = {}) {
     this.#config = config;
+  }
+
+  async resolveEffectiveRuntime(
+    input: DelegatedChildRuntimeResolveInput,
+  ): Promise<EffectiveDelegationRuntime> {
+    const toolFilter = this.#filterChildTools(input.spawnRequest.allowedTools, input.policy);
+    const runtimeResolution = await this.#config.runtimeResolver?.resolve({
+      effectiveRuntime: input.effectiveRuntime,
+      spawnRequest: input.spawnRequest,
+      policy: input.policy,
+      toolFilter,
+    });
+    return runtimeResolution?.effectiveRuntime ?? input.effectiveRuntime;
   }
 
   async run(input: DelegatedChildRunInput): Promise<DelegatedResult> {

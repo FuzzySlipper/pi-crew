@@ -281,12 +281,17 @@ describe("DelegatedSpawnLifecycle", () => {
       parentRuntime,
     });
 
-    const result = await tool.execute("tool-call-1", { task: "inspect" }, new AbortController().signal);
+    const result = await tool.execute(
+      "tool-call-1",
+      { task: "inspect" },
+      new AbortController().signal,
+    );
     const content = result.content[0];
     const text = content?.type === "text" ? content.text : "";
-    const details = isRecord(result.details) && isRecord(result.details["result"])
-      ? result.details["result"]
-      : {};
+    const details =
+      isRecord(result.details) && isRecord(result.details["result"])
+        ? result.details["result"]
+        : {};
 
     expect(text).toContain("Delegated child result");
     expect(text).toContain("Verify before trusting: evidenceChecked=false");
