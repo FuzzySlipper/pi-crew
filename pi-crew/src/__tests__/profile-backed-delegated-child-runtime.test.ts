@@ -94,6 +94,64 @@ describe("createProfileBackedDelegatedChildRuntimeResolver", () => {
     expect(resolution.tools?.map((tool) => tool.name)).toEqual(["read_file", "terminal"]);
   });
 
+  it("expands coder profile toolsets to Den and local code tools", async () => {
+    const profilesRoot = mkdtempSync(join(tmpdir(), "pi-profile-backed-tools-"));
+    mkdirSync(join(profilesRoot, "coder-worker"));
+    writeFileSync(
+      join(profilesRoot, "coder-worker", "profile.yaml"),
+      [
+        "name: Coder Worker",
+        "description: Delegated coder profile",
+        "skills: []",
+        "modelConfig:",
+        "  provider: den-router",
+        "  model: coder-profile-model",
+        "  baseUrl: http://127.0.0.1:18082/v1",
+        "toolPolicy:",
+        "  mode: allow_list",
+        "  allow:",
+        "    - filesystem",
+        "    - terminal",
+        "    - git",
+        "    - den",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(join(profilesRoot, "coder-worker", "soul.md"), "Coder prompt.");
+
+    const registry = new ToolRegistry(new FakeLogger());
+    registry.setMcpTools([mcpTool("get_task"), mcpTool("search_documents")]);
+    const toolProvider = new CapturingToolProvider();
+    const resolver = createProfileBackedDelegatedChildRuntimeResolver({
+      profilesRoot,
+      toolRegistry: registry,
+      toolProvider,
+      fallbackBaseUrl: "http://127.0.0.1:9999/v1",
+    });
+
+    await resolver.resolve({
+      effectiveRuntime: { profileId: "coder-worker" },
+      spawnRequest: { task: "tool smoke" },
+      policy: createExecutionPolicy({
+        policyId: "delegated-coder-policy",
+        rootPath: "/workspace",
+        allowedTools: [],
+      }),
+      toolFilter: { allowedToolNames: [], deniedToolNames: [] },
+    });
+
+    expect(toolProvider.resolvedNames).toEqual([
+      "get_task",
+      "search_documents",
+      "read_file",
+      "write_file",
+      "search_files",
+      "terminal",
+      "git_status",
+      "git_diff",
+    ]);
+  });
+
   it("lets an explicit spawn model override the profile model after policy resolution", async () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-profile-backed-override-"));
     mkdirSync(join(profilesRoot, "reviewer-child"));

@@ -7,6 +7,7 @@ import {
   type ToolProvider,
 } from "@pi-crew/service";
 import type { ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
+import { delegatedChildLocalToolNames } from "./delegated-child-tool-provider.js";
 
 export interface ProfileBackedDelegatedChildRuntimeDeps {
   readonly profilesRoot: string;
@@ -45,10 +46,14 @@ class ProfileBackedDelegatedChildRuntimeResolver implements DelegatedChildRuntim
         baseUrl: modelConfig?.baseUrl ?? this.deps.fallbackBaseUrl,
       },
     );
-    const allowedToolNames = selectProfileToolNames(
-      profile.toolPolicy,
-      this.deps.toolRegistry.listTools().map((tool) => tool.name),
-    );
+    const allowedToolNames = [
+      ...new Set(
+        selectProfileToolNames(profile.toolPolicy, [
+          ...this.deps.toolRegistry.listTools().map((tool) => tool.name),
+          ...delegatedChildLocalToolNames,
+        ]),
+      ),
+    ];
     const tools = this.deps.toolProvider.resolveTools(allowedToolNames);
     return Promise.resolve({
       systemPrompt: assembleSystemPrompt({
@@ -96,8 +101,45 @@ function selectProfileToolNames(
 function toolMatchesSelectedSet(toolName: string, toolSet: string): boolean {
   const normalized = toolName.toLowerCase();
   const normalizedSet = toolSet.toLowerCase();
-  if (normalizedSet === "all") return true;
-  return normalized === normalizedSet || normalized.startsWith(`${normalizedSet}_`);
+  switch (normalizedSet) {
+    case "all":
+      return true;
+    case "den":
+      return SAFE_DEN_TOOL_NAMES.has(stripMcpPrefix(normalized));
+    case "filesystem":
+      return ["read_file", "write_file", "search_files"].includes(normalized);
+    case "filesystem_readonly":
+      return ["read_file", "search_files"].includes(normalized);
+    case "terminal":
+      return normalized === "terminal";
+    case "git":
+    case "git_diff_log":
+      return normalized.startsWith("git_") || normalized === "git";
+    default:
+      return normalized === normalizedSet || normalized.startsWith(`${normalizedSet}_`);
+  }
+}
+
+const SAFE_DEN_TOOL_NAMES = new Set([
+  "get_task",
+  "get_thread",
+  "get_messages",
+  "get_latest_task_packet",
+  "get_latest_worker_completion",
+  "get_task_workflow_summary",
+  "get_document",
+  "search_documents",
+  "query_librarian",
+  "list_review_findings",
+  "list_review_rounds",
+  "get_worker_run_status",
+  "den_channels_read_recent",
+]);
+
+function stripMcpPrefix(toolName: string): string {
+  if (toolName.startsWith("mcp_den_")) return toolName.slice("mcp_den_".length);
+  if (toolName.startsWith("den_")) return toolName.slice("den_".length);
+  return toolName;
 }
 
 function resolveApiKey(
