@@ -22,6 +22,7 @@ import {
   ConversationalAgentResponderFactory,
   createDelegatedFanOutTool,
   createDelegatedSpawnTool,
+  createDelegationHelperTools,
   type AgentResponderFactory,
   type AgentResponderFactoryContext,
   type ConversationalAgentFactory,
@@ -250,25 +251,35 @@ function addDelegationTool(
   if (delegation === undefined || !agentAllowsDelegation(agent, runtime)) return runtime.tools;
   const parentSessionId = context.sessionId ?? agent.session.sessionId;
   const parentRuntime = parentRuntimeFor(agent, runtime);
+  const parentPolicy = parentPolicyForDelegation(runtime);
+  const constraints = delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 };
+  const commonOptions = {
+    lifecycle: delegation.lifecycle,
+    parentSessionId,
+    parentPolicy,
+    parentDelegationConstraints: constraints,
+    parentRuntime,
+    allowedRuntimes: delegation.allowedRuntimes ?? [],
+  };
   return [
     ...runtime.tools,
-    createDelegatedSpawnTool({
-      lifecycle: delegation.lifecycle,
-      parentSessionId,
-      parentPolicy: parentPolicyForDelegation(runtime),
-      parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
-      parentRuntime,
-      allowedRuntimes: delegation.allowedRuntimes ?? [],
-    }) as unknown as AgentTool,
-    createDelegatedFanOutTool({
-      lifecycle: delegation.lifecycle,
-      parentSessionId,
-      parentPolicy: parentPolicyForDelegation(runtime),
-      parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
-      parentRuntime,
-      allowedRuntimes: delegation.allowedRuntimes ?? [],
-    }) as unknown as AgentTool,
+    createDelegatedSpawnTool(commonOptions) as unknown as AgentTool,
+    createDelegatedFanOutTool(commonOptions) as unknown as AgentTool,
+    ...createAllowedDelegationHelperTools(runtime, commonOptions),
   ];
+}
+function createAllowedDelegationHelperTools(
+  runtime: ResolvedConversationalAgentRuntime,
+  options: Parameters<typeof createDelegationHelperTools>[0],
+): readonly AgentTool[] {
+  return createDelegationHelperTools(options)
+    .filter((tool) => toolAllowedByProfilePolicy(tool.name, runtime.profile.toolPolicy))
+    .filter((tool) => !runtime.executionPolicy.deniedTools.includes(tool.name))
+    .filter(
+      (tool) =>
+        runtime.executionPolicy.allowedTools.length === 0 ||
+        runtime.executionPolicy.allowedTools.includes(tool.name),
+    ) as unknown as readonly AgentTool[];
 }
 function parentPolicyForDelegation(runtime: ResolvedConversationalAgentRuntime): ExecutionPolicy {
   if (runtime.executionPolicy.allowedTools.length > 0) return runtime.executionPolicy;

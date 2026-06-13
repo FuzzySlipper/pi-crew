@@ -22,7 +22,16 @@ describe("prime-coder profile", () => {
     expect(profile.runtimeConfig).toMatchObject({ maxIterations: 48 });
     expect(profile.toolPolicy).toEqual({
       mode: "allow_list",
-      allow: expect.arrayContaining(["den", "filesystem", "terminal", "git", "delegation"]),
+      allow: expect.arrayContaining([
+        "den",
+        "filesystem",
+        "terminal",
+        "git",
+        "delegation",
+        "scout_codebase",
+        "summarize_files",
+        "find_relevant_paths",
+      ]),
     });
     expect(profile.systemPrompt).toContain("Prime/assistant operating model");
     expect(profile.systemPrompt).toContain("Use assistant helpers for broad discovery");

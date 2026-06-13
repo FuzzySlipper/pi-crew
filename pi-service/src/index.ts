@@ -199,6 +199,11 @@ export {
 } from "./workers/delegated-spawn-tool.js";
 export { DenDelegationProjectionExtension } from "./workers/den-delegation-projection.js";
 export {
+  createDelegationHelperTools,
+  type DelegatedHelperToolResult,
+  type DelegatedHelperPathHandle,
+} from "./workers/delegated-helper-tools.js";
+export {
   createDelegatedFanOutTool,
   type ParentVisibleFanOutResult,
 } from "./workers/delegated-fan-out-tool.js";

@@ -20,7 +20,9 @@ class DelegatingAgent implements ConversationalAgentAdapter {
   readonly #signal = new AbortController().signal;
   readonly state = { messages: [] as AgentMessage[] };
   constructor(private readonly tools: readonly AgentTool[]) {}
-  subscribe(_listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void {
+  subscribe(
+    _listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void,
+  ): () => void {
     return () => undefined;
   }
   async prompt(messages: AgentMessage[]): Promise<void> {
@@ -38,7 +40,9 @@ class ReadbackAgent implements ConversationalAgentAdapter {
   readonly #signal = new AbortController().signal;
   readonly state = { messages: [] as AgentMessage[] };
   constructor(private readonly tools: readonly AgentTool[]) {}
-  subscribe(_listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void {
+  subscribe(
+    _listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void,
+  ): () => void {
     return () => undefined;
   }
   async prompt(messages: AgentMessage[]): Promise<void> {
@@ -58,7 +62,9 @@ class CapturingAgentFactory implements ConversationalAgentFactory {
   constructor(private readonly mode: "delegation" | "readback" = "delegation") {}
   create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
     this.inputs.push(input);
-    return this.mode === "delegation" ? new DelegatingAgent(input.tools ?? []) : new ReadbackAgent(input.tools ?? []);
+    return this.mode === "delegation"
+      ? new DelegatingAgent(input.tools ?? [])
+      : new ReadbackAgent(input.tools ?? []);
   }
 }
 
@@ -66,13 +72,15 @@ class CapturingLifecycle implements DelegatedSpawnLifecyclePort {
   inputs: DelegatedSpawnInput[] = [];
   spawn(input: DelegatedSpawnInput) {
     this.inputs.push(input);
-    return Promise.resolve(ok({
-      outcome: "success" as const,
-      summary: "child completed",
-      policyId: input.parentPolicy.policyId,
-      childSessionId: "child-session-1",
-      effectiveRuntime: input.parentRuntime,
-    }));
+    return Promise.resolve(
+      ok({
+        outcome: "success" as const,
+        summary: "child completed",
+        policyId: input.parentPolicy.policyId,
+        childSessionId: "child-session-1",
+        effectiveRuntime: input.parentRuntime,
+      }),
+    );
   }
 }
 
@@ -82,25 +90,33 @@ describe("conversational delegation wiring", () => {
     writeProfile(profilesRoot, "runner-profile");
     const agent = CrewConfigSchema.parse({
       den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
-      conversationalAgents: [{
-        agentId: "runner",
-        enabled: true,
-        profileId: "runner-profile",
-        profileIdentity: "runner",
-        memberIdentity: "runner",
-        session: { ownerId: "owner", sessionId: "configured-session", maxHistoryMessages: 20 },
-        channels: [{ providerId: "den-channels", channelId: "642", subscriptionIdentity: "runner:ordinary" }],
-        runtime: {
-          mode: "agent",
-          provider: "local-openai-compatible",
-          model: "local-model",
-          baseUrl: "http://127.0.0.1:11434/v1",
-          systemPromptSource: "profile",
-          tools: { allow: ["delegation"] },
-          toolPolicy: { mode: "profile" },
+      conversationalAgents: [
+        {
+          agentId: "runner",
+          enabled: true,
+          profileId: "runner-profile",
+          profileIdentity: "runner",
+          memberIdentity: "runner",
+          session: { ownerId: "owner", sessionId: "configured-session", maxHistoryMessages: 20 },
+          channels: [
+            {
+              providerId: "den-channels",
+              channelId: "642",
+              subscriptionIdentity: "runner:ordinary",
+            },
+          ],
+          runtime: {
+            mode: "agent",
+            provider: "local-openai-compatible",
+            model: "local-model",
+            baseUrl: "http://127.0.0.1:11434/v1",
+            systemPromptSource: "profile",
+            tools: { allow: ["delegation"] },
+            toolPolicy: { mode: "profile" },
+          },
+          lifecycle: { turnTimeoutMs: 300000 },
         },
-        lifecycle: { turnTimeoutMs: 300000 },
-      }],
+      ],
     }).conversationalAgents;
     const lifecycle = new CapturingLifecycle();
     const agentFactory = new CapturingAgentFactory();
@@ -108,7 +124,9 @@ describe("conversational delegation wiring", () => {
       agents: agent,
       profilesRoot,
       toolRegistry: new ToolRegistry(new FakeLogger()),
-      mcpClient: { callTool: () => Promise.resolve({ ok: true, content: [] }) } as unknown as MCPClient,
+      mcpClient: {
+        callTool: () => Promise.resolve({ ok: true, content: [] }),
+      } as unknown as MCPClient,
       logger: new FakeLogger(),
       eventBus: new FakeEventBus(),
       agentFactory,
@@ -128,7 +146,13 @@ describe("conversational delegation wiring", () => {
     });
 
     expect(agentFactory.inputs[0]?.tools?.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(["spawn_subagent", "fan_out_subagents"]),
+      expect.arrayContaining([
+        "spawn_subagent",
+        "fan_out_subagents",
+        "scout_codebase",
+        "summarize_files",
+        "find_relevant_paths",
+      ]),
     );
     expect(lifecycle.inputs).toHaveLength(1);
     expect(lifecycle.inputs[0]?.parentSessionId).toBe("live-parent-session");
@@ -144,42 +168,69 @@ describe("conversational delegation wiring", () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-channel-readback-"));
     writeProfile(profilesRoot, "runner-profile", ["den_channels_read_recent"]);
     const agent = CrewConfigSchema.parse({
-      den: { coreUrl: "http://localhost:3030", channelsUrl: "http://192.168.1.10:18081", requiredAtStartup: false },
-      conversationalAgents: [{
-        agentId: "runner",
-        enabled: true,
-        profileId: "runner-profile",
-        profileIdentity: "runner",
-        memberIdentity: "runner",
-        session: { ownerId: "owner", sessionId: "configured-session", maxHistoryMessages: 20 },
-        channels: [{ providerId: "den-channels", channelId: "642", subscriptionIdentity: "runner:ordinary" }],
-        runtime: {
-          mode: "agent",
-          provider: "local-openai-compatible",
-          model: "local-model",
-          baseUrl: "http://127.0.0.1:11434/v1",
-          systemPromptSource: "profile",
-          tools: { allow: ["den"] },
-          toolPolicy: { mode: "profile" },
+      den: {
+        coreUrl: "http://localhost:3030",
+        channelsUrl: "http://192.168.1.10:18081",
+        requiredAtStartup: false,
+      },
+      conversationalAgents: [
+        {
+          agentId: "runner",
+          enabled: true,
+          profileId: "runner-profile",
+          profileIdentity: "runner",
+          memberIdentity: "runner",
+          session: { ownerId: "owner", sessionId: "configured-session", maxHistoryMessages: 20 },
+          channels: [
+            {
+              providerId: "den-channels",
+              channelId: "642",
+              subscriptionIdentity: "runner:ordinary",
+            },
+          ],
+          runtime: {
+            mode: "agent",
+            provider: "local-openai-compatible",
+            model: "local-model",
+            baseUrl: "http://127.0.0.1:11434/v1",
+            systemPromptSource: "profile",
+            tools: { allow: ["den"] },
+            toolPolicy: { mode: "profile" },
+          },
+          lifecycle: { turnTimeoutMs: 300000 },
         },
-        lifecycle: { turnTimeoutMs: 300000 },
-      }],
+      ],
     }).conversationalAgents;
-    const fetchFn = () => Promise.resolve(new Response(JSON.stringify({ messages: [{
-      id: 4791,
-      body: "**delegation.tool_visible** get_task_workflow_summary toolCallId tool-1",
-      createdAt: "2026-06-12T09:00:00Z",
-    }] }), { status: 200 }));
+    const fetchFn = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            messages: [
+              {
+                id: 4791,
+                body: "**delegation.tool_visible** get_task_workflow_summary toolCallId tool-1",
+                createdAt: "2026-06-12T09:00:00Z",
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
     const agentFactory = new CapturingAgentFactory("readback");
     const factory = buildConversationalAgentResponderFactoryForAgents({
       agents: agent,
       profilesRoot,
       toolRegistry: new ToolRegistry(new FakeLogger()),
-      mcpClient: { callTool: () => Promise.resolve({ ok: true, content: [] }) } as unknown as MCPClient,
+      mcpClient: {
+        callTool: () => Promise.resolve({ ok: true, content: [] }),
+      } as unknown as MCPClient,
       logger: new FakeLogger(),
       eventBus: new FakeEventBus(),
       agentFactory,
-      channelReadback: { baseUrl: "http://192.168.1.10:18081", fetchFn: fetchFn as unknown as typeof fetch },
+      channelReadback: {
+        baseUrl: "http://192.168.1.10:18081",
+        fetchFn: fetchFn as unknown as typeof fetch,
+      },
     });
 
     const responder = factory.createResponder({
@@ -194,30 +245,46 @@ describe("conversational delegation wiring", () => {
       message: textMessage("verify channel evidence"),
     });
 
-    expect(agentFactory.inputs[0]?.tools?.map((tool) => tool.name)).toContain("den_channels_read_recent");
-    expect(response).toMatchObject({ kind: "text", text: expect.stringContaining("message #4791") });
+    expect(agentFactory.inputs[0]?.tools?.map((tool) => tool.name)).toContain(
+      "den_channels_read_recent",
+    );
+    expect(response).toMatchObject({
+      kind: "text",
+      text: expect.stringContaining("message #4791"),
+    });
   });
 });
 
-function writeProfile(root: string, profileId: string, extraAllowedTools: readonly string[] = []): void {
+function writeProfile(
+  root: string,
+  profileId: string,
+  extraAllowedTools: readonly string[] = [],
+): void {
   const dir = join(root, profileId);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "soul.md"), "Runner soul.", "utf-8");
-  writeFileSync(join(dir, "profile.yaml"), [
-    'name: "Runner"',
-    'description: "Runner profile"',
-    "modelConfig:",
-    '  provider: "local-openai-compatible"',
-    '  model: "local-model"',
-    '  baseUrl: "http://127.0.0.1:11434/v1"',
-    "toolPolicy:",
-    "  mode: allow_list",
-    "  allow:",
-    "    - spawn_subagent",
-    "    - fan_out_subagents",
-    ...extraAllowedTools.map((tool) => `    - ${tool}`),
-    "",
-  ].join("\n"), "utf-8");
+  writeFileSync(
+    join(dir, "profile.yaml"),
+    [
+      'name: "Runner"',
+      'description: "Runner profile"',
+      "modelConfig:",
+      '  provider: "local-openai-compatible"',
+      '  model: "local-model"',
+      '  baseUrl: "http://127.0.0.1:11434/v1"',
+      "toolPolicy:",
+      "  mode: allow_list",
+      "  allow:",
+      "    - spawn_subagent",
+      "    - fan_out_subagents",
+      "    - scout_codebase",
+      "    - summarize_files",
+      "    - find_relevant_paths",
+      ...extraAllowedTools.map((tool) => `    - ${tool}`),
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
 }
 
 function textMessage(text: string): ChannelMessage {

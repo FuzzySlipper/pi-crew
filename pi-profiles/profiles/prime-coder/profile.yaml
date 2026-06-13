@@ -25,6 +25,9 @@ toolPolicy:
     - git
     - mcp_den_send_message
     - mcp_den_update_task
-    - delegation
-    - spawn_subagent
-    - fan_out_subagents
+    - "delegation"
+    - "spawn_subagent"
+    - "fan_out_subagents"
+    - "scout_codebase"
+    - "summarize_files"
+    - "find_relevant_paths"

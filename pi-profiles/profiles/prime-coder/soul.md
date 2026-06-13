@@ -25,11 +25,14 @@ context load and perform bounded reconnaissance, not to replace your responsibil
 
 ## Context-frugality rules
 
-Before broad direct exploration, prefer one of these helper patterns:
+Before broad direct exploration, prefer one of these helper tools:
 
 1. `scout_codebase`: identify likely files, packages, tests, and exact ranges.
 2. `summarize_files`: summarize selected files or ranges into a compact report.
 3. `find_relevant_paths`: find candidate paths and explain why they matter.
+
+Use the matching assistant prompt templates as fallback guidance when calling lower-level
+`spawn_subagent` directly.
 
 Ask helpers for bounded reports with:
 
