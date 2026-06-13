@@ -1,7 +1,7 @@
 /** Assemble Agent-backed ordinary conversational runtimes from installed config. */
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getModels, getProviders, Type } from "@earendil-works/pi-ai";
-import type { Api, KnownProvider, Model, TextContent } from "@earendil-works/pi-ai";
+import { getModels, getProviders } from "@earendil-works/pi-ai";
+import type { Api, KnownProvider, Model } from "@earendil-works/pi-ai";
 import {
   ConfigurationError,
   type DelegationConstraints,
@@ -10,11 +10,7 @@ import {
   type ExecutionPolicy,
   type Logger,
 } from "@pi-crew/core";
-import {
-  type MCPClient,
-  type ToolCallContentBlock,
-  ToolRegistry as McpToolRegistry,
-} from "@pi-crew/mcp";
+import { type MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import {
   assembleProfilePrompt,
   loadProfile,
@@ -39,6 +35,7 @@ import {
   SessionToolFilter,
 } from "@pi-crew/tools";
 import type { CrewConfig } from "./config.js";
+import { createConversationalMcpAgentTool } from "./conversational-mcp-tool.js";
 import { createDenChannelReadbackTool } from "./den-channel-readback-tool.js";
 import type { DenChannelReadbackToolConfig } from "./den-channel-readback-tool.js";
 export interface ConversationalRuntimeModelConfig {
@@ -71,13 +68,17 @@ export interface ConversationalDelegationRuntimeConfig {
   readonly parentDelegationConstraints?: DelegationConstraints;
   readonly allowedRuntimes?: readonly EffectiveDelegationRuntime[];
 }
-export interface DenChannelReadbackRuntimeConfig extends Omit<DenChannelReadbackToolConfig, "allowedChannelIds"> {}
+export interface DenChannelReadbackRuntimeConfig extends Omit<
+  DenChannelReadbackToolConfig,
+  "allowedChannelIds"
+> {}
 export interface BuildConversationalAgentResponderFactoryInput extends ResolveConversationalAgentRuntimeInput {
   readonly eventBus?: EventBus;
   readonly history?: ConversationalTurnHistory;
   readonly agentFactory?: ConversationalAgentFactory;
   readonly delegation?: ConversationalDelegationRuntimeConfig;
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
+  readonly defaultDenProjectId?: string;
 }
 export interface BuildConversationalAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["conversationalAgents"][number][];
@@ -91,6 +92,7 @@ export interface BuildConversationalAgentResponderFactoryForAgentsInput {
   readonly agentFactory?: ConversationalAgentFactory;
   readonly delegation?: ConversationalDelegationRuntimeConfig;
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
+  readonly defaultDenProjectId?: string;
 }
 class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
   constructor(
@@ -101,7 +103,11 @@ class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBu
   build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
     const filter = new SessionToolFilter(this.eventBus, this.logger);
     const runtime = resolveConversationalAgentRuntime({ ...this.input, sessionToolFilter: filter });
-    const withReadback = addChannelReadbackTool(runtime, this.input.agent, this.input.channelReadback);
+    const withReadback = addChannelReadbackTool(
+      runtime,
+      this.input.agent,
+      this.input.channelReadback,
+    );
     const tools = addDelegationTool(withReadback, this.input.agent, context, this.input.delegation);
     return createResponder(
       { ...runtime, tools },
@@ -117,7 +123,11 @@ class ProfileMappedConversationalRuntimeBuilder implements ConversationalAgentRu
   build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
     const agent = selectAgentForContext(this.input.agents, context.profileId);
     const filter = new SessionToolFilter(this.input.eventBus, this.input.logger);
-    const runtime = resolveConversationalAgentRuntime({ ...this.input, agent, sessionToolFilter: filter });
+    const runtime = resolveConversationalAgentRuntime({
+      ...this.input,
+      agent,
+      sessionToolFilter: filter,
+    });
     const withReadback = addChannelReadbackTool(runtime, agent, this.input.channelReadback);
     const tools = addDelegationTool(withReadback, agent, context, this.input.delegation);
     return createResponder(
@@ -175,6 +185,8 @@ export function resolveConversationalAgentRuntime(
     policy: executionPolicy,
     sessionToolFilter: input.sessionToolFilter,
     sessionId: input.agent.session.sessionId,
+    defaultSender: input.agent.profileIdentity,
+    defaultProjectId: input.defaultDenProjectId,
   });
   return {
     profile,
@@ -211,8 +223,14 @@ function addChannelReadbackTool(
   channelReadback: DenChannelReadbackRuntimeConfig | undefined,
 ): ResolvedConversationalAgentRuntime {
   if (channelReadback === undefined) return runtime;
-  if (!agent.runtime.tools.allow.some((entry) => toolMatchesSelectedSet("den_channels_read_recent", entry))) return runtime;
-  if (!toolAllowedByProfilePolicy("den_channels_read_recent", runtime.profile.toolPolicy)) return runtime;
+  if (
+    !agent.runtime.tools.allow.some((entry) =>
+      toolMatchesSelectedSet("den_channels_read_recent", entry),
+    )
+  )
+    return runtime;
+  if (!toolAllowedByProfilePolicy("den_channels_read_recent", runtime.profile.toolPolicy))
+    return runtime;
   if (runtime.executionPolicy.deniedTools.includes("den_channels_read_recent")) return runtime;
   const allowedChannelIds = agent.channels.map((channel) => channel.channelId);
   return {
@@ -263,17 +281,20 @@ function agentAllowsDelegation(
   agent: CrewConfig["conversationalAgents"][number],
   runtime: ResolvedConversationalAgentRuntime,
 ): boolean {
-  const requested = agent.runtime.tools.allow.some((entry) =>
-    entry === "delegation" || entry === "spawn_subagent" || entry === "fan_out_subagents"
+  const requested = agent.runtime.tools.allow.some(
+    (entry) =>
+      entry === "delegation" || entry === "spawn_subagent" || entry === "fan_out_subagents",
   );
   if (!requested) return false;
   if (!toolAllowedByProfilePolicy("spawn_subagent", runtime.profile.toolPolicy)) return false;
   if (!toolAllowedByProfilePolicy("fan_out_subagents", runtime.profile.toolPolicy)) return false;
   if (runtime.executionPolicy.deniedTools.includes("spawn_subagent")) return false;
   if (runtime.executionPolicy.deniedTools.includes("fan_out_subagents")) return false;
-  return runtime.executionPolicy.allowedTools.length === 0
-    || (runtime.executionPolicy.allowedTools.includes("spawn_subagent")
-      && runtime.executionPolicy.allowedTools.includes("fan_out_subagents"));
+  return (
+    runtime.executionPolicy.allowedTools.length === 0 ||
+    (runtime.executionPolicy.allowedTools.includes("spawn_subagent") &&
+      runtime.executionPolicy.allowedTools.includes("fan_out_subagents"))
+  );
 }
 function parentRuntimeFor(
   agent: CrewConfig["conversationalAgents"][number],
@@ -401,23 +422,31 @@ function selectConversationalTools(input: {
   readonly policy: ExecutionPolicy;
   readonly sessionToolFilter: SessionToolFilter | undefined;
   readonly sessionId: string;
+  readonly defaultSender: string;
+  readonly defaultProjectId?: string;
 }): AgentTool[] {
   const beforePolicy = input.registry
     .listTools()
     .filter((tool) => input.allow.some((set) => toolMatchesSelectedSet(tool.name, set)))
     .filter((tool) => toolAllowedByProfilePolicy(tool.name, input.profileToolPolicy));
-  const afterPolicy = input.sessionToolFilter !== undefined
-    ? input.sessionToolFilter.filter(
-        input.policy,
-        input.sessionId,
-        beforePolicy.map((tool) => tool.name),
-        null,
-      )
-    : beforePolicy.map((tool) => tool.name);
+  const afterPolicy =
+    input.sessionToolFilter !== undefined
+      ? input.sessionToolFilter.filter(
+          input.policy,
+          input.sessionId,
+          beforePolicy.map((tool) => tool.name),
+          null,
+        )
+      : beforePolicy.map((tool) => tool.name);
   const allowedSet = new Set(afterPolicy);
   return beforePolicy
     .filter((tool) => allowedSet.has(tool.name))
-    .map((tool) => createAgentTool(tool, input.mcpClient));
+    .map((tool) =>
+      createConversationalMcpAgentTool(tool, input.mcpClient, {
+        sender: input.defaultSender,
+        projectId: input.defaultProjectId,
+      }),
+    );
 }
 function toolAllowedByProfilePolicy(toolName: string, policy: ToolPolicy | undefined): boolean {
   if (policy === undefined) return false;
@@ -428,35 +457,6 @@ function toolAllowedByProfilePolicy(toolName: string, policy: ToolPolicy | undef
   }
   return !(policy.deny ?? []).some((entry) => toolMatchesSelectedSet(toolName, entry));
 }
-function createAgentTool(
-  tool: ReturnType<McpToolRegistry["listTools"]>[number],
-  mcpClient: MCPClient,
-): AgentTool {
-  const parameters = Type.Object({}, { additionalProperties: true });
-  return {
-    label: tool.name,
-    name: tool.name,
-    description: tool.description,
-    parameters,
-    execute: async (_toolCallId, params) => {
-      const result = await mcpClient.callTool(tool.name, paramsToRecord(params));
-      if (!result.ok) {
-        return {
-          content: [{ type: "text", text: result.error ?? "MCP tool call failed" }],
-          details: { ok: false, error: result.error },
-        };
-      }
-      return {
-        content: result.content.map(contentBlockToText),
-        details: { ok: true },
-      };
-    },
-  };
-}
-function paramsToRecord(params: unknown): Record<string, unknown> {
-  return typeof params === "object" && params !== null ? (params as Record<string, unknown>) : {};
-}
-
 function toolMatchesSelectedSet(toolName: string, toolSet: string): boolean {
   const normalized = toolName.toLowerCase();
   const normalizedSet = toolSet.toLowerCase();
@@ -484,12 +484,4 @@ function stripMcpPrefix(toolName: string): string {
   if (toolName.startsWith("mcp_den_")) return toolName.slice("mcp_den_".length);
   if (toolName.startsWith("den_")) return toolName.slice("den_".length);
   return toolName;
-}
-
-function contentBlockToText(block: ToolCallContentBlock): TextContent {
-  if (block.type === "text") return { type: "text", text: block.text };
-  if (block.type === "resource") {
-    return { type: "text", text: block.resource.text ?? block.resource.uri };
-  }
-  return { type: "text", text: `[image:${block.mimeType}]` };
 }

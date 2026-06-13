@@ -19,7 +19,10 @@ import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { CrewConfig } from "./config.js";
 import { resolveCrewInstallLayout } from "./config.js";
 import { buildConversationalAgentResponderFactoryForAgents } from "./conversational-runtime-assembly.js";
-import type { ConversationalDelegationRuntimeConfig, DenChannelReadbackRuntimeConfig } from "./conversational-runtime-assembly.js";
+import type {
+  ConversationalDelegationRuntimeConfig,
+  DenChannelReadbackRuntimeConfig,
+} from "./conversational-runtime-assembly.js";
 
 /**
  * Build the AgentResponderFactory selected by validated runtime config.
@@ -53,6 +56,7 @@ export function buildRuntimeResponderFactory(
         history,
         delegation,
         channelReadback,
+        defaultDenProjectId: runtime.den.channelsProjectId,
       });
     }
     return buildRuntimeResponderFactory(runtime.runtime, eventBus);
