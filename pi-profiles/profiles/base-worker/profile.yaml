@@ -7,6 +7,9 @@ modelConfig:
   apiKeyEnv: "PI_CREW_LLM_API_KEY"
   maxTokens: 4096
   temperature: 0.1
+runtimeConfig:
+  maxIterations: 36
+  maxTokensPerTurn: 4096
 toolPolicy:
   mode: "allow_list"
   allow:

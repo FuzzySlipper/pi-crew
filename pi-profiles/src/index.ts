@@ -9,6 +9,7 @@ export {
   type Profile,
   type Skill,
   type ModelConfig,
+  type RuntimeConfig,
   type ToolPolicy,
 } from "./profile.js";
 

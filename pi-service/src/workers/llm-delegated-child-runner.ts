@@ -2,11 +2,6 @@
  * LLM-backed delegated child runner: creates a real Agent session for
  * delegated subagent execution.
  *
- * DESIGN: SessionMaterializedDelegatedChildRunner is the stub that only
- * records visibility events. This runner replaces it with actual LLM-backed
- * execution using pi-ai model resolution and pi-agent-core Agent.
- * Rationale: spawn_subagent should produce real LLM output, not a stub result.
- *
  * DESIGN (#2284): Child tool surface is derived from spawnRequest.allowedTools
  * and policy.allowedTools (intersection), minus deniedTools (union). A tool
  * provider resolves allowed tool names to AgentTool implementations.
@@ -39,7 +34,11 @@ import {
   attachExtractedReviewResult,
   latestAssistantText,
 } from "./delegated-review-result-extraction.js";
-import { buildDrainModePrompt, turnHadToolResults } from "./delegated-child-drain-mode.js";
+import {
+  buildDrainModePrompt,
+  selectDrainModeTools,
+  turnHadToolResults,
+} from "./delegated-child-drain-mode.js";
 import { createDelegatedResultPostTools } from "./delegated-result-post-tools.js";
 import { resolveDelegatedChildModel } from "./llm-delegated-child-model-resolution.js";
 
@@ -78,6 +77,12 @@ export interface DelegatedChildRuntimeResolution {
   readonly tools?: readonly AgentTool[];
   readonly apiKey?: string;
   readonly effectiveRuntime?: EffectiveDelegationRuntime;
+  readonly runtimeConfig?: DelegatedRuntimeConfig;
+}
+
+export interface DelegatedRuntimeConfig {
+  readonly maxIterations?: number;
+  readonly maxTokensPerTurn?: number;
 }
 
 export interface DelegatedChildRuntimeResolver {
@@ -136,7 +141,6 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     const toolStartTimes = new Map<string, number>();
     const actualToolsUsed = new Set<string>();
     let lastTurnTimestamp = startedAt;
-    let maxIterations = this.#resolveMaxIterations(input);
 
     await input.emitTurnVisible({
       turnNumber: 1,
@@ -154,6 +158,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         toolFilter,
       });
       const resolvedRuntime = runtimeResolution?.effectiveRuntime ?? input.effectiveRuntime;
+      const maxIterations = this.#resolveMaxIterations(input, runtimeResolution?.runtimeConfig);
       const model = runtimeResolution?.model ?? this.#resolveModel(resolvedRuntime);
       let postedImplementation: DelegatedImplementationResult | undefined;
       let postedReview: DelegatedReviewResult | undefined;
@@ -186,7 +191,8 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
           streamSimple(m, context, {
             ...options,
             temperature: 0.3,
-            maxTokens: 2048,
+            maxTokens:
+              runtimeResolution?.runtimeConfig?.maxTokensPerTurn ?? input.policy.maxTokensPerTurn,
           }),
         sessionId: input.childSession.sessionId,
         initialState: {
@@ -264,7 +270,10 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
             turnHadToolResults(event)
           ) {
             drainModeEntered = true;
-            agent.state.tools = [];
+            agent.state.tools = selectDrainModeTools(
+              tools,
+              input.spawnRequest.expectedResultSchema,
+            );
             agent.steer({
               role: "user",
               content: buildDrainModePrompt(input.spawnRequest),
@@ -283,6 +292,15 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
       try {
         await agent.prompt([taskMessage]);
         await agent.waitForIdle();
+        if (needsFinalization(input.spawnRequest, postedImplementation, postedReview)) {
+          agent.state.tools = selectDrainModeTools(tools, input.spawnRequest.expectedResultSchema);
+          agent.steer({
+            role: "user",
+            content: buildDrainModePrompt(input.spawnRequest),
+            timestamp: Date.now(),
+          });
+          await agent.waitForIdle();
+        }
       } finally {
         unsubscribe();
       }
@@ -350,40 +368,23 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     }
   }
 
-  /**
-   * Filter tool names from spawn request and policy.
-   *
-   * Rules:
-   * - If policy.allowedTools is empty, the child gets no tools
-   *   (a child never has more permissions than its policy allows)
-   * - Spawn request allowedTools is intersected with policy.allowedTools
-   * - If spawn request does not specify allowedTools, use policy.allowedTools
-   * - deniedTools = union of policy.deniedTools; spawn request deniedTools
-   *   are also applied when present
-   * - Allowed list minus denied list = final surface
-   */
   #filterChildTools(
     spawnAllowedTools: readonly string[] | undefined,
     policy: ExecutionPolicy,
   ): ChildToolFilterResult {
     const policyTools = policy.allowedTools ?? [];
 
-    // If policy allows no tools, child gets no tools
     if (policyTools.length === 0) {
       return { allowedToolNames: [], deniedToolNames: [...(policy.deniedTools ?? [])] };
     }
 
-    // Compute allowlist: intersection of spawn request and policy
     let allowSet: Set<string>;
     if (spawnAllowedTools !== undefined && spawnAllowedTools.length > 0) {
-      // Intersection: child can only use tools the policy AND spawn request allow
       allowSet = new Set(spawnAllowedTools.filter((t) => policyTools.includes(t)));
     } else {
-      // No spawn request restriction, use full policy allowlist
       allowSet = new Set(policyTools);
     }
 
-    // Remove denied tools (union of both sources)
     const spawnDenied = spawnAllowedTools !== undefined ? inputDeniedTools() : [];
     const policyDenied = policy.deniedTools ?? [];
     const denySet = new Set([...spawnDenied, ...policyDenied]);
@@ -406,24 +407,27 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     return provider.resolveTools(filter.allowedToolNames);
   }
 
-  /**
-   * Resolve max iterations for the child run.
-   *
-   * DESIGN: Reads from policy.maxIterations (the child's derived cap)
-   * and spawnRequest's implicit max. The hard limit prevents unbounded
-   * tool-calling loops. Zero means unlimited (with timeout only).
-   * Rationale: a delegated child should never exceed its policy budget.
-   */
-  #resolveMaxIterations(input: DelegatedChildRunInput): number {
-    const policyMax = input.policy.maxIterations;
-    if (policyMax !== undefined && policyMax > 0) return policyMax;
-    // Default fallback: 10 iterations if policy doesn't specify
-    return 10;
+  #resolveMaxIterations(
+    input: DelegatedChildRunInput,
+    runtimeConfig: DelegatedRuntimeConfig | undefined,
+  ): number {
+    return runtimeConfig?.maxIterations ?? input.policy.maxIterations ?? 0;
   }
 
   #resolveModel(runtime: EffectiveDelegationRuntime) {
     return resolveDelegatedChildModel(runtime, this.#config);
   }
+}
+
+function needsFinalization(
+  spawnRequest: DelegatedChildRunInput["spawnRequest"],
+  implementation: DelegatedImplementationResult | undefined,
+  review: DelegatedReviewResult | undefined,
+): boolean {
+  return (
+    (spawnRequest.expectedResultSchema === "implementation" && implementation === undefined) ||
+    (spawnRequest.expectedResultSchema === "review" && review === undefined)
+  );
 }
 
 function buildChildTaskPrompt(
@@ -493,5 +497,4 @@ function buildChildSystemPrompt(
 
   return parts.filter(Boolean).join("\n");
 }
-
 export type { DelegatedChildRunInput };

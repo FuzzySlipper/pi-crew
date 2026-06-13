@@ -72,6 +72,7 @@ class ProfileBackedDelegatedChildRuntimeResolver implements DelegatedChildRuntim
         provider: model.provider,
         model: model.id,
       },
+      runtimeConfig: profile.runtimeConfig,
       tools,
       apiKey:
         resolveApiKey(modelConfig?.apiKeyEnv, this.deps.env ?? process.env) ??

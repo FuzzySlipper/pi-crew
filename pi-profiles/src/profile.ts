@@ -57,6 +57,26 @@ export interface ModelConfig {
   maxTokens?: number;
 }
 
+// ── RuntimeConfig ────────────────────────────────────────────────
+
+/** Per-profile execution budgets for runtime/delegated turns. */
+export interface RuntimeConfig {
+  /** Maximum model/tool loop turns for one delegated run. */
+  maxIterations?: number;
+
+  /** Maximum output tokens for a single model turn. */
+  maxTokensPerTurn?: number;
+
+  /** Maximum whole-run duration in milliseconds. */
+  maxDurationMs?: number;
+
+  /** Maximum duration for one turn in milliseconds. */
+  maxTurnDurationMs?: number;
+
+  /** Idle timeout in milliseconds. */
+  idleTimeoutMs?: number;
+}
+
 // ── ToolPolicy ──────────────────────────────────────────────────
 
 /**
@@ -120,6 +140,9 @@ export interface Profile {
 
   /** Optional model overrides for this profile. */
   modelConfig?: ModelConfig;
+
+  /** Optional execution budgets. */
+  runtimeConfig?: RuntimeConfig;
 
   /** Optional tool access policy. */
   toolPolicy?: ToolPolicy;

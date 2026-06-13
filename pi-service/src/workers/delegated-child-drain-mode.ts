@@ -1,6 +1,6 @@
 /** Drain-mode helpers for delegated child execution. */
 
-import type { AgentEvent } from "@earendil-works/pi-agent-core";
+import type { AgentEvent, AgentTool } from "@earendil-works/pi-agent-core";
 import type { DelegationSpawnRequest } from "@pi-crew/core";
 
 export function buildDrainModePrompt(spawnRequest: DelegationSpawnRequest): string {
@@ -16,6 +16,19 @@ export function buildDrainModePrompt(spawnRequest: DelegationSpawnRequest): stri
     contract,
     "If evidence is incomplete, return a structured blocked or insufficient_evidence result with the handles/checks you do have rather than continuing to investigate.",
   ].join("\n");
+}
+
+export function selectDrainModeTools(
+  tools: readonly AgentTool[],
+  expectedResultSchema: DelegationSpawnRequest["expectedResultSchema"],
+): AgentTool[] {
+  const finalizerName =
+    expectedResultSchema === "implementation"
+      ? "post_delegated_implementation_result"
+      : expectedResultSchema === "review"
+        ? "post_delegated_review_result"
+        : undefined;
+  return finalizerName === undefined ? [] : tools.filter((tool) => tool.name === finalizerName);
 }
 
 export function turnHadToolResults(event: AgentEvent): boolean {
