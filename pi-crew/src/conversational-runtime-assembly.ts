@@ -258,7 +258,7 @@ function addDelegationTool(
       parentPolicy: parentPolicyForDelegation(runtime),
       parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
       parentRuntime,
-      allowedRuntimes: delegation.allowedRuntimes ?? [parentRuntime],
+      allowedRuntimes: delegation.allowedRuntimes ?? [],
     }) as unknown as AgentTool,
     createDelegatedFanOutTool({
       lifecycle: delegation.lifecycle,
@@ -266,7 +266,7 @@ function addDelegationTool(
       parentPolicy: parentPolicyForDelegation(runtime),
       parentDelegationConstraints: delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 },
       parentRuntime,
-      allowedRuntimes: delegation.allowedRuntimes ?? [parentRuntime],
+      allowedRuntimes: delegation.allowedRuntimes ?? [],
     }) as unknown as AgentTool,
   ];
 }

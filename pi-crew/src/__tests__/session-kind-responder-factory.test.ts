@@ -5,7 +5,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-import type { AgentResponder, AgentResponderFactory, AgentResponderFactoryContext } from "@pi-crew/service";
+import type {
+  AgentResponder,
+  AgentResponderFactory,
+  AgentResponderFactoryContext,
+} from "@pi-crew/service";
 import { EchoAgentResponder } from "@pi-crew/service";
 import type { ChannelContent } from "@pi-crew/core";
 import { SessionKindAwareResponderFactory } from "../session-kind-responder-factory.js";
@@ -20,7 +24,8 @@ class TrackingResponderFactory implements AgentResponderFactory {
   createResponder(context: AgentResponderFactoryContext): AgentResponder {
     this.calls.push(context);
     return {
-      respond: (): Promise<ChannelContent> => Promise.resolve({ kind: "text", text: `conv:${context.profileId}` }),
+      respond: (): Promise<ChannelContent> =>
+        Promise.resolve({ kind: "text", text: `conv:${context.profileId}` }),
     };
   }
 }
@@ -57,7 +62,7 @@ describe("SessionKindAwareResponderFactory", () => {
     expect(responder).not.toBeInstanceOf(EchoAgentResponder);
   });
 
-  it("routes delegated sessions to the conversational factory", () => {
+  it("routes delegated sessions to echo responder without requiring conversational config match", () => {
     const tracking = new TrackingResponderFactory();
     const factory = new SessionKindAwareResponderFactory(tracking);
 
@@ -66,9 +71,8 @@ describe("SessionKindAwareResponderFactory", () => {
       kind: "delegated",
     });
 
-    expect(tracking.calls).toHaveLength(1);
-    expect(tracking.calls[0]?.kind).toBe("delegated");
-    expect(responder).not.toBeInstanceOf(EchoAgentResponder);
+    expect(tracking.calls).toHaveLength(0);
+    expect(responder).toBeInstanceOf(EchoAgentResponder);
   });
 
   it("routes sessions with undefined kind to the conversational factory (backward compat)", () => {

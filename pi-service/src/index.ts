@@ -193,9 +193,15 @@ export type {
   DelegatedToolVisibilityInput,
   DelegatedTurnVisibilityInput,
 } from "./workers/delegated-spawn-lifecycle.js";
-export { createDelegatedSpawnTool, type DelegatedSpawnLifecyclePort } from "./workers/delegated-spawn-tool.js";
+export {
+  createDelegatedSpawnTool,
+  type DelegatedSpawnLifecyclePort,
+} from "./workers/delegated-spawn-tool.js";
 export { DenDelegationProjectionExtension } from "./workers/den-delegation-projection.js";
-export { createDelegatedFanOutTool, type ParentVisibleFanOutResult } from "./workers/delegated-fan-out-tool.js";
+export {
+  createDelegatedFanOutTool,
+  type ParentVisibleFanOutResult,
+} from "./workers/delegated-fan-out-tool.js";
 export {
   DelegatedChildRegistry,
   InMemoryPendingChildRepository,
@@ -205,7 +211,13 @@ export {
 } from "./workers/delegated-child-registry.js";
 export { SessionMaterializedDelegatedChildRunner } from "./workers/session-materialized-delegated-child-runner.js";
 export { LlmDelegatedChildRunner } from "./workers/llm-delegated-child-runner.js";
-export type { ToolProvider } from "./workers/llm-delegated-child-runner.js";
+export type {
+  ToolProvider,
+  DelegatedChildRuntimeResolver,
+  DelegatedChildRuntimeResolution,
+  DelegatedChildRuntimeResolutionInput,
+} from "./workers/llm-delegated-child-runner.js";
+export { resolveDelegatedChildModel } from "./workers/llm-delegated-child-model-resolution.js";
 export {
   SessionManagerDelegationSessionBridge,
   type SessionManagerDelegationBridgeConfig,

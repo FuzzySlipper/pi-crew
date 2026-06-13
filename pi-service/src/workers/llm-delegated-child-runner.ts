@@ -17,7 +17,7 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { streamSimple } from "@earendil-works/pi-ai";
+import { streamSimple, type Api, type Model } from "@earendil-works/pi-ai";
 import type { DelegatedResult, EffectiveDelegationRuntime, ExecutionPolicy } from "@pi-crew/core";
 import type { DelegatedChildRunInput, DelegatedChildRunner } from "./delegated-spawn-lifecycle.js";
 import {
@@ -50,6 +50,25 @@ export interface LlmDelegatedChildRunnerConfig {
    * (prompt-only, single-turn — backward compatible with current behavior).
    */
   readonly toolProvider?: ToolProvider;
+  readonly runtimeResolver?: DelegatedChildRuntimeResolver;
+}
+
+export interface DelegatedChildRuntimeResolutionInput {
+  readonly effectiveRuntime: EffectiveDelegationRuntime;
+  readonly spawnRequest: DelegatedChildRunInput["spawnRequest"];
+  readonly policy: ExecutionPolicy;
+  readonly toolFilter: ChildToolFilterResult;
+}
+
+export interface DelegatedChildRuntimeResolution {
+  readonly systemPrompt?: string;
+  readonly model?: Model<Api>;
+  readonly tools?: readonly AgentTool[];
+  readonly apiKey?: string;
+}
+
+export interface DelegatedChildRuntimeResolver {
+  resolve(input: DelegatedChildRuntimeResolutionInput): Promise<DelegatedChildRuntimeResolution>;
 }
 
 /**
@@ -101,13 +120,27 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     });
 
     try {
-      const model = this.#resolveModel(input.effectiveRuntime);
       const toolFilter = this.#filterChildTools(input.spawnRequest.allowedTools, input.policy);
-      const tools = this.#resolveTools(toolFilter);
+      const runtimeResolution = await this.#config.runtimeResolver?.resolve({
+        effectiveRuntime: input.effectiveRuntime,
+        spawnRequest: input.spawnRequest,
+        policy: input.policy,
+        toolFilter,
+      });
+      const model = runtimeResolution?.model ?? this.#resolveModel(input.effectiveRuntime);
+      const tools = [...(runtimeResolution?.tools ?? this.#resolveTools(toolFilter))];
+      const systemPrompt = buildChildSystemPrompt(
+        input.effectiveRuntime,
+        toolFilter,
+        input.spawnRequest,
+        runtimeResolution?.systemPrompt,
+      );
 
       const agent = new Agent({
         getApiKey: () =>
-          this.#config.apiKey ?? (this.#config.baseUrl !== undefined ? "unused" : undefined),
+          runtimeResolution?.apiKey ??
+          this.#config.apiKey ??
+          (this.#config.baseUrl !== undefined ? "unused" : undefined),
         streamFn: (m, context, options) =>
           streamSimple(m, context, {
             ...options,
@@ -117,11 +150,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         sessionId: input.childSession.sessionId,
         initialState: {
           model,
-          systemPrompt: buildChildSystemPrompt(
-            input.effectiveRuntime,
-            toolFilter,
-            input.spawnRequest,
-          ),
+          systemPrompt,
           tools: tools.length > 0 ? tools : undefined,
         },
       });
@@ -356,14 +385,25 @@ function buildChildSystemPrompt(
   runtime: EffectiveDelegationRuntime,
   toolFilter: ChildToolFilterResult,
   spawnRequest: { readonly expectedResultSchema?: string; readonly requiredEvidence?: unknown },
+  profileSystemPrompt?: string,
 ): string {
-  const parts: string[] = [
-    "You are a delegated subagent executing a specific task.",
-    "Complete the task concisely and return the result.",
+  const parts: string[] =
+    profileSystemPrompt !== undefined && profileSystemPrompt.trim().length > 0
+      ? [
+          profileSystemPrompt.trim(),
+          "## Delegation Runtime Instructions",
+          "You are running as a delegated subagent executing a specific task for a parent session.",
+          "Complete the delegated task concisely and return the required result shape.",
+        ]
+      : [
+          "You are a delegated subagent executing a specific task.",
+          "Complete the task concisely and return the result.",
+        ];
+  parts.push(
     `Profile: ${runtime.profileId}`,
     runtime.provider !== undefined ? `Provider: ${runtime.provider}` : "",
     runtime.model !== undefined ? `Model: ${runtime.model}` : "",
-  ];
+  );
 
   if (toolFilter.allowedToolNames.length > 0) {
     parts.push(`\nAllowed tools: ${toolFilter.allowedToolNames.join(", ")}`);

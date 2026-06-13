@@ -261,6 +261,7 @@ export class Crew {
       childRunner: createDelegatedChildRunner(config.delegation, {
         mcpClient: this.#mcpClient,
         toolRegistry: this.#mcpToolRegistry,
+        profilesRoot: resolveCrewInstallLayout(config).profilesRoot,
       }),
       childRegistry,
     });

@@ -7,7 +7,11 @@ import {
   type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import type { CrewConfig } from "./config.js";
-import { createDelegatedChildToolProvider, type DelegatedChildToolProviderDeps } from "./delegated-child-tool-provider.js";
+import {
+  createDelegatedChildToolProvider,
+  type DelegatedChildToolProviderDeps,
+} from "./delegated-child-tool-provider.js";
+import { createProfileBackedDelegatedChildRuntimeResolver } from "./profile-backed-delegated-child-runtime.js";
 
 export interface DeferredDelegationLifecyclePort {
   readonly port: DelegatedSpawnLifecyclePort;
@@ -33,13 +37,25 @@ export function createDeferredDelegationLifecyclePort(): DeferredDelegationLifec
 
 export function createDelegatedChildRunner(
   config: CrewConfig["delegation"],
-  deps?: DelegatedChildToolProviderDeps,
+  deps?: DelegatedChildToolProviderDeps & { readonly profilesRoot?: string },
 ): DelegatedChildRunner {
   if (config.llmBaseUrl === undefined) return new SessionMaterializedDelegatedChildRunner();
+  const toolProvider = deps === undefined ? undefined : createDelegatedChildToolProvider(deps);
   return new LlmDelegatedChildRunner({
     baseUrl: config.llmBaseUrl,
     apiKey: config.llmApiKey,
     modelName: config.llmModelName,
-    ...(deps === undefined ? {} : { toolProvider: createDelegatedChildToolProvider(deps) }),
+    ...(toolProvider === undefined ? {} : { toolProvider }),
+    ...(deps?.profilesRoot === undefined || toolProvider === undefined
+      ? {}
+      : {
+          runtimeResolver: createProfileBackedDelegatedChildRuntimeResolver({
+            profilesRoot: deps.profilesRoot,
+            toolRegistry: deps.toolRegistry,
+            toolProvider,
+            fallbackBaseUrl: config.llmBaseUrl,
+            fallbackApiKey: config.llmApiKey,
+          }),
+        }),
   });
 }

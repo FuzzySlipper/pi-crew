@@ -2,10 +2,10 @@
  * Session-kind-aware responder factory routing for the pi-crew composition root.
  *
  * Routes responder creation based on `kind` in the factory context:
- * - Worker sessions get a lightweight responder (they don't use instance-level
- *   message processing — execution goes through AgentWorkerExecutor).
- * - Conversational and delegated sessions get the full conversational runtime
- *   factory (LLM agent, tools, profile assembly).
+ * - Worker and delegated sessions get a lightweight responder. Worker execution
+ *   goes through AgentWorkerExecutor; delegated execution goes through
+ *   DelegatedChildRunner.
+ * - Conversational sessions get the full conversational runtime factory.
  *
  * DESIGN: Worker sessions must not require a conversational agent match.
  * Rationale: WorkerRuntime drives execution through AgentWorkerExecutor, not
@@ -16,7 +16,11 @@
  * @module pi-crew/session-kind-responder-factory
  */
 
-import type { AgentResponder, AgentResponderFactory, AgentResponderFactoryContext } from "@pi-crew/service";
+import type {
+  AgentResponder,
+  AgentResponderFactory,
+  AgentResponderFactoryContext,
+} from "@pi-crew/service";
 import { EchoAgentResponder } from "@pi-crew/service";
 
 /**
@@ -26,12 +30,10 @@ import { EchoAgentResponder } from "@pi-crew/service";
  * Returns an echo responder for worker sessions (no conversational match needed).
  */
 export class SessionKindAwareResponderFactory implements AgentResponderFactory {
-  constructor(
-    private readonly conversationalFactory: AgentResponderFactory,
-  ) {}
+  constructor(private readonly conversationalFactory: AgentResponderFactory) {}
 
   createResponder(context: AgentResponderFactoryContext): AgentResponder {
-    if (context.kind === "worker") {
+    if (context.kind === "worker" || context.kind === "delegated") {
       // DESIGN: Worker sessions bypass conversational agent assembly entirely.
       // Rationale: WorkerRuntime execution goes through AgentWorkerExecutor,
       // not through the instance's processMessage/responder path. The instance

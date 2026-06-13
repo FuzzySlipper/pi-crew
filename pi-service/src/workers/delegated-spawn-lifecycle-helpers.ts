@@ -45,6 +45,7 @@ export function resolveEffectiveRuntime(
     provider: requested?.provider ?? parentRuntime.provider,
     model: requested?.model ?? parentRuntime.model,
   };
+  if (allowedRuntimes.length === 0) return ok({ ...candidate });
   if (allowedRuntimes.some((runtime) => sameRuntime(runtime, candidate)))
     return ok({ ...candidate });
   return fail(
