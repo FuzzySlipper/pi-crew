@@ -329,9 +329,16 @@ export class HttpDirectAgentClient {
       );
 
       if (!response.ok) {
+        const responseBody = await boundedResponseText(response);
         this.#logger.warn("Gateway system-message POST returned non-OK", {
           sourceKind,
+          channelId,
+          senderIdentity,
+          sourceId,
           status: response.status,
+          statusText: response.statusText,
+          responseBody,
+          bodyLength: body.length,
         });
       }
     } catch (err: unknown) {
@@ -450,6 +457,11 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
     );
   }
   return controller.signal;
+}
+
+async function boundedResponseText(response: Response): Promise<string> {
+  const text = await response.text();
+  return text.length > 1000 ? `${text.slice(0, 1000)}…` : text;
 }
 
 function lifecycleTelemetryError(eventType: string, status: number): ConnectionError {

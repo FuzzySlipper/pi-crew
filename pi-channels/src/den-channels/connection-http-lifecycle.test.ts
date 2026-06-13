@@ -90,12 +90,9 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
       return Promise.resolve(new Response("ok", { status: 200 }));
     });
 
-    const conn = new DenHttpDirectAgentConnection(
-      makeConfig(),
-      logger,
-      cursorStore,
-      { fetchFn: mockFetch as unknown as typeof fetch },
-    );
+    const conn = new DenHttpDirectAgentConnection(makeConfig(), logger, cursorStore, {
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
 
     await conn.open();
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
@@ -113,12 +110,49 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
     expect(payloads.every((payload) => payload.taskId === 2040)).toBe(true);
     expect(payloads.every((payload) => payload.assignmentId === "assignment-2040")).toBe(true);
     expect(payloads.every((payload) => payload.workerRunId === "piw_2040_lifecycle")).toBe(true);
-    expect(payloads.every((payload) => payload.agentInstanceId === "pi-crew-gateway-live")).toBe(true);
+    expect(payloads.every((payload) => payload.agentInstanceId === "pi-crew-gateway-live")).toBe(
+      true,
+    );
 
     const activePayloads = payloads.filter((payload) => payload.eventType !== "completed");
-    expect(activePayloads.every((payload) => typeof payload.stalenessDeadline === "string")).toBe(true);
+    expect(activePayloads.every((payload) => typeof payload.stalenessDeadline === "string")).toBe(
+      true,
+    );
     expect(payloads[payloads.length - 1]?.stalenessDeadline).toBeUndefined();
     expect(gatewayBodies).toHaveLength(0);
+  });
+
+  it("logs gateway failure diagnostics when final message delivery returns non-OK", async () => {
+    const mockFetch = vi.fn((input: string | URL) => {
+      const urlStr = urlFromInput(input);
+      if (urlStr.includes("/api/gateway/system-messages")) {
+        return Promise.resolve(new Response("constraint failed", { status: 500 }));
+      }
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const conn = new DenHttpDirectAgentConnection(makeConfig(), logger, cursorStore, {
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    await conn.sendMessage("642", {
+      content: { kind: "text", text: "final status" },
+      metadata: { senderIdentity: "pi-orchestrator" },
+    });
+
+    expect(logger.entries.map((entry) => entry.message)).toContain(
+      "Gateway system-message POST returned non-OK",
+    );
+    const warning = logger.entries.find(
+      (entry) => entry.message === "Gateway system-message POST returned non-OK",
+    );
+    expect(warning?.context).toMatchObject({
+      channelId: 642,
+      senderIdentity: "pi-orchestrator",
+      status: 500,
+      responseBody: "constraint failed",
+      bodyLength: "final status".length,
+    });
+    expect(typeof warning?.context?.sourceId).toBe("string");
   });
 
   it("fails closed before delivery when lifecycle telemetry cannot be recorded", async () => {
@@ -156,12 +190,9 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
       return Promise.resolve(new Response("ok", { status: 200 }));
     });
 
-    const conn = new DenHttpDirectAgentConnection(
-      makeConfig(),
-      logger,
-      cursorStore,
-      { fetchFn: mockFetch as unknown as typeof fetch },
-    );
+    const conn = new DenHttpDirectAgentConnection(makeConfig(), logger, cursorStore, {
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
     conn.on("error", (error) => {
       errors.push(error);
     });
