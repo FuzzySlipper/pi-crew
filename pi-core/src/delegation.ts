@@ -133,6 +133,19 @@ export interface DelegatedImplementationResult {
   readonly denHandoffHandles?: readonly DelegatedArtifactHandle[];
 }
 
+export type DelegatedStructureRepairOutcome =
+  | "not_needed"
+  | "repaired"
+  | "unrepairable"
+  | "repair_invalid";
+
+export interface DelegatedStructureRepair {
+  readonly attempted: boolean;
+  readonly outcome: DelegatedStructureRepairOutcome;
+  readonly changes?: readonly string[];
+  readonly warnings?: readonly string[];
+}
+
 /** Lineage carried by every delegated session. */
 export interface DelegationLineage {
   /** Session ID that directly spawned this child. */
@@ -270,6 +283,9 @@ export interface DelegatedResult {
 
   /** Structured child implementation result when implementation-mode delegation is requested. */
   readonly implementation?: DelegatedImplementationResult;
+
+  /** Bounded metadata describing any structure-only repair applied before validation. */
+  readonly structureRepair?: DelegatedStructureRepair;
 }
 
 /** Derived policy and lineage for a child session. */

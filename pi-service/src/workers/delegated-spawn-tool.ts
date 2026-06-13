@@ -45,6 +45,7 @@ interface ParentVisibleDelegatedResult {
   readonly error?: string;
   readonly review?: DelegatedResult["review"];
   readonly implementation?: DelegatedResult["implementation"];
+  readonly structureRepair?: DelegatedResult["structureRepair"];
 }
 
 const MAX_SAFE_EXCERPT_CHARS = 1_600;
@@ -192,6 +193,7 @@ function toParentVisibleResult(result: DelegatedResult): ParentVisibleDelegatedR
     ...(result.error === undefined ? {} : { error: result.error }),
     ...(result.review === undefined ? {} : { review: result.review }),
     ...(result.implementation === undefined ? {} : { implementation: result.implementation }),
+    ...(result.structureRepair === undefined ? {} : { structureRepair: result.structureRepair }),
   };
 }
 

@@ -84,6 +84,7 @@ const usefulDetailKeys = [
   "evidenceChecked",
   "artifactCount",
   "failureCategory",
+  "structureRepair",
   "reason",
   "error",
   "recoveryGuidance",

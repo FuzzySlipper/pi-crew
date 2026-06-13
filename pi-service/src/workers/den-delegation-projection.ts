@@ -118,6 +118,7 @@ function formatCompletedMessage(payload: DelegationCompletedPayload): ProjectedM
       error: payload.result.error,
       recoveryGuidance: payload.result.recoveryGuidance,
       evidenceChecked: payload.result.evidenceChecked,
+      structureRepair: payload.result.structureRepair,
       artifactCount: payload.result.artifacts?.length ?? 0,
     },
   };

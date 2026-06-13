@@ -55,7 +55,41 @@ describe("delegated implementation result extraction", () => {
     expect(result.safeExcerpt).toContain('"taskId": "2401"');
   });
 
-  it("leaves malformed implementation text as safe excerpt for validator failure", () => {
+  it("repairs bounded field-name and wrapper drift before validation", () => {
+    const result = attachExtractedImplementationResult(
+      baseResult(),
+      implementationSpawn,
+      `Done:\n\`\`\`json\n${JSON.stringify({
+        status: "noCodeChange",
+        task_id: "2401",
+        no_code_change_rationale: "profile-backed runtime smoke only",
+        artifact_handles: {
+          type: "inventory_note",
+          description: "smoke observed profile-backed runtime",
+        },
+        checks: { command: "not run", status: "not_run", summary: "no-code smoke" },
+        workdir_status: { state: "clean", summary: "no repo mutations" },
+        den_handoff_handles: {
+          type: "den_message",
+          message_id: 14511,
+          description: "bounded repair plan",
+        },
+      })}\n\`\`\``,
+    );
+
+    expect(result.implementation?.status).toBe("no_code_change");
+    expect(result.implementation?.taskId).toBe("2401");
+    expect(result.implementation?.artifactHandles).toHaveLength(1);
+    expect(result.implementation?.denHandoffHandles?.[0]?.messageId).toBe(14511);
+    expect(result.structureRepair).toMatchObject({
+      attempted: true,
+      outcome: "repaired",
+    });
+    expect(result.structureRepair?.changes).toContain("normalized field: task_id -> taskId");
+    expect(result.evidenceChecked).toBe(true);
+  });
+
+  it("leaves unrecoverable malformed implementation text as safe excerpt for validator failure", () => {
     const result = attachExtractedImplementationResult(
       baseResult(),
       implementationSpawn,
@@ -65,6 +99,10 @@ describe("delegated implementation result extraction", () => {
     expect(result.implementation).toBeUndefined();
     expect(result.evidenceChecked).toBe(false);
     expect(result.safeExcerpt).toBe("I implemented it and tests pass.");
+    expect(result.structureRepair).toMatchObject({
+      attempted: true,
+      outcome: "unrepairable",
+    });
   });
 });
 

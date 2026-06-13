@@ -5,10 +5,16 @@ import type {
   DelegatedImplementationCheck,
   DelegatedImplementationResult,
   DelegatedResult,
+  DelegatedStructureRepair,
   DelegationSpawnRequest,
 } from "@pi-crew/core";
 
 const MAX_IMPLEMENTATION_EXCERPT_CHARS = 1_600;
+
+interface RepairedImplementationParse {
+  readonly implementation: DelegatedImplementationResult | null;
+  readonly repair: DelegatedStructureRepair;
+}
 
 export function appendImplementationResultInstructions(
   task: string,
@@ -39,10 +45,12 @@ export function attachExtractedImplementationResult(
 ): DelegatedResult {
   if (result.implementation !== undefined) return result;
   if (spawnRequest.expectedResultSchema !== "implementation") return result;
-  const implementation = text === undefined ? null : extractImplementationResult(text);
-  if (implementation === null) {
+  const parsed =
+    text === undefined ? missingTextRepair() : extractImplementationResultWithRepair(text);
+  if (parsed.implementation === null) {
     return {
       ...result,
+      structureRepair: result.structureRepair ?? parsed.repair,
       safeExcerpt:
         result.safeExcerpt ??
         bounded(text ?? "No assistant text was available for delegated implementation extraction."),
@@ -50,20 +58,68 @@ export function attachExtractedImplementationResult(
   }
   return {
     ...result,
-    implementation,
+    implementation: parsed.implementation,
+    structureRepair: result.structureRepair ?? parsed.repair,
     evidenceChecked: true,
-    safeExcerpt: result.safeExcerpt ?? bounded(JSON.stringify(implementation, null, 2)),
+    safeExcerpt: result.safeExcerpt ?? bounded(JSON.stringify(parsed.implementation, null, 2)),
     artifacts: result.artifacts ?? [
-      ...implementation.artifactHandles,
-      ...(implementation.denHandoffHandles ?? []),
+      ...parsed.implementation.artifactHandles,
+      ...(parsed.implementation.denHandoffHandles ?? []),
     ],
   };
 }
 
 export function extractImplementationResult(text: string): DelegatedImplementationResult | null {
-  const tagged = extractTaggedJson(text);
-  const parsed = parseJsonObject(tagged ?? text.trim());
-  return isImplementationResult(parsed) ? parsed : null;
+  return extractImplementationResultWithRepair(text).implementation;
+}
+
+function extractImplementationResultWithRepair(text: string): RepairedImplementationParse {
+  const strictParsed = parseJsonObject(extractTaggedJson(text) ?? text.trim());
+  if (isImplementationResult(strictParsed)) {
+    return { implementation: strictParsed, repair: { attempted: false, outcome: "not_needed" } };
+  }
+
+  const candidates = [
+    extractTaggedJson(text),
+    stripCodeFence(text),
+    extractJsonObject(text),
+  ].filter((candidate): candidate is string => candidate !== null && candidate.trim().length > 0);
+  const changes: string[] = [];
+  for (const candidate of candidates) {
+    const parsed = parseJsonObject(candidate);
+    if (!isRecord(parsed)) continue;
+    const normalized = normalizeImplementationObject(parsed, changes);
+    if (isImplementationResult(normalized)) {
+      return {
+        implementation: normalized,
+        repair: {
+          attempted: true,
+          outcome: "repaired",
+          changes: unique(changes),
+          warnings: ["structure-only repair; deterministic validator remains authoritative"],
+        },
+      };
+    }
+  }
+  return {
+    implementation: null,
+    repair: {
+      attempted: true,
+      outcome: changes.length > 0 ? "repair_invalid" : "unrepairable",
+      ...(changes.length > 0 ? { changes: unique(changes) } : {}),
+    },
+  };
+}
+
+function missingTextRepair(): RepairedImplementationParse {
+  return {
+    implementation: null,
+    repair: {
+      attempted: false,
+      outcome: "unrepairable",
+      warnings: ["no assistant text available"],
+    },
+  };
 }
 
 function extractTaggedJson(text: string): string | null {
@@ -72,6 +128,12 @@ function extractTaggedJson(text: string): string | null {
       text,
     );
   return match?.[1] ?? null;
+}
+
+function extractJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  return start >= 0 && end > start ? text.slice(start, end + 1) : null;
 }
 
 function parseJsonObject(text: string): unknown {
@@ -86,6 +148,92 @@ function stripCodeFence(text: string): string {
   const trimmed = text.trim();
   const match = /^```(?:json)?\s*([\s\S]*?)\s*```$/u.exec(trimmed);
   return match?.[1] ?? trimmed;
+}
+
+function normalizeImplementationObject(
+  value: Readonly<Record<string, unknown>>,
+  changes: string[],
+): Readonly<Record<string, unknown>> {
+  return {
+    status: normalizeStatus(readAlias(value, "status", changes)),
+    taskId: readAlias(value, "taskId", changes, "task_id"),
+    branch: readAlias(value, "branch", changes),
+    headCommit: readAlias(value, "headCommit", changes, "head_commit"),
+    noCodeChangeRationale: readAlias(
+      value,
+      "noCodeChangeRationale",
+      changes,
+      "no_code_change_rationale",
+    ),
+    changedFiles: readAlias(value, "changedFiles", changes, "changed_files"),
+    artifactHandles: normalizeArray(
+      readAlias(value, "artifactHandles", changes, "artifact_handles"),
+      changes,
+      "artifactHandles",
+    ).map((artifact) => normalizeArtifact(artifact, changes)),
+    checks: normalizeArray(readAlias(value, "checks", changes), changes, "checks"),
+    workdirStatus: normalizeWorkdir(
+      readAlias(value, "workdirStatus", changes, "workdir_status"),
+      changes,
+    ),
+    denHandoffHandles: normalizeArray(
+      readAlias(value, "denHandoffHandles", changes, "den_handoff_handles"),
+      changes,
+      "denHandoffHandles",
+    ).map((artifact) => normalizeArtifact(artifact, changes)),
+  };
+}
+
+function readAlias(
+  value: Readonly<Record<string, unknown>>,
+  canonical: string,
+  changes: string[],
+  alias?: string,
+): unknown {
+  if (value[canonical] !== undefined) return value[canonical];
+  if (alias !== undefined && value[alias] !== undefined) {
+    changes.push(`normalized field: ${alias} -> ${canonical}`);
+    return value[alias];
+  }
+  return undefined;
+}
+
+function normalizeStatus(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim();
+  if (["noCodeChange", "no-code-change", "no_code"].includes(normalized)) {
+    return "no_code_change";
+  }
+  if (normalized === "insufficientEvidence") return "insufficient_evidence";
+  return normalized;
+}
+
+function normalizeArray(value: unknown, changes: string[], field: string): readonly unknown[] {
+  if (value === undefined) return [];
+  if (Array.isArray(value)) return value;
+  changes.push(`wrapped single value as array: ${field}`);
+  return [value];
+}
+
+function normalizeArtifact(value: unknown, changes: string[]): unknown {
+  if (!isRecord(value)) return value;
+  return {
+    type: value["type"],
+    description: value["description"],
+    messageId: readAlias(value, "messageId", changes, "message_id"),
+    slug: value["slug"],
+    filePath: readAlias(value, "filePath", changes, "file_path"),
+    commitSha: readAlias(value, "commitSha", changes, "commit_sha"),
+  };
+}
+
+function normalizeWorkdir(value: unknown, changes: string[]): unknown {
+  if (!isRecord(value)) return value;
+  return {
+    state: value["state"],
+    summary: value["summary"],
+    dirtyFiles: readAlias(value, "dirtyFiles", changes, "dirty_files"),
+  };
 }
 
 function isImplementationResult(value: unknown): value is DelegatedImplementationResult {
@@ -175,6 +323,10 @@ function validArtifactType(value: unknown): boolean {
 function bounded(text: string): string {
   if (text.length <= MAX_IMPLEMENTATION_EXCERPT_CHARS) return text;
   return `${text.slice(0, MAX_IMPLEMENTATION_EXCERPT_CHARS)}… [truncated]`;
+}
+
+function unique(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
