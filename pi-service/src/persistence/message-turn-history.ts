@@ -1,13 +1,13 @@
-/** MessageRepository-backed conversational Agent history adapter. */
+/** MessageRepository-backed fullAgent Agent history adapter. */
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { MessageRepository, MessageRow } from "./types.js";
-import type { ConversationalTurnHistory } from "../instances/conversational-agent-responder.js";
+import type { FullAgentTurnHistory } from "../instances/full-agent-responder.js";
 
 type PersistableAgentRole = "user" | "assistant" | "tool" | "system";
 
 /** Stores Agent messages in the runtime messages table and rehydrates recent context. */
-export class MessageRepositoryTurnHistory implements ConversationalTurnHistory {
+export class MessageRepositoryTurnHistory implements FullAgentTurnHistory {
   constructor(private readonly messages: MessageRepository) {}
 
   async loadRecent(sessionId: string, limit: number): Promise<AgentMessage[]> {

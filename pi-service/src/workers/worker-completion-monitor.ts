@@ -3,12 +3,12 @@
  *
  * DESIGN: This is a pure assessment utility that takes raw worker state and
  * derives a structured closeout decision. It does NOT call Den MCP tools
- * directly — the conversational agent or executor is responsible for
+ * directly — the full agent or executor is responsible for
  * gathering the raw data and passing it in.
  *
  * Rationale: Separating assessment from data gathering makes this testable
  * without mocking Den MCP, and allows reuse from different contexts
- * (conversational agent, worker executor, admin CLI).
+ * (full agent, worker executor, admin CLI).
  *
  * @module pi-service/workers/worker-completion-monitor
  */

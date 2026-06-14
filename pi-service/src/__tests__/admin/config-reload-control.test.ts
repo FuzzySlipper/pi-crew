@@ -159,7 +159,7 @@ function overview(): DiagnosticsOverview {
     denChannels: { status: "ok", lastOkAt: "1970-01-01T00:00:00.000Z" },
     mcp: { status: "ok", lastOkAt: "1970-01-01T00:00:00.000Z" },
     runtimeDb: { status: "ok", path: ":memory:", walEnabled: true, tableCount: 1, schemaVersion: 1 },
-    counts: { activeSessions: 0, workerSessions: 0, conversationalSessions: 0, activeAssignmentsLocal: 0, stuckWorkers: 0, checkpointWaiting: 0, degradedConversationalSessions: 0 },
+    counts: { activeSessions: 0, workerSessions: 0, fullSessions: 0, activeAssignmentsLocal: 0, stuckWorkers: 0, checkpointWaiting: 0, degradedFullSessions: 0 },
     sessions: [],
     recentEvents: [],
   } as const;

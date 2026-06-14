@@ -157,7 +157,7 @@ export class RemediationControlService {
       const session = await this.#sessionStore?.get(sessionId);
       const before = { sessionId, kind: session?.kind ?? "missing", instanceId: session?.instanceId ?? null };
       if (session === undefined || session === null) return denied(before, "session_not_found", []);
-      if (session.kind !== "conversational") return denied(before, "worker_sessions_den_sovereign", []);
+      if (session.kind !== "full") return denied(before, "worker_sessions_den_sovereign", []);
       if (request.dryRun) {
         return { accepted: true, before, after: null, warnings: [], denEvidence: localEvidence("dry_run") };
       }
@@ -188,7 +188,7 @@ export class RemediationControlService {
       const session = await this.#sessionStore?.get(sessionId);
       const before = { sessionId, kind: session?.kind ?? "missing", state: session?.state ?? "missing", instanceId: session?.instanceId ?? null };
       if (session === undefined || session === null) return denied(before, "session_not_found", []);
-      if (session.kind !== "conversational") return denied(before, "worker_sessions_den_sovereign", []);
+      if (session.kind !== "full") return denied(before, "worker_sessions_den_sovereign", []);
       if (request.dryRun) return { accepted: true, before, after: null, warnings: [], denEvidence: localEvidence("dry_run") };
       if (session.instanceId !== null) await this.#instancePool?.release(session.instanceId);
       await this.#sessionStore?.save({ ...session, state: "archived", instanceId: null });

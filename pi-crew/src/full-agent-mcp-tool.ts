@@ -11,7 +11,7 @@ export interface DefaultDenToolContext {
   readonly projectId?: string;
 }
 
-export function createConversationalMcpAgentTool(
+export function createFullAgentMcpAgentTool(
   tool: ReturnType<McpToolRegistry["listTools"]>[number],
   mcpClient: MCPClient,
   defaults: DefaultDenToolContext,

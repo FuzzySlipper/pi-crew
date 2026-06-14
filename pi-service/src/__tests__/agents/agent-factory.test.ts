@@ -41,16 +41,16 @@ describe("AgentFactoryImpl", () => {
   });
 
   describe("createSession", () => {
-    it("creates a conversational session", async () => {
+    it("creates a full-agent session", async () => {
       const config: SessionConfig = {
         profileId: "default",
-        kind: "conversational",
+        kind: "full",
         channelBindings: ["ch-test"],
       };
 
       const record = await factory.createSession(config);
 
-      expect(record.kind).toBe("conversational");
+      expect(record.kind).toBe("full");
       expect(record.profileId).toBe("default");
       expect(record.channelBindings).toEqual(["ch-test"]);
       expect(record.state).toBe("active");
@@ -88,7 +88,7 @@ describe("AgentFactoryImpl", () => {
     it("emits session.created event", async () => {
       const config: SessionConfig = {
         profileId: "default",
-        kind: "conversational",
+        kind: "full",
       };
 
       const record = await factory.createSession(config);
@@ -99,14 +99,14 @@ describe("AgentFactoryImpl", () => {
       expect(createdEvents).toHaveLength(1);
       expect(createdEvents.at(0)?.payload).toMatchObject({
         sessionId: record.id,
-        kind: "conversational",
+        kind: "full",
       });
     });
 
     it("persists the session to the store", async () => {
       const config: SessionConfig = {
         profileId: "default",
-        kind: "conversational",
+        kind: "full",
       };
 
       const record = await factory.createSession(config);
@@ -119,7 +119,7 @@ describe("AgentFactoryImpl", () => {
     it("creates sessions with unique IDs", async () => {
       const config: SessionConfig = {
         profileId: "default",
-        kind: "conversational",
+        kind: "full",
       };
 
       const a = await factory.createSession(config);
@@ -131,7 +131,7 @@ describe("AgentFactoryImpl", () => {
     it("acquires a distinct instance per session", async () => {
       const config: SessionConfig = {
         profileId: "default",
-        kind: "conversational",
+        kind: "full",
       };
 
       const a = await factory.createSession(config);

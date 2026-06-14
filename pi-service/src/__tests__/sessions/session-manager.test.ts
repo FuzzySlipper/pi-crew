@@ -23,7 +23,7 @@ function makeSessionConfig(
 ): SessionConfig {
   return {
     profileId: "default",
-    kind: "conversational",
+    kind: "full",
     ...overrides,
   };
 }
@@ -45,12 +45,12 @@ describe("SessionManagerImpl", () => {
   });
 
   describe("create", () => {
-    it("creates a conversational session", async () => {
+    it("creates a full-agent session", async () => {
       const record = await manager.create(
-        makeSessionConfig({ kind: "conversational" }),
+        makeSessionConfig({ kind: "full" }),
       );
 
-      expect(record.kind).toBe("conversational");
+      expect(record.kind).toBe("full");
       expect(record.state).toBe("active");
       expect(record.instanceId).toBeTruthy();
     });
@@ -126,7 +126,7 @@ describe("SessionManagerImpl", () => {
   });
 
   describe("bindChannel / unbindChannel", () => {
-    it("binds a channel to a conversational session", async () => {
+    it("binds a channel to a full-agent session", async () => {
       const record = await manager.create(makeSessionConfig());
       await manager.bindChannel(record.id, "ch-beta");
 
@@ -200,7 +200,7 @@ describe("SessionManagerImpl", () => {
       });
     });
 
-    it("creates a new conversational session as fallback", async () => {
+    it("creates a new full-agent session as fallback", async () => {
       const provider = new FakeChannelProvider();
       eventBus.clear();
 
@@ -326,7 +326,7 @@ describe("SessionManagerImpl", () => {
       return { eventBus: eb, store: s, pool: p, manager: m };
     }
 
-    it("rehydrates idle conversational session and processes message", async () => {
+    it("rehydrates idle full-agent session and processes message", async () => {
       const { eventBus, store, pool, manager } = makeRehydrationManager();
 
       const record = await manager.create(
@@ -462,7 +462,7 @@ describe("SessionManagerImpl", () => {
   });
 
   describe("fallback profile routing", () => {
-    it("uses injected fallbackProfileId for new conversational sessions", async () => {
+    it("uses injected fallbackProfileId for new full-agent sessions", async () => {
       const provider = new FakeChannelProvider();
       eventBus.clear();
 

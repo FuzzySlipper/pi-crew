@@ -54,7 +54,7 @@ export class DiagnosticsService {
     const counts = {
       activeSessions: sessions.filter((session) => session.state === "active").length,
       workerSessions: sessions.filter((session) => session.kind === "worker").length,
-      conversationalSessions: sessions.filter((session) => session.kind === "conversational").length,
+      fullSessions: sessions.filter((session) => session.kind === "full").length,
       activeAssignmentsLocal: projectedSessions.filter((session) => session.workerBinding !== null)
         .length,
       stuckWorkers: projectedSessions.filter((session) => session.localLifecycleState === "worker.stuck")
@@ -62,9 +62,9 @@ export class DiagnosticsService {
       checkpointWaiting: projectedSessions.filter(
         (session) => session.localLifecycleState === "checkpoint.waiting",
       ).length,
-      degradedConversationalSessions: projectedSessions.filter(
+      degradedFullSessions: projectedSessions.filter(
         (session) =>
-          session.kind === "conversational" &&
+          session.kind === "full" &&
           (session.recentErrorCount > 0 || session.presenceStatus === "degraded"),
       ).length,
     };
@@ -193,13 +193,13 @@ function classifySession(
   }
   if (events.some((event) => event.event === "worker.stuck")) return "pi_crew_local";
   if (session.kind === "worker" && denAssignment === null) return "unknown";
-  // DESIGN: Conversational sessions with recent turn errors or degraded presence
+  // DESIGN: Full-agent sessions with recent turn errors or degraded presence
   // are classified as pi_crew_local so operators can see them in diagnostics.
   // Rationale: these are local runtime issues that need operator attention.
-  if (session.kind === "conversational" && countRecentErrors(session.id, events) > 0) {
+  if (session.kind === "full" && countRecentErrors(session.id, events) > 0) {
     return "pi_crew_local";
   }
-  if (session.kind === "conversational" && findPresenceStatus(session, events) === "degraded") {
+  if (session.kind === "full" && findPresenceStatus(session, events) === "degraded") {
     return "pi_crew_local";
   }
   return "healthy";
@@ -284,7 +284,7 @@ function uptimeSeconds(startedAt: string, current: string): number {
   return Math.floor(elapsed / 1000);
 }
 
-// ── Conversational diagnostics helpers ────────────────────────
+// ── FullAgent diagnostics helpers ────────────────────────
 
 function countRecentErrors(sessionId: string, events: readonly DiagnosticEventRecord[]): number {
   return events.filter(
@@ -299,9 +299,9 @@ function findPresenceStatus(
   events: readonly DiagnosticEventRecord[],
 ): "active" | "idle" | "degraded" | "offline" | "unknown" {
   // DESIGN: Derive presence status from session state and recent presence events.
-  // Rationale: Conversational sessions need a quick health signal in diagnostics
+  // Rationale: Full-agent sessions need a quick health signal in diagnostics
   // without requiring a separate presence query.
-  if (session.kind !== "conversational") return "unknown";
+  if (session.kind !== "full") return "unknown";
   if (session.state === "archived") return "offline";
   if (session.state === "idle") return "idle";
 

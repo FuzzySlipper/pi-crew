@@ -2,20 +2,20 @@ interface TurnQueueEntry<T> {
   readonly promise: Promise<T>;
 }
 
-export interface ConversationalTurnCoordinatorOptions {
+export interface FullAgentTurnCoordinatorOptions {
   readonly turnTimeoutMs?: number;
 }
 
 export const DEFAULT_CONVERSATIONAL_TURN_TIMEOUT_MS = 300_000;
 
 /**
- * Serializes conversational turns per durable session ID.
+ * Serializes fullAgent turns per durable session ID.
  */
-export class ConversationalTurnCoordinator {
+export class FullAgentTurnCoordinator {
   readonly turnTimeoutMs: number;
   private readonly queues = new Map<string, TurnQueueEntry<unknown>>();
 
-  constructor(options: ConversationalTurnCoordinatorOptions = {}) {
+  constructor(options: FullAgentTurnCoordinatorOptions = {}) {
     this.turnTimeoutMs = options.turnTimeoutMs ?? DEFAULT_CONVERSATIONAL_TURN_TIMEOUT_MS;
   }
 
@@ -31,10 +31,10 @@ export class ConversationalTurnCoordinator {
   }
 }
 
-export class ConversationalTurnTimeoutError extends Error {
+export class FullAgentTurnTimeoutError extends Error {
   constructor(readonly timeoutMs: number) {
-    super(`Conversational turn exceeded ${String(timeoutMs)}ms timeout`);
-    this.name = "ConversationalTurnTimeoutError";
+    super(`FullAgent turn exceeded ${String(timeoutMs)}ms timeout`);
+    this.name = "FullAgentTurnTimeoutError";
   }
 }
 
@@ -42,7 +42,7 @@ export function withTurnTimeout<T>(operation: Promise<T>, timeoutMs: number): Pr
   let timeout: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
-      reject(new ConversationalTurnTimeoutError(timeoutMs));
+      reject(new FullAgentTurnTimeoutError(timeoutMs));
     }, timeoutMs);
   });
   return Promise.race([operation, timeoutPromise]).finally(() => {
@@ -50,8 +50,8 @@ export function withTurnTimeout<T>(operation: Promise<T>, timeoutMs: number): Pr
   });
 }
 
-export function isConversationalTurnTimeoutError(
+export function isFullAgentTurnTimeoutError(
   error: unknown,
-): error is ConversationalTurnTimeoutError {
-  return error instanceof ConversationalTurnTimeoutError;
+): error is FullAgentTurnTimeoutError {
+  return error instanceof FullAgentTurnTimeoutError;
 }

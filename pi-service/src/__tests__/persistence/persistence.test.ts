@@ -24,7 +24,7 @@ function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
   const now = new Date().toISOString();
   return {
     id: "session-1",
-    kind: "conversational",
+    kind: "full",
     profileId: "runner",
     instanceId: null,
     createdAt: now,
@@ -107,7 +107,7 @@ describe("runtime persistence", () => {
   it("opens SQLite in WAL mode and creates only runtime tables", () => {
     const health = db.health();
     expect(health.walEnabled).toBe(true);
-    expect(health.schemaVersion).toBe(4);
+    expect(health.schemaVersion).toBe(6);
     const rows = db.handle
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all() as Array<{ name: string }>;
@@ -120,7 +120,7 @@ describe("runtime persistence", () => {
     expect(names).not.toContain("memory");
   });
 
-  it("persists conversational and worker sessions across reopen", async () => {
+  it("persists full-agent and worker sessions across reopen", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
     await sessions.save(
       session({ id: "chat", channelBindings: ["den:604"], instanceId: "inst-chat" }),
@@ -136,6 +136,38 @@ describe("runtime persistence", () => {
     expect(chat.id).toBe("chat");
     expect(chat.instanceId).toBe("inst-chat");
     expect(present(await reopened.get("worker")).workerBinding?.runId).toBe("run-1");
+  });
+
+  it("fails loudly for persisted legacy conversational session kind", async () => {
+    db.handle
+      .prepare(
+        `INSERT INTO sessions (id, kind, profile_id, instance_id, channel_bindings_json,
+           worker_binding_json, delegation_json, delegation_spawn_request_json,
+           delegation_constraints_json, effective_runtime_json,
+           status, created_at, last_activity, expires_at)
+         VALUES (@id, @kind, @profile_id, @instance_id, @channel_bindings_json,
+                 @worker_binding_json, @delegation_json, @delegation_spawn_request_json,
+                 @delegation_constraints_json, @effective_runtime_json,
+                 @status, @created_at, @last_activity, @expires_at)`,
+      )
+      .run({
+        id: "legacy-chat",
+        kind: "conversational",
+        profile_id: "runner",
+        instance_id: null,
+        channel_bindings_json: "[]",
+        worker_binding_json: null,
+        delegation_json: null,
+        delegation_spawn_request_json: null,
+        delegation_constraints_json: null,
+        effective_runtime_json: null,
+        status: "active",
+        created_at: new Date().toISOString(),
+        last_activity: new Date().toISOString(),
+        expires_at: null,
+      });
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    expect(() => sessions.get("legacy-chat")).toThrow(/Legacy session kind conversational/);
   });
 
   it("persists delegated runtime and remaining delegation constraints across reopen", async () => {
@@ -239,7 +271,7 @@ describe("runtime persistence", () => {
 
   it("hydrates active sessions and archives terminal worker bindings", async () => {
     const sessions = new SqliteSessionRepository(db.handle, logger);
-    await sessions.save(session({ id: "chat", kind: "conversational" }));
+    await sessions.save(session({ id: "chat", kind: "full" }));
     await sessions.save(
       session({
         id: "done-worker",

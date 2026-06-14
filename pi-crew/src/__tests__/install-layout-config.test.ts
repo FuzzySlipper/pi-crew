@@ -138,7 +138,7 @@ describe("installed config layout", () => {
     expect(config.delegation.projection.projectToolCalledEvents).toBe(true);
   });
 
-  it("uses installed profiles root for conversational responder assembly", () => {
+  it("uses installed profiles root for full-agent responder assembly", () => {
     const root = tempRoot();
     const profileDir = join(root, "profiles", "installed-profile");
     mkdirSync(profileDir, { recursive: true });
@@ -165,7 +165,7 @@ describe("installed config layout", () => {
         "den:",
         '  coreUrl: "http://localhost:3030"',
         "  requiredAtStartup: false",
-        "conversationalAgents:",
+        "fullAgents:",
         "  - agentId: installed",
         "    enabled: true",
         "    profileId: installed-profile",
@@ -199,6 +199,26 @@ describe("installed config layout", () => {
     );
 
     expect(() => factory.createResponder({ profileId: "installed-profile" })).not.toThrow();
+  });
+
+  it("fails loudly for legacy conversationalAgents config", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "install:",
+        `  root: "${root}"`,
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "conversationalAgents: []",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    expect(() => loadCrewConfig(configPath)).toThrow(/rename it to fullAgents/);
   });
 
   it("fails closed when installed profile root is missing", () => {

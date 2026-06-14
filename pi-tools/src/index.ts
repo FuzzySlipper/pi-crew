@@ -122,14 +122,14 @@ export {
 
 export { SessionToolFilter } from "./session-tool-filter.js";
 
-// ── Conversational policy ─────────────────────────────────────
+// ── FullAgent policy ─────────────────────────────────────
 
 export {
-  type ConversationalPolicyInput,
-  createConversationalPolicy,
+  type FullAgentPolicyInput,
+  createFullAgentPolicy,
   WORKER_ONLY_TOOLS,
   isWorkerOnlyTool,
-} from "./conversational-policy.js";
+} from "./full-agent-policy.js";
 
 // ── Assignment-manager policy ────────────────────────────────
 

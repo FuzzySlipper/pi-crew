@@ -29,7 +29,7 @@ function binding(overrides: Partial<ChannelBindingRecord> = {}): ChannelBindingR
 function config(overrides: Partial<SessionConfig> = {}): SessionConfig {
   return {
     profileId: "pi-crew-runner",
-    kind: "conversational",
+    kind: "full",
     channelBindings: [binding()],
     ...overrides,
   };
@@ -58,7 +58,7 @@ function harness() {
 }
 
 describe("SessionPresenceBridge", () => {
-  it("refreshes ordinary subscription evidence when a conversational session rehydrates", async () => {
+  it("refreshes ordinary subscription evidence when a full-agent session rehydrates", async () => {
     const { manager, presence, store } = harness();
     const record = await manager.create(config());
     await manager.evictIdleSessions();
@@ -80,7 +80,7 @@ describe("SessionPresenceBridge", () => {
     expect(presence.sentMessages).toHaveLength(0);
   });
 
-  it("marks conversational subscriptions idle on idle eviction without leaving membership", async () => {
+  it("marks fullAgent subscriptions idle on idle eviction without leaving membership", async () => {
     const { manager, presence } = harness();
     await manager.create(config());
 
@@ -92,7 +92,7 @@ describe("SessionPresenceBridge", () => {
     expect(presence.sentMessages).toHaveLength(0);
   });
 
-  it("marks membership left only when a conversational session is archived", async () => {
+  it("marks membership left only when a full-agent session is archived", async () => {
     const { manager, presence } = harness();
     const record = await manager.create(config());
 
@@ -103,7 +103,7 @@ describe("SessionPresenceBridge", () => {
     expect(rows[0]?.presenceState).toBe("left");
   });
 
-  it("marks membership left when a conversational session unbinds a channel", async () => {
+  it("marks membership left when a full-agent session unbinds a channel", async () => {
     const { manager, presence } = harness();
     const record = await manager.create(config());
 
@@ -115,7 +115,7 @@ describe("SessionPresenceBridge", () => {
     expect(presence.sentMessages).toHaveLength(0);
   });
 
-  it("does not publish conversational channel presence for worker sessions", async () => {
+  it("does not publish fullAgent channel presence for worker sessions", async () => {
     const { manager, presence } = harness();
     await manager.create(config({
       kind: "worker",

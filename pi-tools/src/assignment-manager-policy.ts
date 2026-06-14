@@ -1,9 +1,9 @@
 /**
- * Assignment-manager policy — a conversational agent capability tier
+ * Assignment-manager policy — a full agent capability tier
  * that can drive worker assignments without unrestricted worker lifecycle access.
  *
  * DESIGN: Assignment-manager agents occupy a middle ground between ordinary
- * conversational sessions and full worker sessions. They may:
+ * full-agent sessions and full worker sessions. They may:
  *
  *   - Read Den state (tasks, messages, documents, worker run status)
  *   - Create and monitor worker assignments (lease, cleanup, list pool)
@@ -16,7 +16,7 @@
  *   - Use context_status, request_checkpoint, or record_cleanup_evidence
  *   - Spawn subagents directly (subagent delegation goes through worker path)
  *
- * Rationale: An assignment-driving conversational agent orchestrates work
+ * Rationale: An assignment-driving full agent orchestrates work
  * through the Den-managed worker path. It never impersonates a worker or
  * short-circuits the assignment lifecycle.
  *
@@ -25,7 +25,7 @@
 
 import type { CredentialAccessLevel, ExecutionPolicy } from "@pi-crew/core";
 import { createExecutionPolicy } from "./execution-policy.js";
-import { WORKER_ONLY_TOOLS } from "./conversational-policy.js";
+import { WORKER_ONLY_TOOLS } from "./full-agent-policy.js";
 
 // ── Assignment-manager tool categories ─────────────────────────
 
@@ -132,7 +132,7 @@ const ASSIGNMENT_MANAGER_MAX_TOKENS_PER_TURN = 128_000;
 // ── Factory ────────────────────────────────────────────────────
 
 /**
- * Create an {@link ExecutionPolicy} for an assignment-manager conversational session.
+ * Create an {@link ExecutionPolicy} for an assignment-manager full-agent session.
  *
  * The policy uses an allowlist approach: by default, only tools in
  * {@link ASSIGNMENT_MANAGER_SAFE_TOOLS} are permitted. This ensures that

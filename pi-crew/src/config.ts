@@ -83,21 +83,21 @@ const WorkerPoolConfigSchema = z
   })
   .default({});
 
-const ConversationalAgentSessionConfigSchema = z.object({
+const FullAgentSessionConfigSchema = z.object({
   ownerId: z.string().min(1),
   sessionId: z.string().min(1),
   idleTimeoutMs: z.number().int().positive().optional(),
   maxHistoryMessages: z.number().int().positive(),
 });
 
-const ConversationalAgentChannelConfigSchema = z.object({
+const FullAgentChannelConfigSchema = z.object({
   providerId: z.string().min(1),
   channelId: z.string().min(1),
   subscriptionIdentity: z.string().min(1),
   wakePolicy: z.enum(["subscription", "direct_polling"]).default("subscription"),
 });
 
-const ConversationalAgentRuntimeConfigSchema = z
+const FullAgentRuntimeConfigSchema = z
   .object({
     mode: z.literal("agent").default("agent"),
     provider: z.string().min(1).optional(),
@@ -110,14 +110,14 @@ const ConversationalAgentRuntimeConfigSchema = z
   })
   .default({});
 
-const ConversationalAgentLifecycleConfigSchema = z.object({
+const FullAgentLifecycleConfigSchema = z.object({
   singleFlight: z.boolean().default(true),
   turnTimeoutMs: z.number().int().positive(),
   onStartup: z.literal("rehydrate_or_create").default("rehydrate_or_create"),
   onShutdownStatus: z.literal("offline").default("offline"),
 });
 
-const ConversationalAgentConfigSchema = z.object({
+const FullAgentConfigSchema = z.object({
   agentId: z.string().min(1),
   enabled: z.boolean().default(true),
   profileId: z.string().min(1),
@@ -125,10 +125,10 @@ const ConversationalAgentConfigSchema = z.object({
   memberIdentity: z.string().min(1),
   memberRole: z.string().min(1).optional(),
   displayName: z.string().min(1).optional(),
-  session: ConversationalAgentSessionConfigSchema,
-  channels: z.array(ConversationalAgentChannelConfigSchema).min(1),
-  runtime: ConversationalAgentRuntimeConfigSchema,
-  lifecycle: ConversationalAgentLifecycleConfigSchema,
+  session: FullAgentSessionConfigSchema,
+  channels: z.array(FullAgentChannelConfigSchema).min(1),
+  runtime: FullAgentRuntimeConfigSchema,
+  lifecycle: FullAgentLifecycleConfigSchema,
 });
 
 const DelegationProjectionConfigSchema = z.object({
@@ -159,7 +159,7 @@ export const CrewConfigSchema = z.object({
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
-  conversationalAgents: z.array(ConversationalAgentConfigSchema).default([]),
+  fullAgents: z.array(FullAgentConfigSchema).default([]),
   workerPool: WorkerPoolConfigSchema,
   workers: WorkerRoleMappingConfigSchema.default({
     bindings: DEFAULT_WORKER_ROLE_BINDINGS,
@@ -214,6 +214,7 @@ export function resolveCrewInstallLayout(config: CrewConfig): CrewInstallLayout 
 export function loadCrewConfig(yamlPath: string): CrewConfig {
   const raw = readConfigFile(yamlPath);
   const parsed = parseConfigYaml(raw, yamlPath);
+  rejectLegacyTerminologyConfig(parsed);
 
   const result = CrewConfigSchema.safeParse(parsed ?? {});
   if (!result.success) {
@@ -254,6 +255,15 @@ function validateConfiguredProfilesRoot(profilesRoot: string | undefined): void 
   }
   if (!statSync(profilesRoot).isDirectory()) {
     throw new ConfigurationError(`Configured profiles root is not a directory: ${profilesRoot}`);
+  }
+}
+
+function rejectLegacyTerminologyConfig(parsed: unknown): void {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
+  if (Object.prototype.hasOwnProperty.call(parsed, "conversationalAgents")) {
+    throw new ConfigurationError(
+      "Legacy config key conversationalAgents is no longer supported; rename it to fullAgents.",
+    );
   }
 }
 

@@ -14,7 +14,7 @@ function makeRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
     id: "sess-test-1",
     profileId: "default",
     instanceId: "inst-1",
-    kind: "conversational",
+    kind: "full",
     createdAt: now,
     lastActiveAt: now,
     state: "active",

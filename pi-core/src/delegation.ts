@@ -10,7 +10,7 @@
 import type { ExecutionPolicy } from "./security.js";
 
 /** Supported top-level and child session kinds. */
-export type SessionKind = "conversational" | "worker" | "delegated";
+export type SessionKind = "full" | "worker" | "delegated";
 
 /**
  * Handle to a durable artifact produced by a delegated child.

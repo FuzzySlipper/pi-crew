@@ -1,4 +1,4 @@
-/** Tests for conversational turn coordination and safe failures. */
+/** Tests for fullAgent turn coordination and safe failures. */
 
 import { describe, expect, it } from "vitest";
 import { FakeChannelProvider, FakeEventBus, FakeLogger } from "@pi-crew/core";
@@ -72,11 +72,11 @@ function message(id: string, text: string): ChannelMessage {
   };
 }
 
-describe("SessionManagerImpl conversational turn coordination", () => {
+describe("SessionManagerImpl fullAgent turn coordination", () => {
   it("serializes concurrent messages for one session and emits busy then active presence", async () => {
     const { eventBus, manager, provider, responder } = createHarness();
     await manager.create({
-      kind: "conversational",
+      kind: "full",
       profileId: "system-architect",
       channelBindings: [binding],
     });
@@ -112,7 +112,7 @@ describe("SessionManagerImpl conversational turn coordination", () => {
   it("sends a safe response and recovers presence after provider failure", async () => {
     const { eventBus, manager, provider, responder } = createHarness();
     await manager.create({
-      kind: "conversational",
+      kind: "full",
       profileId: "system-architect",
       channelBindings: [binding],
     });
@@ -138,7 +138,7 @@ describe("SessionManagerImpl conversational turn coordination", () => {
   it("times out a stuck turn with a safe response and releases the session lock", async () => {
     const { manager, provider, responder } = createHarness({ turnTimeoutMs: 5 });
     await manager.create({
-      kind: "conversational",
+      kind: "full",
       profileId: "system-architect",
       channelBindings: [binding],
     });

@@ -1,4 +1,4 @@
-/** Tests for durable session ID propagation through conversational routing. */
+/** Tests for durable session ID propagation through fullAgent routing. */
 
 import type { ChannelContent, ChannelMessage } from "@pi-crew/core";
 import { FakeChannelProvider, FakeEventBus, FakeLogger } from "@pi-crew/core";
@@ -42,7 +42,7 @@ function message(id: string, text: string): ChannelMessage {
 }
 
 describe("session history routing", () => {
-  it("passes the durable conversational session ID into fresh and rehydrated Agent responders", async () => {
+  it("passes the durable full-agent session ID into fresh and rehydrated Agent responders", async () => {
     const logger = new FakeLogger();
     const eventBus = new FakeEventBus();
     const store = new InMemorySessionStore();

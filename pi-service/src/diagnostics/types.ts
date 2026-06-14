@@ -61,11 +61,11 @@ export interface DiagnosticEventJournal {
 export interface DiagnosticCounts {
   readonly activeSessions: number;
   readonly workerSessions: number;
-  readonly conversationalSessions: number;
+  readonly fullSessions: number;
   readonly activeAssignmentsLocal: number;
   readonly stuckWorkers: number;
   readonly checkpointWaiting: number;
-  readonly degradedConversationalSessions: number;
+  readonly degradedFullSessions: number;
 }
 
 export interface DiagnosticChannelBindingProjection {

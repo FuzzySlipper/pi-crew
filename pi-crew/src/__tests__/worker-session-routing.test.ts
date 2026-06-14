@@ -3,8 +3,8 @@
  *
  * Verifies the full chain from AgentFactoryImpl through InstancePool/InstanceFactory
  * to the responder factory, proving that:
- * - Worker sessions create instances without requiring a conversational agent match.
- * - Conversational sessions still route through the conversational factory.
+ * - Worker sessions create instances without requiring a full agent match.
+ * - Full-agent sessions still route through the fullAgent factory.
  *
  * @module pi-crew/__tests__/worker-session-routing.test
  */
@@ -23,10 +23,10 @@ import { SessionKindAwareResponderFactory } from "../session-kind-responder-fact
 // ── Fakes ──────────────────────────────────────────────────────
 
 /**
- * A conversational-only factory that rejects any profile not in its allowlist.
- * Simulates the ProfileMappedConversationalRuntimeBuilder behavior.
+ * A fullAgent-only factory that rejects any profile not in its allowlist.
+ * Simulates the ProfileMappedFullAgentRuntimeBuilder behavior.
  */
-class StrictConversationalFactory implements AgentResponderFactory {
+class StrictFullAgentFactory implements AgentResponderFactory {
   public readonly calls: AgentResponderFactoryContext[] = [];
   private readonly allowedProfiles: ReadonlySet<string>;
 
@@ -36,7 +36,7 @@ class StrictConversationalFactory implements AgentResponderFactory {
 
   createResponder(context: AgentResponderFactoryContext): AgentResponder {
     if (!this.allowedProfiles.has(context.profileId)) {
-      throw new Error(`No configured conversational agent matches profile ${context.profileId}`);
+      throw new Error(`No configured full agent matches profile ${context.profileId}`);
     }
     this.calls.push(context);
     return {
@@ -48,7 +48,7 @@ class StrictConversationalFactory implements AgentResponderFactory {
 // ── Helper ─────────────────────────────────────────────────────
 
 function buildTestSetup(allowedProfiles: readonly string[] = ["conv-architect"]) {
-  const convFactory = new StrictConversationalFactory(allowedProfiles);
+  const convFactory = new StrictFullAgentFactory(allowedProfiles);
   const kindAwareFactory = new SessionKindAwareResponderFactory(convFactory);
   const logger = new FakeLogger();
   const eventBus = new FakeEventBus();
@@ -67,7 +67,7 @@ function buildTestSetup(allowedProfiles: readonly string[] = ["conv-architect"])
 // ── Tests ──────────────────────────────────────────────────────
 
 describe("Worker session routing through SessionKindAwareResponderFactory", () => {
-  it("worker session creation bypasses conversational factory", async () => {
+  it("worker session creation bypasses fullAgent factory", async () => {
     const { convFactory, agentFactory, pool } = buildTestSetup();
 
     const record = await agentFactory.createSession({
@@ -86,7 +86,7 @@ describe("Worker session routing through SessionKindAwareResponderFactory", () =
     expect(record.profileId).toBe("coder-worker");
     expect(record.kind).toBe("worker");
 
-    // The strict conversational factory was never called
+    // The strict fullAgent factory was never called
     expect(convFactory.calls).toHaveLength(0);
 
     // The instance was acquired and exists in the pool
@@ -95,26 +95,26 @@ describe("Worker session routing through SessionKindAwareResponderFactory", () =
     expect(pool.has(instanceId)).toBe(true);
   });
 
-  it("conversational session creation routes through conversational factory", async () => {
+  it("full-agent session creation routes through fullAgent factory", async () => {
     const { convFactory, agentFactory } = buildTestSetup();
 
     const record = await agentFactory.createSession({
       profileId: "conv-architect",
-      kind: "conversational",
+      kind: "full",
       channelBindings: [],
     });
 
     expect(record).toBeDefined();
     expect(record.profileId).toBe("conv-architect");
-    expect(record.kind).toBe("conversational");
+    expect(record.kind).toBe("full");
     expect(convFactory.calls).toHaveLength(1);
     expect(convFactory.calls[0]?.profileId).toBe("conv-architect");
-    expect(convFactory.calls[0]?.kind).toBe("conversational");
+    expect(convFactory.calls[0]?.kind).toBe("full");
   });
 
-  it("worker session with unknown profile does not throw from conversational factory", async () => {
+  it("worker session with unknown profile does not throw from fullAgent factory", async () => {
     // This is the exact scenario that caused the original bug:
-    // a strict conversational factory would throw "No configured conversational
+    // a strict fullAgent factory would throw "No configured fullAgent
     // agent matches profile coder-worker" but the session-kind-aware router
     // intercepts before that happens.
     const { convFactory, agentFactory } = buildTestSetup();
@@ -136,18 +136,18 @@ describe("Worker session routing through SessionKindAwareResponderFactory", () =
     expect(convFactory.calls).toHaveLength(0);
   });
 
-  it("conversational session with unknown profile still throws", async () => {
-    // Verify that the conversational factory is still the authority for
-    // conversational sessions — unknown profiles should still fail.
+  it("full-agent session with unknown profile still throws", async () => {
+    // Verify that the fullAgent factory is still the authority for
+    // full-agent sessions — unknown profiles should still fail.
     const { agentFactory } = buildTestSetup();
 
     await expect(
       agentFactory.createSession({
         profileId: "unknown-profile",
-        kind: "conversational",
+        kind: "full",
         channelBindings: [],
       }),
-    ).rejects.toThrow("No configured conversational agent matches profile unknown-profile");
+    ).rejects.toThrow("No configured full agent matches profile unknown-profile");
   });
 
   it("worker instance has an echo responder that works", async () => {

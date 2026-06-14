@@ -11,18 +11,18 @@ import {
   DeterministicToolAgentResponderFactory,
   EchoAgentResponderFactory,
   type AgentResponderFactory,
-  type ConversationalTurnHistory,
+  type FullAgentTurnHistory,
   type RuntimeConfig,
 } from "@pi-crew/service";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
 
 import type { CrewConfig } from "./config.js";
 import { resolveCrewInstallLayout } from "./config.js";
-import { buildConversationalAgentResponderFactoryForAgents } from "./conversational-runtime-assembly.js";
+import { buildFullAgentResponderFactoryForAgents } from "./full-agent-runtime-assembly.js";
 import type {
-  ConversationalDelegationRuntimeConfig,
+  FullAgentDelegationRuntimeConfig,
   DenChannelReadbackRuntimeConfig,
-} from "./conversational-runtime-assembly.js";
+} from "./full-agent-runtime-assembly.js";
 
 /**
  * Build the AgentResponderFactory selected by validated runtime config.
@@ -32,20 +32,20 @@ export function buildRuntimeResponderFactory(
   eventBus: EventBus,
   logger?: Logger,
   mcpSurfaceManager?: McpSurfaceManager,
-  history?: ConversationalTurnHistory,
-  delegation?: ConversationalDelegationRuntimeConfig,
+  history?: FullAgentTurnHistory,
+  delegation?: FullAgentDelegationRuntimeConfig,
   channelReadback?: DenChannelReadbackRuntimeConfig,
 ): AgentResponderFactory {
   if (isCrewConfig(runtime)) {
-    const agents = runtime.conversationalAgents.filter((candidate) => candidate.enabled);
+    const agents = runtime.fullAgents.filter((candidate) => candidate.enabled);
     if (agents.length > 0) {
       if (logger === undefined || mcpSurfaceManager === undefined) {
         throw new ConfigurationError(
-          "Conversational Agent runtime assembly requires logger and MCP surface manager",
+          "FullAgent Agent runtime assembly requires logger and MCP surface manager",
         );
       }
       const profilesRoot = resolveCrewInstallLayout(runtime).profilesRoot;
-      return buildConversationalAgentResponderFactoryForAgents({
+      return buildFullAgentResponderFactoryForAgents({
         agents,
         profilesRoot,
         mcpSurfaceManager,
@@ -79,5 +79,5 @@ export function buildRuntimeResponderFactory(
 }
 
 function isCrewConfig(value: RuntimeConfig | CrewConfig): value is CrewConfig {
-  return "conversationalAgents" in value;
+  return "fullAgents" in value;
 }

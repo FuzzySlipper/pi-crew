@@ -236,7 +236,7 @@ export interface DenHttpSubscriptionConfig {
   /** Den Channels ordinary channel id whose membership/subscription is registered. */
   readonly channelId: string;
 
-  /** Stable Den-facing profile identity for this conversational runtime. */
+  /** Stable Den-facing profile identity for this fullAgent runtime. */
   readonly profileIdentity: string;
 
   /** Optional Den-facing member role such as runner or planner. */
@@ -245,7 +245,7 @@ export interface DenHttpSubscriptionConfig {
   /** Concrete runtime instance identity; changes on recreate/rebind. */
   readonly agentInstanceId: string;
 
-  /** Durable owner of the conversational session. */
+  /** Durable owner of the full-agent session. */
   readonly sessionOwnerId: string;
 
   /** Durable pi-crew session id bound to the ordinary channel subscription. */
@@ -276,7 +276,7 @@ export interface DenHttpConnectionConfig {
   /** Member identity for direct-agent event delivery/wake. */
   readonly memberIdentity: string;
 
-  /** Additional configured conversational member identities accepted by this runtime. */
+  /** Additional configured fullAgent member identities accepted by this runtime. */
   readonly memberIdentities?: readonly string[];
 
   /** Authentication token for the Den Channels Gateway. */

@@ -10,7 +10,7 @@ const conversation: SessionRecord = {
   id: "sess-prime-coder",
   profileId: "prime-coder",
   instanceId: "inst-1",
-  kind: "conversational",
+  kind: "full",
   delegation: null,
   delegationSpawnRequest: null,
   createdAt: "2026-06-13T00:00:00.000Z",
@@ -103,7 +103,7 @@ describe("DirectDebugSessionService", () => {
 
     await expect(
       workerService.runTurn({ sessionId: "worker-session", message: "hello" }),
-    ).rejects.toThrow(/conversational/);
+    ).rejects.toThrow(/full-agent/);
     await expect(
       unboundService.runTurn({ sessionId: "sess-prime-coder", message: "hello" }),
     ).rejects.toThrow(/channel binding/);
@@ -189,11 +189,11 @@ function diagnostics(): { projectOverview(): Promise<DiagnosticsOverview> } {
         counts: {
           activeSessions: 1,
           workerSessions: 0,
-          conversationalSessions: 1,
+          fullSessions: 1,
           activeAssignmentsLocal: 0,
           stuckWorkers: 0,
           checkpointWaiting: 0,
-          degradedConversationalSessions: 0,
+          degradedFullSessions: 0,
         },
         sessions: [],
         recentEvents: [

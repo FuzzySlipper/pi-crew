@@ -1,8 +1,8 @@
-# Dedicated conversational orchestrator test profile for pi-crew
-name: "Conversational Orchestrator Test"
+# Dedicated full-agent orchestrator test profile for pi-crew
+name: "Full Orchestrator Test"
 description: >-
   Bounded test orchestrator profile for native pi-crew delegation viability
-  checks. It participates as a Den Channels conversational agent and may use
+  checks. It participates as a Den Channels full agent and may use
   only minimal Den read/write tools plus native delegation tools.
 skills:
   - name: den-grounded-orchestration

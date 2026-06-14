@@ -25,17 +25,17 @@ const baseOverview: DiagnosticsOverview = {
   counts: {
     activeSessions: 1,
     workerSessions: 0,
-    conversationalSessions: 1,
+    fullSessions: 1,
     activeAssignmentsLocal: 0,
     stuckWorkers: 0,
     checkpointWaiting: 0,
-    degradedConversationalSessions: 0,
+    degradedFullSessions: 0,
   },
   sessions: [
     {
       sessionId: "sess-prime-coder",
       profileId: "prime-coder",
-      kind: "conversational",
+      kind: "full",
       sessionState: "active",
       messageCount: 0,
       instanceId: "inst-1",

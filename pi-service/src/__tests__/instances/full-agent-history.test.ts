@@ -1,4 +1,4 @@
-/** Tests for conversational Agent history persistence and rehydration. */
+/** Tests for fullAgent Agent history persistence and rehydration. */
 
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -7,14 +7,14 @@ import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { describe, expect, it } from "vitest";
 import { AgentInstanceImpl } from "../../instances/agent-instance.js";
 import {
-  ConversationalAgentResponder,
-  type ConversationalAgentAdapter,
-  type ConversationalAgentFactory,
-  type ConversationalAgentFactoryInput,
-  type ConversationalTurnHistory,
-} from "../../instances/conversational-agent-responder.js";
+  FullAgentResponder,
+  type FullAgentAdapter,
+  type FullAgentFactory,
+  type FullAgentFactoryInput,
+  type FullAgentTurnHistory,
+} from "../../instances/full-agent-responder.js";
 
-class CapturingAgent implements ConversationalAgentAdapter {
+class CapturingAgent implements FullAgentAdapter {
   readonly prompts: AgentMessage[][] = [];
   readonly state = { messages: [] as AgentMessage[] };
   readonly #signal = new AbortController().signal;
@@ -46,17 +46,17 @@ class CapturingAgent implements ConversationalAgentAdapter {
   }
 }
 
-class CapturingAgentFactory implements ConversationalAgentFactory {
+class CapturingAgentFactory implements FullAgentFactory {
   readonly agent = new CapturingAgent();
-  readonly created: ConversationalAgentFactoryInput[] = [];
+  readonly created: FullAgentFactoryInput[] = [];
 
-  create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
+  create(input: FullAgentFactoryInput): FullAgentAdapter {
     this.created.push(input);
     return this.agent;
   }
 }
 
-class InMemoryTurnHistory implements ConversationalTurnHistory {
+class InMemoryTurnHistory implements FullAgentTurnHistory {
   readonly appended: Array<{
     sessionId: string;
     role: AgentMessage["role"];
@@ -111,13 +111,13 @@ function channelMessage(text: string): ChannelMessage {
   };
 }
 
-describe("conversational Agent history", () => {
+describe("fullAgent Agent history", () => {
   it("loads durable session history before the next Agent prompt and appends the completed turn", async () => {
     const priorUser = userMessage("first user message");
     const priorAssistant = assistantMessage("first assistant response");
     const history = new InMemoryTurnHistory([priorUser, priorAssistant]);
     const factory = new CapturingAgentFactory();
-    const responder = new ConversationalAgentResponder({
+    const responder = new FullAgentResponder({
       agentFactory: factory,
       eventBus: new FakeEventBus(),
       history,

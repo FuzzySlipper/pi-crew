@@ -29,10 +29,10 @@ export interface DenWorkerCorrelationPayload {
   readonly batchIndex?: string;
 }
 
-/** Fired when a new conversational, worker, or delegated session is created. */
+/** Fired when a new fullAgent, worker, or delegated session is created. */
 export interface SessionCreatedPayload {
   readonly sessionId: string;
-  readonly kind: "conversational" | "worker" | "delegated";
+  readonly kind: "full" | "worker" | "delegated";
   readonly delegation?: DelegationLineage;
 }
 
@@ -120,20 +120,20 @@ export interface TurnCompletedPayload extends DenWorkerCorrelationPayload {
   readonly durationMs: number;
 }
 
-/** Fired when an Agent conversational message begins. */
+/** Fired when an Agent fullAgent message begins. */
 export interface MessageStartedPayload extends DenWorkerCorrelationPayload {
   readonly sessionId: string;
   readonly messageRole: string;
 }
 
-/** Fired when an Agent conversational message streams an update. */
+/** Fired when an Agent fullAgent message streams an update. */
 export interface MessageUpdatedPayload extends DenWorkerCorrelationPayload {
   readonly sessionId: string;
   readonly messageRole: string;
   readonly updateType: string;
 }
 
-/** Fired when an Agent conversational message completes. */
+/** Fired when an Agent fullAgent message completes. */
 export interface MessageCompletedPayload extends DenWorkerCorrelationPayload {
   readonly sessionId: string;
   readonly messageRole: string;
@@ -251,7 +251,7 @@ export interface CompletionPostedPayload {
   readonly accepted: boolean;
 }
 
-/** Fired when a conversational session is rehydrated after instance eviction. */
+/** Fired when a full-agent session is rehydrated after instance eviction. */
 export interface SessionRehydratedPayload {
   readonly sessionId: string;
   readonly profileId: string;
@@ -261,7 +261,7 @@ export interface SessionRehydratedPayload {
   readonly reason: "idle_session" | "instance_missing";
 }
 
-/** Fired when /new resets a conversational session boundary. */
+/** Fired when /new resets a full-agent session boundary. */
 export interface SessionResetPayload {
   readonly sessionId: string;
   readonly oldInstanceId: string | null;
@@ -272,7 +272,7 @@ export interface SessionResetPayload {
   readonly archivedMessageCount: number;
 }
 
-/** Fired when a conversational session needs provider presence reconciliation. */
+/** Fired when a full-agent session needs provider presence reconciliation. */
 export interface SessionPresenceBindingPayload {
   readonly providerId?: string;
   readonly channelId: string;
@@ -287,7 +287,7 @@ export interface SessionPresenceBindingPayload {
 export interface SessionPresencePayload {
   readonly sessionId: string;
   readonly profileId: string;
-  readonly kind: "conversational";
+  readonly kind: "full";
   readonly channelBinding: SessionPresenceBindingPayload;
   readonly agentInstanceId: string | null;
   readonly subscriptionStatus: ChannelSubscriptionStatus;

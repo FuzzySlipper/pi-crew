@@ -1,4 +1,4 @@
-/** Conversational session reset boundary for /new. */
+/** Full-agent session reset boundary for /new. */
 import type { EventBus } from "@pi-crew/core";
 import type { InstancePool } from "../instances/instance-pool.js";
 import type { MessageRepository } from "../persistence/types.js";
@@ -19,7 +19,7 @@ export interface SessionResetResult {
   readonly resetAt: string;
 }
 
-export interface ConversationalSessionResetDeps {
+export interface FullSessionResetDeps {
   readonly sessionStore: SessionStore;
   readonly instancePool: InstancePool;
   readonly messageRepository?: MessageRepository;
@@ -27,21 +27,21 @@ export interface ConversationalSessionResetDeps {
   readonly now?: () => string;
 }
 
-export class ConversationalSessionResetError extends Error {
+export class FullSessionResetError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "ConversationalSessionResetError";
+    this.name = "FullSessionResetError";
   }
 }
 
-export class ConversationalSessionResetService {
+export class FullSessionResetService {
   readonly #sessionStore: SessionStore;
   readonly #instancePool: InstancePool;
   readonly #messageRepository?: MessageRepository;
   readonly #eventBus: EventBus;
   readonly #now: () => string;
 
-  constructor(deps: ConversationalSessionResetDeps) {
+  constructor(deps: FullSessionResetDeps) {
     this.#sessionStore = deps.sessionStore;
     this.#instancePool = deps.instancePool;
     this.#messageRepository = deps.messageRepository;
@@ -51,9 +51,9 @@ export class ConversationalSessionResetService {
 
   async reset(request: SessionResetRequest): Promise<SessionResetResult> {
     const session = await this.#sessionStore.get(request.sessionId);
-    if (session === null) throw new ConversationalSessionResetError("session_not_found");
-    if (session.kind !== "conversational") {
-      throw new ConversationalSessionResetError("worker_sessions_den_sovereign");
+    if (session === null) throw new FullSessionResetError("session_not_found");
+    if (session.kind !== "full") {
+      throw new FullSessionResetError("worker_sessions_den_sovereign");
     }
     const archivedMessageCount = await this.#countAndClearMessages(session.id);
     if (session.instanceId !== null) await this.#instancePool.release(session.instanceId);

@@ -19,8 +19,8 @@ import type { Logger } from "@pi-crew/core";
 export interface HydrationResult {
   /** Number of active sessions loaded from the DB. */
   activeSessions: number;
-  /** Number of conversational sessions loaded. */
-  conversationalSessions: number;
+  /** Number of full-agent sessions loaded. */
+  fullSessions: number;
   /** Number of worker sessions loaded. */
   workerSessions: number;
   /** Session IDs that were archived (orphaned/terminal workers). */
@@ -69,10 +69,10 @@ export class StartupHydrator {
       `Hydration: loaded ${String(activeSessions.length)} active sessions`,
     );
 
-    // Separate worker and conversational sessions.
+    // Separate worker and full-agent sessions.
     const workerSessions = activeSessions.filter((s) => s.kind === "worker");
-    const conversationalSessions = activeSessions.filter(
-      (s) => s.kind === "conversational",
+    const fullSessions = activeSessions.filter(
+      (s) => s.kind === "full",
     );
 
     // Verify worker bindings against Den.
@@ -91,7 +91,7 @@ export class StartupHydrator {
 
     return {
       activeSessions: activeSessions.length,
-      conversationalSessions: conversationalSessions.length,
+      fullSessions: fullSessions.length,
       workerSessions: workerSessions.length,
       archivedSessionIds: archivedIds,
       diagnostics,

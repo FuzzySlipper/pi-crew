@@ -63,9 +63,9 @@ describe("SessionManagerImpl presence binding lifecycle", () => {
       && payload.channelBinding.subscriptionIdentity === "pi-crew-runner:ordinary:642")).toBe(true);
   });
 
-  it("emits presence events when conversational channels are bound and unbound", async () => {
+  it("emits presence events when fullAgent channels are bound and unbound", async () => {
     const { eventBus, manager } = managerHarness();
-    const record = await manager.create({ profileId: "fallback-test", kind: "conversational" });
+    const record = await manager.create({ profileId: "fallback-test", kind: "full" });
     eventBus.clear();
 
     await manager.bindChannel(record.id, "642");

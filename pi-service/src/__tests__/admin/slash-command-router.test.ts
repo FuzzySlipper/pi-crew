@@ -1,4 +1,4 @@
-/** Tests for conversational slash command routing. */
+/** Tests for fullAgent slash command routing. */
 import { describe, expect, it } from "vitest";
 import { createSlashCommandRouter } from "../../admin/slash-command-router.js";
 import type { DiagnosticsOverview, DiagnosticSessionProjection } from "../../diagnostics/types.js";
@@ -8,7 +8,7 @@ const session: SessionRecord = {
   id: "sess-prime-coder",
   profileId: "prime-coder",
   instanceId: "inst-1",
-  kind: "conversational",
+  kind: "full",
   delegation: null,
   delegationSpawnRequest: null,
   createdAt: "2026-06-13T00:00:00.000Z",
@@ -43,7 +43,7 @@ describe("SlashCommandRouter", () => {
     const reload = await router.tryHandle({ session, input: "/reload-mcp" });
 
     expect(workerResult).toMatchObject({ handled: true, command: "status", ok: false });
-    expect(workerResult.message).toContain("conversational sessions");
+    expect(workerResult.message).toContain("full-agent sessions");
     expect(reload).toMatchObject({ handled: true, command: "reload-mcp", ok: false });
     expect(reload.message).toContain("not yet available");
   });
@@ -91,7 +91,7 @@ function overview(): DiagnosticsOverview {
     sessionId: "sess-prime-coder",
     profileId: "prime-coder",
     instanceId: "inst-1",
-    kind: "conversational",
+    kind: "full",
     sessionState: "active",
     messageCount: 3,
     channelBindings: session.channelBindings,
@@ -130,11 +130,11 @@ function overview(): DiagnosticsOverview {
     counts: {
       activeSessions: 1,
       workerSessions: 0,
-      conversationalSessions: 1,
+      fullSessions: 1,
       activeAssignmentsLocal: 0,
       stuckWorkers: 0,
       checkpointWaiting: 0,
-      degradedConversationalSessions: 0,
+      degradedFullSessions: 0,
     },
     sessions: [projection],
     recentEvents: [],

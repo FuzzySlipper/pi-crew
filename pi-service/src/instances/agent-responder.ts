@@ -34,8 +34,8 @@ export interface AgentResponderFactoryContext {
    * Session kind requesting this responder.
    *
    * DESIGN: Allows responder factories to route differently for worker vs
-   * conversational sessions. Rationale: worker sessions don't need a
-   * conversational agent responder — execution goes through AgentWorkerExecutor.
+   * full-agent sessions. Rationale: worker sessions don't need a
+   * full agent responder — execution goes through AgentWorkerExecutor.
    * Undefined for backward compatibility with callers that don't pass kind.
    */
   readonly kind?: SessionKind;

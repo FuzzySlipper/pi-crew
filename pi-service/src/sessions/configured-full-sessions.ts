@@ -2,17 +2,17 @@ import type { ChannelMessage } from "@pi-crew/core";
 import type { ChannelBinding, SessionConfig, SessionRecord } from "./types.js";
 import { isChannelBindingRecord, channelBindingId } from "./session-channel-bindings.js";
 
-export interface ConfiguredConversationalSession {
+export interface ConfiguredFullSession {
   readonly sessionId: string;
   readonly profileId: string;
   readonly channelBindings: readonly ChannelBinding[];
 }
 
-export function normalizeConfiguredConversationalSessions(
+export function normalizeConfiguredFullSessions(
   configs: readonly SessionConfig[],
-): readonly ConfiguredConversationalSession[] {
+): readonly ConfiguredFullSession[] {
   return configs
-    .filter((config) => config.kind === "conversational" && config.sessionId !== undefined)
+    .filter((config) => config.kind === "full" && config.sessionId !== undefined)
     .map((config) => ({
       sessionId: config.sessionId ?? "",
       profileId: config.profileId,
@@ -20,10 +20,10 @@ export function normalizeConfiguredConversationalSessions(
     }));
 }
 
-export function findConfiguredConversationalSession(
-  configs: readonly ConfiguredConversationalSession[],
+export function findConfiguredFullSession(
+  configs: readonly ConfiguredFullSession[],
   message: ChannelMessage,
-): ConfiguredConversationalSession | null {
+): ConfiguredFullSession | null {
   const metadata = message.metadata ?? {};
   const sessionId = stringMetadata(metadata, "sessionId");
   if (sessionId !== undefined) {
@@ -44,21 +44,21 @@ export function findConfiguredConversationalSession(
 }
 
 export function sessionConfigFromConfigured(
-  config: ConfiguredConversationalSession,
+  config: ConfiguredFullSession,
 ): SessionConfig {
   return {
     sessionId: config.sessionId,
-    kind: "conversational",
+    kind: "full",
     profileId: config.profileId,
     channelBindings: [...config.channelBindings],
   };
 }
 
 export function configuredSessionMatchesRecord(
-  configured: ConfiguredConversationalSession,
+  configured: ConfiguredFullSession,
   record: SessionRecord,
 ): boolean {
-  return record.id === configured.sessionId && record.kind === "conversational";
+  return record.id === configured.sessionId && record.kind === "full";
 }
 
 function bindingMatchesMetadata(

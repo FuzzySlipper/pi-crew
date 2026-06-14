@@ -31,7 +31,7 @@ class TrackingResponderFactory implements AgentResponderFactory {
 }
 
 describe("SessionKindAwareResponderFactory", () => {
-  it("routes worker sessions to echo responder without calling conversational factory", () => {
+  it("routes worker sessions to echo responder without calling fullAgent factory", () => {
     const tracking = new TrackingResponderFactory();
     const factory = new SessionKindAwareResponderFactory(tracking);
 
@@ -45,24 +45,24 @@ describe("SessionKindAwareResponderFactory", () => {
     expect(tracking.calls).toHaveLength(0);
   });
 
-  it("routes conversational sessions to the conversational factory", () => {
+  it("routes full-agent sessions to the fullAgent factory", () => {
     const tracking = new TrackingResponderFactory();
     const factory = new SessionKindAwareResponderFactory(tracking);
 
     const responder = factory.createResponder({
       profileId: "conv-architect",
-      kind: "conversational",
+      kind: "full",
     });
 
     // Should delegate to the tracking factory
     expect(tracking.calls).toHaveLength(1);
     expect(tracking.calls[0]?.profileId).toBe("conv-architect");
-    expect(tracking.calls[0]?.kind).toBe("conversational");
+    expect(tracking.calls[0]?.kind).toBe("full");
     // Not an echo responder
     expect(responder).not.toBeInstanceOf(EchoAgentResponder);
   });
 
-  it("routes delegated sessions to echo responder without requiring conversational config match", () => {
+  it("routes delegated sessions to echo responder without requiring fullAgent config match", () => {
     const tracking = new TrackingResponderFactory();
     const factory = new SessionKindAwareResponderFactory(tracking);
 
@@ -75,7 +75,7 @@ describe("SessionKindAwareResponderFactory", () => {
     expect(responder).toBeInstanceOf(EchoAgentResponder);
   });
 
-  it("routes sessions with undefined kind to the conversational factory (backward compat)", () => {
+  it("routes sessions with undefined kind to the fullAgent factory (backward compat)", () => {
     const tracking = new TrackingResponderFactory();
     const factory = new SessionKindAwareResponderFactory(tracking);
 

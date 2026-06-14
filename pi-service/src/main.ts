@@ -310,11 +310,11 @@ function emptyDiagnosticsOverview(startedAt: string): DiagnosticsOverview {
     counts: {
       activeSessions: 0,
       workerSessions: 0,
-      conversationalSessions: 0,
+      fullSessions: 0,
       activeAssignmentsLocal: 0,
       stuckWorkers: 0,
       checkpointWaiting: 0,
-      degradedConversationalSessions: 0,
+      degradedFullSessions: 0,
     },
     sessions: [],
     recentEvents: [],

@@ -1,7 +1,7 @@
 /**
  * Session domain types for pi-service.
  *
- * These define the session lifecycle model: conversational sessions
+ * These define the session lifecycle model: full-agent sessions
  * have channel bindings and session sovereignty; worker sessions have
  * a WorkerBinding tying them to a Den assignment.
  *
@@ -19,7 +19,7 @@ import type {
 // ── Channel binding ─────────────────────────────────────────────
 
 /**
- * Den-facing metadata for a conversational channel binding.
+ * Den-facing metadata for a fullAgent channel binding.
  *
  * String bindings remain supported for old persisted rows; new V2 Den
  * Channels bindings should use this structured record so session lifecycle
@@ -68,7 +68,7 @@ export interface WorkerTargetPacketRef {
 /**
  * Den-assignment binding carried by worker sessions.
  *
- * A conversational session has `workerBinding: null`.
+ * A full-agent session has `workerBinding: null`.
  * A worker session has exactly one worker binding and no channel bindings.
  */
 export interface WorkerBinding {
@@ -102,9 +102,9 @@ export interface SessionRecord {
   readonly profileId: string;
   /** Instance ID currently bound (null when idle/archived). */
   readonly instanceId: string | null;
-  /** Conversational, worker, or delegated child. */
+  /** FullAgent, worker, or delegated child. */
   readonly kind: SessionKind;
-  /** Delegation lineage; null for top-level conversational/worker sessions. */
+  /** Delegation lineage; null for top-level fullAgent/worker sessions. */
   readonly delegation: DelegationLineage | null;
   /** Original spawn request retained for audit/result routing. */
   readonly delegationSpawnRequest: DelegationSpawnRequest | null;
@@ -122,7 +122,7 @@ export interface SessionRecord {
   readonly messageCount: number;
   /** Channel bindings for this session (empty for workers). */
   readonly channelBindings: ChannelBinding[];
-  /** Den assignment binding (null for conversational). */
+  /** Den assignment binding (null for fullAgent). */
   readonly workerBinding: WorkerBinding | null;
 }
 
@@ -136,9 +136,9 @@ export interface SessionConfig {
   readonly sessionId?: string;
   /** Which profile to instantiate. */
   readonly profileId: string;
-  /** Conversational, worker, or delegated child. */
+  /** FullAgent, worker, or delegated child. */
   readonly kind: SessionKind;
-  /** Initial channel bindings (conversational only). */
+  /** Initial channel bindings (fullAgent only). */
   readonly channelBindings?: ChannelBinding[];
   /** Den assignment binding (worker only). */
   readonly workerBinding?: WorkerBinding;

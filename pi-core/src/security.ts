@@ -2,7 +2,7 @@
  * Security primitives for agent execution constraints.
  *
  * These foundation types describe the policy vocabulary shared by worker,
- * conversational, and delegated sessions. Runtime modules enforce these
+ * fullAgent, and delegated sessions. Runtime modules enforce these
  * constraints; agents do not self-police them.
  *
  * @module pi-core/security
@@ -23,7 +23,7 @@ export type CredentialAccessLevel =
  * Generic execution constraints for any agent session.
  *
  * Worker sessions derive this from Den assignment and role config.
- * Conversational sessions can derive it from profile config. Delegated
+ * Full-agent sessions can derive it from profile config. Delegated
  * sessions receive a stricter child policy derived from their parent.
  */
 export interface ExecutionPolicy {

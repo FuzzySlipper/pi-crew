@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 
-import { createConversationalMcpAgentTool } from "../conversational-mcp-tool.js";
+import { createFullAgentMcpAgentTool } from "../full-agent-mcp-tool.js";
 
-describe("createConversationalMcpAgentTool", () => {
+describe("createFullAgentMcpAgentTool", () => {
   it("preserves MCP input schema properties while allowing runtime-defaulted Den arguments", () => {
     const schema = {
       type: "object",
       required: ["project_id", "sender", "content"],
       properties: { sender: { type: "string" }, content: { type: "string" } },
     };
-    const tool = createConversationalMcpAgentTool(mcpTool("send_message", schema), makeClient(), {
+    const tool = createFullAgentMcpAgentTool(mcpTool("send_message", schema), makeClient(), {
       sender: "pi-orchestrator",
       projectId: "pi-crew",
     });
@@ -24,7 +24,7 @@ describe("createConversationalMcpAgentTool", () => {
 
   it("fills sender and project_id defaults for Den write tools", async () => {
     const calls: Array<Record<string, unknown>> = [];
-    const tool = createConversationalMcpAgentTool(
+    const tool = createFullAgentMcpAgentTool(
       mcpTool("send_message", { type: "object" }),
       makeClient(calls),
       { sender: "pi-orchestrator", projectId: "pi-crew" },
@@ -39,7 +39,7 @@ describe("createConversationalMcpAgentTool", () => {
 
   it("does not overwrite explicit Den sender/project arguments", async () => {
     const calls: Array<Record<string, unknown>> = [];
-    const tool = createConversationalMcpAgentTool(
+    const tool = createFullAgentMcpAgentTool(
       mcpTool("post_review_findings", { type: "object" }),
       makeClient(calls),
       { sender: "pi-orchestrator", projectId: "pi-crew" },
@@ -58,7 +58,7 @@ describe("createConversationalMcpAgentTool", () => {
 
   it("leaves read-only tools unchanged", async () => {
     const calls: Array<Record<string, unknown>> = [];
-    const tool = createConversationalMcpAgentTool(
+    const tool = createFullAgentMcpAgentTool(
       mcpTool("get_task", { type: "object" }),
       makeClient(calls),
       { sender: "pi-orchestrator", projectId: "pi-crew" },

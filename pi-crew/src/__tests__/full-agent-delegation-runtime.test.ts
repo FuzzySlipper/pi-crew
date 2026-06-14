@@ -9,16 +9,16 @@ import { ToolRegistry, type MCPClient } from "@pi-crew/mcp";
 import type { Profile } from "@pi-crew/profiles";
 import type { McpSurface, McpSurfaceManager } from "../mcp-surface-manager.js";
 import type {
-  ConversationalAgentAdapter,
-  ConversationalAgentFactory,
-  ConversationalAgentFactoryInput,
+  FullAgentAdapter,
+  FullAgentFactory,
+  FullAgentFactoryInput,
   DelegatedSpawnInput,
   DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import { CrewConfigSchema } from "../config.js";
-import { buildConversationalAgentResponderFactoryForAgents } from "../conversational-runtime-assembly.js";
+import { buildFullAgentResponderFactoryForAgents } from "../full-agent-runtime-assembly.js";
 
-class DelegatingAgent implements ConversationalAgentAdapter {
+class DelegatingAgent implements FullAgentAdapter {
   readonly #signal = new AbortController().signal;
   readonly state = { messages: [] as AgentMessage[] };
   constructor(private readonly tools: readonly AgentTool[]) {}
@@ -38,7 +38,7 @@ class DelegatingAgent implements ConversationalAgentAdapter {
   abort(): void {}
 }
 
-class ReadbackAgent implements ConversationalAgentAdapter {
+class ReadbackAgent implements FullAgentAdapter {
   readonly #signal = new AbortController().signal;
   readonly state = { messages: [] as AgentMessage[] };
   constructor(private readonly tools: readonly AgentTool[]) {}
@@ -59,10 +59,10 @@ class ReadbackAgent implements ConversationalAgentAdapter {
   abort(): void {}
 }
 
-class CapturingAgentFactory implements ConversationalAgentFactory {
-  readonly inputs: ConversationalAgentFactoryInput[] = [];
+class CapturingAgentFactory implements FullAgentFactory {
+  readonly inputs: FullAgentFactoryInput[] = [];
   constructor(private readonly mode: "delegation" | "readback" = "delegation") {}
-  create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
+  create(input: FullAgentFactoryInput): FullAgentAdapter {
     this.inputs.push(input);
     return this.mode === "delegation"
       ? new DelegatingAgent(input.tools ?? [])
@@ -95,13 +95,13 @@ function surfaceManager(registry: ToolRegistry): McpSurfaceManager {
   };
 }
 
-describe("conversational delegation wiring", () => {
-  it("adds spawn_subagent to configured conversational agents and reaches the lifecycle", async () => {
+describe("fullAgent delegation wiring", () => {
+  it("adds spawn_subagent to configured full agents and reaches the lifecycle", async () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-delegation-"));
     writeProfile(profilesRoot, "runner-profile");
     const agent = CrewConfigSchema.parse({
       den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
-      conversationalAgents: [
+      fullAgents: [
         {
           agentId: "runner",
           enabled: true,
@@ -128,10 +128,10 @@ describe("conversational delegation wiring", () => {
           lifecycle: { turnTimeoutMs: 300000 },
         },
       ],
-    }).conversationalAgents;
+    }).fullAgents;
     const lifecycle = new CapturingLifecycle();
     const agentFactory = new CapturingAgentFactory();
-    const factory = buildConversationalAgentResponderFactoryForAgents({
+    const factory = buildFullAgentResponderFactoryForAgents({
       agents: agent,
       profilesRoot,
       mcpSurfaceManager: surfaceManager(new ToolRegistry(new FakeLogger())),
@@ -144,7 +144,7 @@ describe("conversational delegation wiring", () => {
     const responder = factory.createResponder({
       profileId: "runner-profile",
       sessionId: "live-parent-session",
-      kind: "conversational",
+      kind: "full",
     });
     await responder.respond({
       profileId: "runner-profile",
@@ -172,7 +172,7 @@ describe("conversational delegation wiring", () => {
     });
   });
 
-  it("adds safe current-channel Den Channels readback for configured conversational agents", async () => {
+  it("adds safe current-channel Den Channels readback for configured full agents", async () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-channel-readback-"));
     writeProfile(profilesRoot, "runner-profile", ["den_channels_read_recent"]);
     const agent = CrewConfigSchema.parse({
@@ -181,7 +181,7 @@ describe("conversational delegation wiring", () => {
         channelsUrl: "http://192.168.1.10:18081",
         requiredAtStartup: false,
       },
-      conversationalAgents: [
+      fullAgents: [
         {
           agentId: "runner",
           enabled: true,
@@ -208,7 +208,7 @@ describe("conversational delegation wiring", () => {
           lifecycle: { turnTimeoutMs: 300000 },
         },
       ],
-    }).conversationalAgents;
+    }).fullAgents;
     const fetchFn = () =>
       Promise.resolve(
         new Response(
@@ -225,7 +225,7 @@ describe("conversational delegation wiring", () => {
         ),
       );
     const agentFactory = new CapturingAgentFactory("readback");
-    const factory = buildConversationalAgentResponderFactoryForAgents({
+    const factory = buildFullAgentResponderFactoryForAgents({
       agents: agent,
       profilesRoot,
       mcpSurfaceManager: surfaceManager(new ToolRegistry(new FakeLogger())),
@@ -241,7 +241,7 @@ describe("conversational delegation wiring", () => {
     const responder = factory.createResponder({
       profileId: "runner-profile",
       sessionId: "live-parent-session",
-      kind: "conversational",
+      kind: "full",
     });
     const response = await responder.respond({
       profileId: "runner-profile",

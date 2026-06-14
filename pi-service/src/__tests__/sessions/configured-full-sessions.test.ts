@@ -1,4 +1,4 @@
-/** Tests for configured non-pooled conversational agent routing. */
+/** Tests for configured non-pooled full agent routing. */
 
 import { describe, expect, it } from "vitest";
 import { FakeChannelProvider, FakeEventBus, FakeLogger } from "@pi-crew/core";
@@ -43,13 +43,13 @@ const plannerBinding: ChannelBindingRecord = {
 const configuredSessions: readonly SessionConfig[] = [
   {
     sessionId: "sess-runner",
-    kind: "conversational",
+    kind: "full",
     profileId: "runner-profile",
     channelBindings: [runnerBinding],
   },
   {
     sessionId: "sess-planner",
-    kind: "conversational",
+    kind: "full",
     profileId: "planner-profile",
     channelBindings: [plannerBinding],
   },
@@ -72,7 +72,7 @@ function createHarness() {
     "fallback-profile",
     null,
   );
-  manager.configureConversationalSessions(configuredSessions);
+  manager.configureFullSessions(configuredSessions);
   return { eventBus, manager, pool, provider: new FakeChannelProvider(), responder, store };
 }
 
@@ -87,7 +87,7 @@ function message(id: string, metadata: Record<string, unknown>): ChannelMessage 
   };
 }
 
-describe("SessionManagerImpl configured conversational sessions", () => {
+describe("SessionManagerImpl configured full-agent sessions", () => {
   it("routes two configured agents on one channel by Den member identity", async () => {
     const { manager, provider, responder, store } = createHarness();
 

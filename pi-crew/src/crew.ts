@@ -14,7 +14,7 @@ import {
   RuntimeDb,
   AdminServer,
   DirectDebugSessionService,
-  ConversationalSessionResetService,
+  FullSessionResetService,
   RemediationControlService,
   ExtensionActivator,
   createServiceExtensionContext,
@@ -60,7 +60,7 @@ import { createDenPoolAssignmentConsumer } from "./den-pool-source.js";
 import type { DenAssignmentRunner } from "./den-assignment-runner.js";
 import type { DenPoolMemberConfig } from "./den-pool-source.js";
 import { createCrewDiagnostics } from "./crew-diagnostics.js";
-import { resolveConversationalAgentRuntime } from "./conversational-runtime-assembly.js";
+import { resolveFullAgentRuntime } from "./full-agent-runtime-assembly.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { DefaultMcpSurfaceManager, type McpSurfaceManager } from "./mcp-surface-manager.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
@@ -70,9 +70,9 @@ import {
   createDelegatedChildRunner,
 } from "./delegation-composition.js";
 import {
-  configureConversationalSessionManager,
-  configuredConversationalMemberIdentities,
-} from "./conversational-agent-sessions.js";
+  configureFullSessionManager,
+  configuredFullAgentMemberIdentities,
+} from "./full-agent-sessions.js";
 import {
   auditEntryToRecord,
   completionDefaultsFromEnv,
@@ -151,7 +151,7 @@ export class Crew {
       config.den,
       this.#logger,
       cursorStore,
-      configuredConversationalMemberIdentities(config),
+      configuredFullAgentMemberIdentities(config),
     );
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
@@ -172,21 +172,21 @@ export class Crew {
     this.#agentRegistry = new AgentRuntimeRegistry();
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
-    const conversationalDelegationLifecycle = createDeferredDelegationLifecyclePort();
+    const fullAgentDelegationLifecycle = createDeferredDelegationLifecyclePort();
     const messageRepository = new SqliteMessageRepository(this.#runtimeDb.handle);
-    const conversationalFactory = buildRuntimeResponderFactory(
+    const fullAgentFactory = buildRuntimeResponderFactory(
       config,
       this.#eventBus,
       this.#logger,
       this.#mcpSurfaceManager,
       new MessageRepositoryTurnHistory(messageRepository),
-      { lifecycle: conversationalDelegationLifecycle.port },
+      { lifecycle: fullAgentDelegationLifecycle.port },
       {
         baseUrl: config.den.channelsUrl,
         token: config.den.channelsToken,
       },
     );
-    const responderFactory = new SessionKindAwareResponderFactory(conversationalFactory);
+    const responderFactory = new SessionKindAwareResponderFactory(fullAgentFactory);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
     this.#instancePool = new InstancePoolImpl(
       instanceFactory,
@@ -214,9 +214,9 @@ export class Crew {
       config.sessions.fallbackProfileId,
       createFallbackChannelBinding(config),
     );
-    configureConversationalSessionManager(this.#sessionManager, config);
+    configureFullSessionManager(this.#sessionManager, config);
 
-    const sessionResetService = new ConversationalSessionResetService({
+    const sessionResetService = new FullSessionResetService({
       sessionStore,
       instancePool: this.#instancePool,
       messageRepository,
@@ -273,7 +273,7 @@ export class Crew {
       }),
       childRegistry,
     });
-    conversationalDelegationLifecycle.set(this.#delegatedSpawnLifecycle);
+    fullAgentDelegationLifecycle.set(this.#delegatedSpawnLifecycle);
     new DelegatedOrphanCleanup({
       delegationSessions: delegationBridge,
       eventBus: this.#eventBus,
@@ -404,10 +404,10 @@ export class Crew {
 
   async #projectTools(sessionId: string | undefined): Promise<unknown> {
     const profilesRoot = resolveCrewInstallLayout(this.#config).profilesRoot;
-    const agents = this.#config.conversationalAgents.filter((agent) =>
+    const agents = this.#config.fullAgents.filter((agent) =>
       sessionId === undefined ? agent.enabled : agent.session.sessionId === sessionId,
     );
-    return { inventories: agents.map((agent) => resolveConversationalAgentRuntime({ agent, profilesRoot, mcpSurfaceManager: this.#mcpSurfaceManager, logger: this.#logger, defaultDenProjectId: this.#config.den.channelsProjectId }).inventory) };
+    return { inventories: agents.map((agent) => resolveFullAgentRuntime({ agent, profilesRoot, mcpSurfaceManager: this.#mcpSurfaceManager, logger: this.#logger, defaultDenProjectId: this.#config.den.channelsProjectId }).inventory) };
   }
 
   get config(): CrewConfig {

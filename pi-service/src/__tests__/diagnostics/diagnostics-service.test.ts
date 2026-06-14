@@ -63,7 +63,7 @@ describe("DiagnosticsService", () => {
 
     expect(overview.classification.kind).toBe("healthy");
     expect(overview.counts.workerSessions).toBe(1);
-    expect(overview.counts.degradedConversationalSessions).toBe(0);
+    expect(overview.counts.degradedFullSessions).toBe(0);
     expect(overview.sessions).toHaveLength(1);
     expect(overview.sessions[0]).toMatchObject({
       sessionId: "session-worker-1",
@@ -161,25 +161,25 @@ describe("DiagnosticsService", () => {
     expect(serialized).toContain("[REDACTED]");
   });
 
-  // ── Conversational session diagnostics ──────────────────────
+  // ── Full-agent session diagnostics ──────────────────────
 
-  it("projects conversational sessions with channel binding details and presence", async () => {
+  it("projects full-agent sessions with channel binding details and presence", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
     const store = new InMemorySessionStore();
-    await store.save(conversationalSession("session-conv-1"));
+    await store.save(fullSession("session-conv-1"));
     eventBus.emit(sessionPresence("session-conv-1", "active"));
 
     const service = makeService(store, journal);
     const overview = await service.projectOverview();
 
-    expect(overview.counts.conversationalSessions).toBe(1);
+    expect(overview.counts.fullSessions).toBe(1);
     expect(overview.counts.workerSessions).toBe(0);
     expect(overview.sessions).toHaveLength(1);
     expect(overview.sessions[0]).toMatchObject({
       sessionId: "session-conv-1",
       profileId: "conv-agent",
-      kind: "conversational",
+      kind: "full",
       sessionState: "active",
       channelBindingDetails: [
         {
@@ -198,11 +198,11 @@ describe("DiagnosticsService", () => {
     });
   });
 
-  it("classifies conversational sessions with turn errors as pi_crew_local", async () => {
+  it("classifies full-agent sessions with turn errors as pi_crew_local", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
     const store = new InMemorySessionStore();
-    await store.save(conversationalSession("session-conv-err"));
+    await store.save(fullSession("session-conv-err"));
     eventBus.emit(turnErrored("session-conv-err", "LLM provider timeout"));
     eventBus.emit(sessionPresence("session-conv-err", "active"));
 
@@ -210,7 +210,7 @@ describe("DiagnosticsService", () => {
     const overview = await service.projectOverview();
 
     expect(overview.classification.kind).toBe("pi_crew_local");
-    expect(overview.counts.degradedConversationalSessions).toBe(1);
+    expect(overview.counts.degradedFullSessions).toBe(1);
     expect(overview.sessions[0]).toMatchObject({
       sessionId: "session-conv-err",
       recentErrorCount: 1,
@@ -219,18 +219,18 @@ describe("DiagnosticsService", () => {
     });
   });
 
-  it("classifies conversational sessions with degraded presence as pi_crew_local", async () => {
+  it("classifies full-agent sessions with degraded presence as pi_crew_local", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
     const store = new InMemorySessionStore();
-    await store.save(conversationalSession("session-conv-degraded"));
+    await store.save(fullSession("session-conv-degraded"));
     eventBus.emit(sessionPresence("session-conv-degraded", "degraded"));
 
     const service = makeService(store, journal);
     const overview = await service.projectOverview();
 
     expect(overview.classification.kind).toBe("pi_crew_local");
-    expect(overview.counts.degradedConversationalSessions).toBe(1);
+    expect(overview.counts.degradedFullSessions).toBe(1);
     expect(overview.sessions[0]).toMatchObject({
       sessionId: "session-conv-degraded",
       recentErrorCount: 0,
@@ -239,12 +239,12 @@ describe("DiagnosticsService", () => {
     });
   });
 
-  it("projects idle conversational sessions with idle presence status", async () => {
+  it("projects idle full-agent sessions with idle presence status", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
     const store = new InMemorySessionStore();
     await store.save(
-      conversationalSession("session-conv-idle", {
+      fullSession("session-conv-idle", {
         state: "idle",
         instanceId: null,
       }),
@@ -261,12 +261,12 @@ describe("DiagnosticsService", () => {
     });
   });
 
-  it("projects conversational sessions with legacy string channel bindings", async () => {
+  it("projects full-agent sessions with legacy string channel bindings", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
     const store = new InMemorySessionStore();
     await store.save(
-      conversationalSession("session-conv-legacy", {
+      fullSession("session-conv-legacy", {
         channelBindings: ["legacy-channel-id"],
       }),
     );
@@ -283,11 +283,11 @@ describe("DiagnosticsService", () => {
     });
   });
 
-  it("counts multiple turn errors for a conversational session", async () => {
+  it("counts multiple turn errors for a full-agent session", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
     const store = new InMemorySessionStore();
-    await store.save(conversationalSession("session-conv-multi-err"));
+    await store.save(fullSession("session-conv-multi-err"));
     eventBus.emit(turnErrored("session-conv-multi-err", "error 1"));
     eventBus.emit(turnErrored("session-conv-multi-err", "error 2"));
     eventBus.emit(turnErrored("session-conv-multi-err", "error 3"));
@@ -296,7 +296,7 @@ describe("DiagnosticsService", () => {
     const overview = await service.projectOverview();
 
     expect(overview.sessions[0]?.recentErrorCount).toBe(3);
-    expect(overview.counts.degradedConversationalSessions).toBe(1);
+    expect(overview.counts.degradedFullSessions).toBe(1);
   });
 });
 
@@ -375,9 +375,9 @@ function workerStuck(sessionId: string, assignmentId: string, runId: string): Ga
   };
 }
 
-// ── Conversational session fixtures ──────────────────────────
+// ── Full-agent session fixtures ──────────────────────────
 
-function conversationalSession(
+function fullSession(
   sessionId: string,
   overrides: Partial<SessionRecord> = {},
 ): SessionRecord {
@@ -385,7 +385,7 @@ function conversationalSession(
     id: sessionId,
     profileId: "conv-agent",
     instanceId: `instance-${sessionId}`,
-    kind: "conversational",
+    kind: "full",
     delegation: null,
     delegationSpawnRequest: null,
     createdAt: now,
@@ -428,7 +428,7 @@ function sessionPresence(
     payload: {
       sessionId,
       profileId: "conv-agent",
-      kind: "conversational" as const,
+      kind: "full" as const,
       channelBinding: {
         providerId: "den-channels",
         channelId: "channel-general",

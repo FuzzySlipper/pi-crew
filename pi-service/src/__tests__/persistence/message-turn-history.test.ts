@@ -1,4 +1,4 @@
-/** Tests for MessageRepository-backed conversational turn history. */
+/** Tests for MessageRepository-backed fullAgent turn history. */
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -20,7 +20,7 @@ function session(id: string): SessionRecord {
   const now = new Date().toISOString();
   return {
     id,
-    kind: "conversational",
+    kind: "full",
     profileId: "runner",
     instanceId: null,
     createdAt: now,

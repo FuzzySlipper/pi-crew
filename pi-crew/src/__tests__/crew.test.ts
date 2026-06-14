@@ -271,7 +271,7 @@ describe("Crew composition root", () => {
     expect(row.count).toBeGreaterThan(0);
   });
 
-  it("persists conversational sessions through the local runtime database", async () => {
+  it("persists full-agent sessions through the local runtime database", async () => {
     const dbPath = makeTempDbPath();
     const config = makeTestCrewConfig({ database: { path: dbPath, wal: true } });
     const firstCrew = new Crew(config, new FakeLogger(), new FakeEventBus());

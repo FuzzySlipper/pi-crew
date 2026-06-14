@@ -24,17 +24,17 @@ import type { AgentFactory } from "../agents/agent-factory.js";
 import type { InstancePool } from "../instances/instance-pool.js";
 import type { AgentInstance } from "../instances/agent-instance.js";
 import {
-  ConversationalTurnCoordinator,
-  isConversationalTurnTimeoutError,
+  FullAgentTurnCoordinator,
+  isFullAgentTurnTimeoutError,
   withTurnTimeout,
-  type ConversationalTurnCoordinatorOptions,
-} from "./conversational-turn-coordinator.js";
+  type FullAgentTurnCoordinatorOptions,
+} from "./full-agent-turn-coordinator.js";
 import {
-  findConfiguredConversationalSession,
-  normalizeConfiguredConversationalSessions,
+  findConfiguredFullSession,
+  normalizeConfiguredFullSessions,
   sessionConfigFromConfigured,
-  type ConfiguredConversationalSession,
-} from "./configured-conversational-sessions.js";
+  type ConfiguredFullSession,
+} from "./configured-full-sessions.js";
 import { withReplyIdentity } from "./session-reply-identity.js";
 
 /**
@@ -45,7 +45,7 @@ import { withReplyIdentity } from "./session-reply-identity.js";
  */
 export interface SessionManager {
   /**
-   * Create a new conversational or worker session.
+   * Create a new fullAgent or worker session.
    *
    * The session record is persisted and an instance is acquired from
    * the pool.  A `session.created` event is emitted.
@@ -75,7 +75,7 @@ export interface SessionManager {
   /**
    * Bind a channel to a session.
    *
-   * Does nothing if the channel is already bound. Conversational sessions
+   * Does nothing if the channel is already bound. Full-agent sessions
    * only — worker sessions have no channel bindings.
    */
   bindChannel(sessionId: string, channelId: string): Promise<void>;
@@ -90,7 +90,7 @@ export interface SessionManager {
    *
    * 1. Look for an existing in-progress session bound to the channel.
    * 2. If found, route to it.
-   * 3. If not found, create a new conversational session as a visible
+   * 3. If not found, create a new full-agent session as a visible
    *    fallback (emits `session.routing` with reason `fallback_created`).
    *
    * @param channel — The channel provider.
@@ -129,8 +129,8 @@ export interface SessionManager {
  * Dependencies are constructor-injected — no global singletons.
  */
 export class SessionManagerImpl implements SessionManager {
-  private readonly turnCoordinator: ConversationalTurnCoordinator;
-  private configuredSessions: readonly ConfiguredConversationalSession[];
+  private readonly turnCoordinator: FullAgentTurnCoordinator;
+  private configuredSessions: readonly ConfiguredFullSession[];
 
   constructor(
     private readonly store: SessionStore,
@@ -140,14 +140,14 @@ export class SessionManagerImpl implements SessionManager {
     private readonly logger: Logger,
     private readonly fallbackProfileId: string,
     private readonly fallbackBinding: ((channelId: string) => ChannelBinding) | null = null,
-    turnOptions: ConversationalTurnCoordinatorOptions = {},
+    turnOptions: FullAgentTurnCoordinatorOptions = {},
   ) {
-    this.turnCoordinator = new ConversationalTurnCoordinator(turnOptions);
+    this.turnCoordinator = new FullAgentTurnCoordinator(turnOptions);
     this.configuredSessions = [];
   }
 
-  configureConversationalSessions(configs: readonly SessionConfig[]): void {
-    this.configuredSessions = normalizeConfiguredConversationalSessions(configs);
+  configureFullSessions(configs: readonly SessionConfig[]): void {
+    this.configuredSessions = normalizeConfiguredFullSessions(configs);
   }
 
   async create(config: SessionConfig): Promise<SessionRecord> {
@@ -254,7 +254,7 @@ export class SessionManagerImpl implements SessionManager {
   ): Promise<SessionRecord | null> {
     const record = await this.store.get(sessionId);
     if (record === null) return null;
-    if (record.kind !== "conversational") return record;
+    if (record.kind !== "full") return record;
     const instanceId = record.instanceId;
     const hasLiveInstance = instanceId !== null && this.pool.has(instanceId);
     if (hasLiveInstance) return record;
@@ -285,7 +285,7 @@ export class SessionManagerImpl implements SessionManager {
         reason,
       },
     });
-    this.logger.info("Conversational session rehydrated", {
+    this.logger.info("Full-agent session rehydrated", {
       sessionId: record.id,
       profileId: record.profileId,
       newInstanceId: instance.id,
@@ -312,7 +312,7 @@ export class SessionManagerImpl implements SessionManager {
         channelId: message.channelId,
       });
     } catch (error: unknown) {
-      const timedOut = isConversationalTurnTimeoutError(error);
+      const timedOut = isFullAgentTurnTimeoutError(error);
       this.emitPresence(record, "idle_evicted", "degraded", "active");
       this.logger.error("Agent processMessage failed", {
         sessionId: record.id,
@@ -353,7 +353,7 @@ export class SessionManagerImpl implements SessionManager {
 
   private async resolveSession(message: ChannelMessage): Promise<SessionRecord> {
     const channelId = message.channelId;
-    const configured = findConfiguredConversationalSession(this.configuredSessions, message);
+    const configured = findConfiguredFullSession(this.configuredSessions, message);
     if (configured !== null) {
       return this.resolveConfiguredSession(configured, channelId);
     }
@@ -372,7 +372,7 @@ export class SessionManagerImpl implements SessionManager {
 
     const newSession = await this.create({
       profileId: this.fallbackProfileId,
-      kind: "conversational",
+      kind: "full",
       channelBindings: [this.bindingFor(channelId)],
     });
     this.emitRouting(newSession.id, channelId, "fallback_created");
@@ -384,7 +384,7 @@ export class SessionManagerImpl implements SessionManager {
   }
 
   private async resolveConfiguredSession(
-    configured: ConfiguredConversationalSession,
+    configured: ConfiguredFullSession,
     channelId: string,
   ): Promise<SessionRecord> {
     const existing = await this.store.get(configured.sessionId);
@@ -458,7 +458,7 @@ export class SessionManagerImpl implements SessionManager {
     subscriptionStatus: ChannelSubscriptionStatus,
     membershipStatus?: ChannelMembershipStatus,
   ): void {
-    if (record.kind !== "conversational") return;
+    if (record.kind !== "full") return;
     for (const binding of record.channelBindings) {
       this.emitPresenceForBinding(record, binding, reason, subscriptionStatus, membershipStatus);
     }
@@ -471,7 +471,7 @@ export class SessionManagerImpl implements SessionManager {
     subscriptionStatus: ChannelSubscriptionStatus,
     membershipStatus?: ChannelMembershipStatus,
   ): void {
-    if (record.kind !== "conversational") return;
+    if (record.kind !== "full") return;
     const channelBinding: ChannelBindingRecord = isChannelBindingRecord(binding)
       ? binding
       : { providerId: "legacy", channelId: binding };
@@ -480,7 +480,7 @@ export class SessionManagerImpl implements SessionManager {
       payload: {
         sessionId: record.id,
         profileId: record.profileId,
-        kind: "conversational",
+        kind: "full",
         channelBinding,
         agentInstanceId: record.instanceId,
         subscriptionStatus,

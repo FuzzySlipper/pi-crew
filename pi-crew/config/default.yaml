@@ -47,7 +47,7 @@ den:
   channelsPollLimit: 10
 
   # ── Den Channels v8 membership/subscription registration ──
-  # Public ordinary channel where this pi-crew conversational agent is visible.
+  # Public ordinary channel where this pi-crew full agent is visible.
   channelsSubscriptionChannelId: "642"
 
   # Stable public member/profile/role metadata for this runtime.
@@ -120,7 +120,7 @@ sessions:
   # Idle timeout in milliseconds before an instance is eligible for eviction.
   idleTimeoutMs: 28800000 # 8 hours
 
-  # Default profile ID for new conversational sessions created as
+  # Default profile ID for new full-agent sessions created as
   # a visible fallback when no existing session matches the channel.
   fallbackProfileId: "system-architect"
 
@@ -134,18 +134,18 @@ delegation:
     localLogEnabled: true
     localLogPath: "/home/agents/pi-crew/delegation-projections.log"
     projectToolCalledEvents: false
-# Required before conversational agents can run real delegated child sessions.
+# Required before full agents can run real delegated child sessions.
 # delegation:
 #   llmBaseUrl: "http://192.168.1.23:13305/v1"
 #   llmModelName: "Qwen3.6-35B-A3B-MTP-GGUF"
 
-# ── Non-pooled conversational agents (ordinary Den Channels members) ──
+# ── Non-pooled full agents (ordinary Den Channels members) ──
 # Configure stable member/session/subscription identities here when deploying
-# multiple long-lived conversational agents. These are not worker pool members.
+# multiple long-lived full agents. These are not worker pool members.
 # To enable native delegation for a dedicated orchestrator test profile, set
 # runtime.tools.allow to include "delegation" and ensure the profile toolPolicy
 # allows concrete tools such as "spawn_subagent" and "fan_out_subagents".
-conversationalAgents:
+fullAgents:
   - agentId: "prime-coder"
     enabled: false
     profileId: "prime-coder"

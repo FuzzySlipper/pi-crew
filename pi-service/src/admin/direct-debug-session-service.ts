@@ -1,4 +1,4 @@
-/** Direct diagnostic turns for existing conversational sessions. */
+/** Direct diagnostic turns for existing full-agent sessions. */
 
 import type {
   ChannelBreadcrumb,
@@ -49,8 +49,8 @@ export class DirectDebugSessionService {
   async runTurn(input: DirectDebugTurnInput): Promise<DirectDebugTurnResult> {
     const session = await this.#sessionManager.get(input.sessionId);
     if (session === null) throw new DirectDebugSessionError(`Session ${input.sessionId} not found`);
-    if (session.kind !== "conversational") {
-      throw new DirectDebugSessionError("Direct debug turns only support conversational sessions");
+    if (session.kind !== "full") {
+      throw new DirectDebugSessionError("Direct debug turns only support full-agent sessions");
     }
     const channelId = firstChannelId(session);
     if (channelId === null) {

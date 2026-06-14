@@ -30,7 +30,7 @@ export interface BuiltInToolInventoryEntry {
 }
 
 export function buildEffectiveToolInventory(input: {
-  readonly agent: CrewConfig["conversationalAgents"][number];
+  readonly agent: CrewConfig["fullAgents"][number];
   readonly profile: Profile;
   readonly mcpEndpoint: string;
   readonly mcpTools: readonly AgentTool[];

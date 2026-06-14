@@ -102,11 +102,11 @@ function overview(): DiagnosticsOverview {
     counts: {
       activeSessions: 2,
       workerSessions: 1,
-      conversationalSessions: 1,
+      fullSessions: 1,
       activeAssignmentsLocal: 1,
       stuckWorkers: 0,
       checkpointWaiting: 0,
-      degradedConversationalSessions: 0,
+      degradedFullSessions: 0,
     },
     sessions: [],
     recentEvents: [],

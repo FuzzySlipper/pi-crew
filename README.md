@@ -56,7 +56,7 @@ npm test -- pi-crew/src/__tests__/crew.test.ts
 
 ## Direct diagnostic chat
 
-`pi-crew-debug` is a first-pass high-trust diagnostic client for existing service-backed conversational sessions. It talks to the local admin debug API and bypasses Den Channels transport/wake/projection while still routing the turn through `SessionManager`, the conversational runtime, tools, and delegation lifecycle.
+`pi-crew-debug` is a first-pass high-trust diagnostic client for existing service-backed full-agent sessions. It talks to the local admin debug API and bypasses Den Channels transport/wake/projection while still routing the turn through `SessionManager`, the conversational runtime, tools, and delegation lifecycle.
 
 ```bash
 PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug sessions
@@ -76,7 +76,7 @@ Direct diagnostic turns intercept recognized slash commands before building LLM 
 - `/help` — list control-plane commands.
 - `/status` or `/session` — return current session/profile/instance/presence diagnostics.
 - `/reload-mcp` — currently returns a precise limitation; a narrow MCP hot-reload seam is not yet implemented.
-- `/new [reason]` — resets the configured conversational session boundary: releases the old instance, deletes persisted turn history for that session, reacquires a fresh instance with the same configured session/channel binding, and returns old/new instance ids plus archived message count/reset timestamp.
+- `/new [reason]` — resets the configured full-agent session boundary: releases the old instance, deletes persisted turn history for that session, reacquires a fresh instance with the same configured session/channel binding, and returns old/new instance ids plus archived message count/reset timestamp.
 
 Admin diagnostics exposes the effective model-callable tool inventory without treating slash commands as tools:
 
@@ -91,7 +91,7 @@ Non-Den runtime-local tools are deliberately separate from Den MCP discovery:
 
 | Surface | Tools | Notes |
 | ------- | ----- | ----- |
-| Conversational delegation/helper built-ins | `spawn_subagent`, `fan_out_subagents`, `scout_codebase`, `summarize_files`, `find_relevant_paths` | Model-callable by conversational agents only when runtime/profile policy selects and permits them. |
+| Conversational delegation/helper built-ins | `spawn_subagent`, `fan_out_subagents`, `scout_codebase`, `summarize_files`, `find_relevant_paths` | Model-callable by full agents only when runtime/profile policy selects and permits them. |
 | Delegated-child and prime local code tools | `read_file`, `write_file`, `search_files`, `terminal`, `git_status`, `git_diff` | Model-callable when runtime/profile policy selects and permits them, bounded to `PI_CREW_LOCAL_TOOL_ROOT` or `/home/dev/pi-crew`; prime coding profiles can use them directly while orchestrator profiles should omit/deny them if they should only coordinate through children. |
 | Slash/control commands | `/help`, `/status`, `/session`, `/new`, `/reload-mcp`, `/tools` | Control-plane inputs, not model-callable tools. |
 

@@ -14,6 +14,7 @@ import type {
   DelegationLineage,
   DelegationSpawnRequest,
 } from "@pi-crew/core";
+import { ConfigurationError } from "@pi-crew/core";
 import type {
   ChannelBinding,
   ChannelBindingRecord,
@@ -28,7 +29,7 @@ import type { SessionRecord } from "../sessions/types.js";
 /** Row shape for the `sessions` table. */
 export interface SessionRow {
   id: string;
-  kind: SessionKind;
+  kind: string;
   profile_id: string;
   instance_id: string | null;
   channel_bindings_json: string;
@@ -187,9 +188,10 @@ export interface DenAssignmentReader {
  * Convert a {@link SessionRow} to a domain {@link SessionRecord}.
  */
 export function rowToRecord(row: SessionRow): SessionRecord {
+  const kind = parseSessionKind(row.kind, row.id);
   return {
     id: row.id,
-    kind: row.kind,
+    kind,
     profileId: row.profile_id,
     instanceId: row.instance_id,
     createdAt: row.created_at,
@@ -245,6 +247,16 @@ function parseChannelBindings(raw: string): ChannelBinding[] {
     // Fall through to default.
   }
   return [];
+}
+
+function parseSessionKind(raw: string, sessionId: string): SessionKind {
+  if (raw === "full" || raw === "worker" || raw === "delegated") return raw;
+  if (raw === "conversational") {
+    throw new ConfigurationError(
+      `Legacy session kind conversational for session ${sessionId} is no longer supported; migrate or discard runtime test data before startup.`,
+    );
+  }
+  throw new ConfigurationError(`Unknown session kind ${raw} for session ${sessionId}`);
 }
 
 function parseChannelBinding(value: unknown): ChannelBinding[] {

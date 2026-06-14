@@ -1,4 +1,4 @@
-/** Shared tool selection helpers for conversational and inventory surfaces. */
+/** Shared tool selection helpers for fullAgent and inventory surfaces. */
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ToolPolicy } from "@pi-crew/profiles";
 

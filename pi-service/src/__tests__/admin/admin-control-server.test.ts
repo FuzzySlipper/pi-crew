@@ -104,7 +104,7 @@ describe("AdminServer remediation controls", () => {
     }
   });
 
-  it("recreates only conversational sessions and preserves worker sovereignty", async () => {
+  it("recreates only full-agent sessions and preserves worker sovereignty", async () => {
     const fixture = await startControlServer(19404, overviewWithWorkerStale());
     try {
       const workerResponse = await responseJson(
@@ -134,7 +134,7 @@ describe("AdminServer remediation controls", () => {
     }
   });
 
-  it("archives only conversational sessions and denies worker sessions", async () => {
+  it("archives only full-agent sessions and denies worker sessions", async () => {
     const fixture = await startControlServer(19407, overviewWithWorkerStale());
     try {
       const workerResponse = await responseJson(
@@ -332,7 +332,7 @@ function validateGatewayConfig(raw: unknown) {
 }
 
 async function seedSessions(store: InMemorySessionStore): Promise<void> {
-  await store.save(sessionRecord("conversation-session", "conversational", "old-instance-1", null, ["channel-1"]));
+  await store.save(sessionRecord("conversation-session", "full", "old-instance-1", null, ["channel-1"]));
   await store.save(
     sessionRecord("worker-session", "worker", "worker-instance", {
       assignmentId: "assignment-1",
@@ -346,7 +346,7 @@ async function seedSessions(store: InMemorySessionStore): Promise<void> {
 
 function sessionRecord(
   id: string,
-  kind: "conversational" | "worker",
+  kind: "full" | "worker",
   instanceId: string | null,
   workerBinding: SessionRecord["workerBinding"],
   channelBindings: string[] = [],
@@ -378,11 +378,11 @@ function overviewWithWorkerStale(overrides: Partial<DiagnosticsOverview> = {}): 
     counts: {
       activeSessions: 1,
       workerSessions: 1,
-      conversationalSessions: 0,
+      fullSessions: 0,
       activeAssignmentsLocal: 1,
       stuckWorkers: 1,
       checkpointWaiting: 0,
-      degradedConversationalSessions: 0,
+      degradedFullSessions: 0,
     },
     sessions: [
       {

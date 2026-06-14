@@ -1,7 +1,7 @@
-/** Tests for conversational /new reset semantics. */
+/** Tests for fullAgent /new reset semantics. */
 import { describe, expect, it } from "vitest";
 import type { EventBus } from "@pi-crew/core";
-import { ConversationalSessionResetService } from "../../admin/conversational-session-reset-service.js";
+import { FullSessionResetService } from "../../admin/full-session-reset-service.js";
 import { InMemorySessionStore } from "../../sessions/session-store.js";
 import type { SessionRecord } from "../../sessions/types.js";
 import type { InstancePool } from "../../instances/instance-pool.js";
@@ -12,7 +12,7 @@ const session: SessionRecord = {
   id: "sess-prime-coder",
   profileId: "prime-coder",
   instanceId: "inst-old",
-  kind: "conversational",
+  kind: "full",
   delegation: null,
   delegationSpawnRequest: null,
   createdAt: "2026-06-13T00:00:00.000Z",
@@ -23,14 +23,14 @@ const session: SessionRecord = {
   workerBinding: null,
 };
 
-describe("ConversationalSessionResetService", () => {
+describe("FullSessionResetService", () => {
   it("releases the old instance, clears persisted history, reacquires the configured session, and emits reset evidence", async () => {
     const store = new InMemorySessionStore();
     await store.save(session);
     const pool = new FakeInstancePool();
     const messages = new FakeMessageRepository(9);
     const events = new FakeEventBus();
-    const service = new ConversationalSessionResetService({
+    const service = new FullSessionResetService({
       sessionStore: store,
       instancePool: pool,
       messageRepository: messages,
@@ -59,7 +59,7 @@ describe("ConversationalSessionResetService", () => {
         profileId: "prime-coder",
         role: undefined,
         sessionId: "sess-prime-coder",
-        kind: "conversational",
+        kind: "full",
       },
     ]);
     expect(messages.deletedSessionIds).toEqual(["sess-prime-coder"]);
@@ -91,7 +91,7 @@ class FakeInstancePool implements InstancePool {
     profileId: string;
     role: string | undefined;
     sessionId: string | undefined;
-    kind: "conversational" | "worker" | "delegated" | undefined;
+    kind: "full" | "worker" | "delegated" | undefined;
   }> = [];
   get size(): number {
     return 1;
@@ -101,7 +101,7 @@ class FakeInstancePool implements InstancePool {
     role?: string,
     _effectiveRuntime?: unknown,
     sessionId?: string,
-    kind?: "conversational" | "worker" | "delegated",
+    kind?: "full" | "worker" | "delegated",
   ): Promise<AgentInstance> {
     this.acquired.push({ profileId, role, sessionId, kind });
     return Promise.resolve({

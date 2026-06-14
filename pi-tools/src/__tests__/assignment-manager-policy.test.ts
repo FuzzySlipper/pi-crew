@@ -5,7 +5,7 @@
  * 1. Safe reads and assignment-management tools are allowed
  * 2. Worker lifecycle tools are always denied
  * 3. Subagent spawning is denied (must use worker path)
- * 4. Assignment-manager does NOT inherit plain conversational denials
+ * 4. Assignment-manager does NOT inherit plain fullAgent denials
  *    beyond the hard denied set
  *
  * @module pi-tools/__tests__/assignment-manager-policy.test
@@ -21,7 +21,7 @@ import {
   WORKER_ONLY_TOOLS,
   SessionToolFilter,
   createAssignmentManagerPolicy,
-  createConversationalPolicy,
+  createFullAgentPolicy,
   isAssignmentManagerTool,
 } from "../index.js";
 
@@ -285,10 +285,10 @@ describe("SessionToolFilter with assignment-manager policy", () => {
 
 // ── Tier isolation ─────────────────────────────────────────────
 
-describe("assignment-manager vs conversational policy isolation", () => {
-  it("assignment-manager can lease workers; conversational cannot", () => {
+describe("assignment-manager vs fullAgent policy isolation", () => {
+  it("assignment-manager can lease workers; fullAgent cannot", () => {
     const amPolicy = createAssignmentManagerPolicy({ policyId: "am-isolation-1" });
-    const convPolicy = createConversationalPolicy({ policyId: "conv-isolation-1" });
+    const convPolicy = createFullAgentPolicy({ policyId: "conv-isolation-1" });
 
     const eventBus = new FakeEventBus();
     const logger = new FakeLogger();
@@ -298,10 +298,10 @@ describe("assignment-manager vs conversational policy isolation", () => {
     const amTools = filter.filter(amPolicy, "sess-am", ["lease_worker", "get_task"], null);
     expect(amTools).toContain("lease_worker");
 
-    // Conversational cannot lease (not in default allowlist, and if
+    // FullAgent cannot lease (not in default allowlist, and if
     // it were added by config, it's not denied by conv policy, but
     // conv policy has no explicit allowlist so all tools pass deny check)
-    // Conversational has no allowlist (empty = all pass), so lease_worker
+    // FullAgent has no allowlist (empty = all pass), so lease_worker
     // would pass unless explicitly denied. The conv policy uses deny-only.
     // AM uses allowlist+deny — the key structural difference.
     filter.filter(convPolicy, "sess-conv", ["lease_worker", "get_task"], null);
@@ -312,7 +312,7 @@ describe("assignment-manager vs conversational policy isolation", () => {
 
   it("both tiers deny worker lifecycle tools", () => {
     const amPolicy = createAssignmentManagerPolicy({ policyId: "am-isolation-2" });
-    const convPolicy = createConversationalPolicy({ policyId: "conv-isolation-2" });
+    const convPolicy = createFullAgentPolicy({ policyId: "conv-isolation-2" });
 
     for (const tool of WORKER_ONLY_TOOLS) {
       expect(amPolicy.deniedTools).toContain(tool);
@@ -320,9 +320,9 @@ describe("assignment-manager vs conversational policy isolation", () => {
     }
   });
 
-  it("ordinary conversational policy does not inherit assignment-manager tools", () => {
-    const convPolicy = createConversationalPolicy({ policyId: "conv-isolation-3" });
-    // Conversational has no allowlist, so tool access is deny-only
+  it("ordinary fullAgent policy does not inherit assignment-manager tools", () => {
+    const convPolicy = createFullAgentPolicy({ policyId: "conv-isolation-3" });
+    // FullAgent has no allowlist, so tool access is deny-only
     expect(convPolicy.allowedTools.length).toBe(0);
     // But worker tools are denied
     expect(convPolicy.deniedTools).toContain("post_structured_completion");

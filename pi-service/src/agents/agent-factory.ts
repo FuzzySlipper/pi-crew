@@ -23,7 +23,7 @@ import type { InstancePool } from "../instances/instance-pool.js";
  */
 export interface AgentFactory {
   /**
-   * Create a new conversational or worker session.
+   * Create a new fullAgent or worker session.
    *
    * @param config — Session configuration (profile, kind, bindings).
    * @returns The persisted session record.
@@ -73,7 +73,7 @@ export class AgentFactoryImpl implements AgentFactory {
       lastActiveAt: now,
       state: "active",
       messageCount: 0,
-      channelBindings: config.kind === "conversational" ? (config.channelBindings ?? []) : [],
+      channelBindings: config.kind === "full" ? (config.channelBindings ?? []) : [],
       workerBinding: config.kind === "worker" ? (config.workerBinding ?? null) : null,
     };
 

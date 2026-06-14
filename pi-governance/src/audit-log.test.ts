@@ -27,7 +27,7 @@ describe("AuditLogger", () => {
     createLogger();
     eventBus.emit({ event: "tool.called", payload: { toolName: "write_file", sessionId: "s1" } });
     eventBus.emit({ event: "turn.started", payload: { sessionId: "s1", turnNumber: 1 } });
-    eventBus.emit({ event: "session.created", payload: { sessionId: "s1", kind: "conversational" as const } });
+    eventBus.emit({ event: "session.created", payload: { sessionId: "s1", kind: "full" as const } });
     expect(entries).toHaveLength(3);
     expect(entries[0]).toBeDefined();
     expect(entries[0].event).toBe("tool.called");

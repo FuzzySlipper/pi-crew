@@ -19,7 +19,7 @@ describe("FakeEventBus", () => {
   it("captures emitted events in order", () => {
     const e1: GatewayEvent = {
       event: "session.created",
-      payload: { sessionId: "s1", kind: "conversational" },
+      payload: { sessionId: "s1", kind: "full" },
     };
     const e2: GatewayEvent = {
       event: "session.expired",
@@ -153,7 +153,7 @@ describe("FakeEventBus", () => {
 
     bus.emit({
       event: "session.created",
-      payload: { sessionId: "s1", kind: "conversational" },
+      payload: { sessionId: "s1", kind: "full" },
     });
 
     expect(handler).not.toHaveBeenCalled();
@@ -167,7 +167,7 @@ describe("FakeEventBus", () => {
 
     bus.emit({
       event: "session.created",
-      payload: { sessionId: "s1", kind: "conversational" },
+      payload: { sessionId: "s1", kind: "full" },
     });
 
     expect(handler).not.toHaveBeenCalled();
@@ -215,7 +215,7 @@ describe("FakeEventBus", () => {
 
     bus.emit({
       event: "session.created",
-      payload: { sessionId: "s1", kind: "conversational" },
+      payload: { sessionId: "s1", kind: "full" },
     });
     expect(bus.emitted).toHaveLength(1);
 

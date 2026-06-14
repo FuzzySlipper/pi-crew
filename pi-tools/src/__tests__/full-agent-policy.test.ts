@@ -3,15 +3,15 @@ import { describe, expect, it } from "vitest";
 import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 
 import {
-  createConversationalPolicy,
+  createFullAgentPolicy,
   WORKER_ONLY_TOOLS,
   isWorkerOnlyTool,
   SessionToolFilter,
 } from "../index.js";
 
-describe("createConversationalPolicy", () => {
-  it("creates a policy with conversational defaults", () => {
-    const policy = createConversationalPolicy({ policyId: "conv-test-1" });
+describe("createFullAgentPolicy", () => {
+  it("creates a policy with fullAgent defaults", () => {
+    const policy = createFullAgentPolicy({ policyId: "conv-test-1" });
     expect(policy.policyId).toBe("conv-test-1");
     expect(policy.rootPath).toBe("/tmp/pi-conversation");
     expect(policy.maxDurationMs).toBe(60 * 60 * 1000);
@@ -21,14 +21,14 @@ describe("createConversationalPolicy", () => {
   });
 
   it("always denies worker-only tools even if caller passes empty deniedTools", () => {
-    const policy = createConversationalPolicy({ policyId: "conv-test-2" });
+    const policy = createFullAgentPolicy({ policyId: "conv-test-2" });
     for (const tool of WORKER_ONLY_TOOLS) {
       expect(policy.deniedTools).toContain(tool);
     }
   });
 
   it("merges caller denied tools with worker-only tools", () => {
-    const policy = createConversationalPolicy({
+    const policy = createFullAgentPolicy({
       policyId: "conv-test-3",
       deniedTools: ["my_custom_tool"],
     });
@@ -38,7 +38,7 @@ describe("createConversationalPolicy", () => {
   });
 
   it("does not duplicate denied tools", () => {
-    const policy = createConversationalPolicy({
+    const policy = createFullAgentPolicy({
       policyId: "conv-test-4",
       deniedTools: ["post_structured_completion"],
     });
@@ -47,7 +47,7 @@ describe("createConversationalPolicy", () => {
   });
 
   it("applies caller overrides for paths, hosts, and budget", () => {
-    const policy = createConversationalPolicy({
+    const policy = createFullAgentPolicy({
       policyId: "conv-test-5",
       rootPath: "/custom/root",
       allowedPaths: ["/custom/root/data"],
@@ -101,13 +101,13 @@ describe("isWorkerOnlyTool", () => {
   });
 });
 
-describe("SessionToolFilter with conversational policy", () => {
+describe("SessionToolFilter with fullAgent policy", () => {
   it("denies worker-only tools through the filter", () => {
     const eventBus = new FakeEventBus();
     const logger = new FakeLogger();
     const filter = new SessionToolFilter(eventBus, logger);
 
-    const policy = createConversationalPolicy({ policyId: "conv-filter-1" });
+    const policy = createFullAgentPolicy({ policyId: "conv-filter-1" });
     const allTools = [
       "web_search",
       "read_file",
@@ -131,7 +131,7 @@ describe("SessionToolFilter with conversational policy", () => {
     const logger = new FakeLogger();
     const filter = new SessionToolFilter(eventBus, logger);
 
-    const policy = createConversationalPolicy({ policyId: "conv-filter-2" });
+    const policy = createFullAgentPolicy({ policyId: "conv-filter-2" });
     filter.filter(policy, "sess-2", ["post_structured_completion", "read_file"], null);
 
     const denied = eventBus.emitted.filter(
@@ -145,7 +145,7 @@ describe("SessionToolFilter with conversational policy", () => {
     const logger = new FakeLogger();
     const filter = new SessionToolFilter(eventBus, logger);
 
-    const policy = createConversationalPolicy({ policyId: "conv-filter-3" });
+    const policy = createFullAgentPolicy({ policyId: "conv-filter-3" });
     expect(filter.isAllowed(policy, "sess-3", "post_structured_completion", null)).toBe(false);
     expect(filter.isAllowed(policy, "sess-3", "release_assignment", null)).toBe(false);
   });
@@ -155,7 +155,7 @@ describe("SessionToolFilter with conversational policy", () => {
     const logger = new FakeLogger();
     const filter = new SessionToolFilter(eventBus, logger);
 
-    const policy = createConversationalPolicy({ policyId: "conv-filter-4" });
+    const policy = createFullAgentPolicy({ policyId: "conv-filter-4" });
     expect(filter.isAllowed(policy, "sess-4", "web_search", null)).toBe(true);
     expect(filter.isAllowed(policy, "sess-4", "read_file", null)).toBe(true);
   });
@@ -165,7 +165,7 @@ describe("SessionToolFilter with conversational policy", () => {
     const logger = new FakeLogger();
     const filter = new SessionToolFilter(eventBus, logger);
 
-    const policy = createConversationalPolicy({
+    const policy = createFullAgentPolicy({
       policyId: "conv-filter-5",
       deniedTools: ["dangerous_tool"],
     });

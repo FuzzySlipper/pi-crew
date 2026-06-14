@@ -272,11 +272,11 @@ function healthyOverview(overrides: Partial<DiagnosticsOverview> = {}): Diagnost
     counts: {
       activeSessions: 1,
       workerSessions: 1,
-      conversationalSessions: 0,
+      fullSessions: 0,
       activeAssignmentsLocal: 1,
       stuckWorkers: 0,
       checkpointWaiting: 0,
-      degradedConversationalSessions: 0,
+      degradedFullSessions: 0,
     },
     sessions: [
       {

@@ -28,7 +28,7 @@ export interface ServiceSessionView {
   readonly sessionId: string;
   /** Profile bound to the session. */
   readonly profileId: string;
-  /** Conversational or worker session. */
+  /** FullAgent or worker session. */
   readonly kind: SessionKind;
   /** Service lifecycle state. */
   readonly state: SessionState;

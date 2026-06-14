@@ -45,9 +45,9 @@ class FakePool implements InstancePool {
 }
 
 describe("delegated session lineage", () => {
-  it("keeps existing conversational sessions structurally compatible", async () => {
+  it("keeps existing full-agent sessions structurally compatible", async () => {
     const store = new InMemorySessionStore();
-    await store.save(baseRecord({ id: "conversation", kind: "conversational" }));
+    await store.save(baseRecord({ id: "conversation", kind: "full" }));
 
     const saved = await store.get("conversation");
 
@@ -116,7 +116,7 @@ function baseRecord(overrides: Partial<SessionRecord>): SessionRecord {
     delegationSpawnRequest: null,
     id: "session",
     instanceId: "instance",
-    kind: "conversational",
+    kind: "full",
     lastActiveAt: "2026-06-09T00:00:00.000Z",
     messageCount: 0,
     profileId: "profile",

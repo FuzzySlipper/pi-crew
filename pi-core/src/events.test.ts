@@ -8,7 +8,7 @@ describe("GatewayEvent union — dot-style names", () => {
   it("accepts 'session.created' event", () => {
     const ev: GatewayEvent = {
       event: "session.created",
-      payload: { sessionId: "s1", kind: "conversational" },
+      payload: { sessionId: "s1", kind: "full" },
     };
     expect(ev.event).toBe("session.created");
     expect(ev.payload.sessionId).toBe("s1");
@@ -164,7 +164,7 @@ describe("GatewayEvent union — dot-style names", () => {
 describe("EventPayload helper", () => {
   it("extracts the correct payload type", () => {
     // Compile-time check: EventPayload<"session.created"> resolves
-    // to { sessionId: string; kind: "conversational" | "worker" }
+    // to { sessionId: string; kind: "full" | "worker" }
     type P = EventPayload<"session.created">;
     const payload: P = { sessionId: "x", kind: "worker" };
     expect(payload.sessionId).toBe("x");

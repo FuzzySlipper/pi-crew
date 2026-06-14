@@ -8,8 +8,8 @@ import type { McpSurface, McpSurfaceManager } from "../mcp-surface-manager.js";
 
 import { CrewConfigSchema } from "../config.js";
 import {
-  buildConversationalAgentResponderFactory, buildConversationalAgentResponderFactoryForAgents, resolveConversationalAgentRuntime,
-} from "../conversational-runtime-assembly.js";
+  buildFullAgentResponderFactory, buildFullAgentResponderFactoryForAgents, resolveFullAgentRuntime,
+} from "../full-agent-runtime-assembly.js";
 
 function writeProfile(
   root: string,
@@ -45,12 +45,12 @@ function surfaceManager(registry: ToolRegistry, client = makeClient()): McpSurfa
   };
 }
 
-type ConversationalAgentConfig = ReturnType<typeof CrewConfigSchema.parse>["conversationalAgents"][number];
+type FullAgentConfig = ReturnType<typeof CrewConfigSchema.parse>["fullAgents"][number];
 
-function parsedAgent(profileId: string, runtime: Record<string, unknown>): ConversationalAgentConfig {
+function parsedAgent(profileId: string, runtime: Record<string, unknown>): FullAgentConfig {
   return CrewConfigSchema.parse({
     den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
-    conversationalAgents: [{
+    fullAgents: [{
       agentId: `agent-${profileId}`,
       enabled: true,
       profileId,
@@ -61,14 +61,14 @@ function parsedAgent(profileId: string, runtime: Record<string, unknown>): Conve
       runtime,
       lifecycle: { turnTimeoutMs: 300000 },
     }],
-  }).conversationalAgents[0] as ConversationalAgentConfig;
+  }).fullAgents[0] as FullAgentConfig;
 }
 
-describe("conversational agent config schema", () => {
-  it("parses top-level conversationalAgents without treating them as worker pool groups", () => {
+describe("full agent config schema", () => {
+  it("parses top-level fullAgents without treating them as worker pool groups", () => {
     const parsed = CrewConfigSchema.parse({
       den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
-      conversationalAgents: [
+      fullAgents: [
         {
           agentId: "pi-crew-runner",
           enabled: true,
@@ -110,13 +110,13 @@ describe("conversational agent config schema", () => {
       workerPool: { groups: [] },
     });
 
-    expect(parsed.conversationalAgents).toHaveLength(1);
+    expect(parsed.fullAgents).toHaveLength(1);
     expect(parsed.workerPool.groups).toEqual([]);
   });
   it("allows conversation agent runtime config to be profile-owned", () => {
     const result = CrewConfigSchema.safeParse({
       den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
-      conversationalAgents: [
+      fullAgents: [
         {
           agentId: "pi-crew-runner",
           enabled: true,
@@ -151,14 +151,14 @@ describe("conversational agent config schema", () => {
   });
 });
 
-describe("resolveConversationalAgentRuntime", () => {
+describe("resolveFullAgentRuntime", () => {
   it("loads inherited profile config, assembles soul prompt, model config, and selected tools", () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-profiles-"));
     writeProfile(
       profilesRoot,
       "base-profile",
       [
-        'name: "Base Conversational"',
+        'name: "Base FullAgent"',
         'description: "Base profile"',
         "modelConfig:",
         '  provider: "openai"',
@@ -177,7 +177,7 @@ describe("resolveConversationalAgentRuntime", () => {
       "child-profile",
       [
         "extends: base-profile",
-        'name: "Child Conversational"',
+        'name: "Child FullAgent"',
         'description: "Child profile"',
         "modelConfig:",
         "  temperature: 0.4",
@@ -193,7 +193,7 @@ describe("resolveConversationalAgentRuntime", () => {
       mcpTool("mcp_web_search"),
     ]);
 
-    const runtime = resolveConversationalAgentRuntime({
+    const runtime = resolveFullAgentRuntime({
       agent: {
         agentId: "pi-crew-runner",
         enabled: true,
@@ -264,7 +264,7 @@ describe("resolveConversationalAgentRuntime", () => {
     const registry = new ToolRegistry(new FakeLogger());
     registry.setMcpTools([mcpTool("mcp_den_get_task"), mcpTool("mcp_den_get_messages")]);
 
-    const runtime = resolveConversationalAgentRuntime({
+    const runtime = resolveFullAgentRuntime({
       agent: {
         agentId: "pi-crew-runner",
         enabled: true,
@@ -323,7 +323,7 @@ describe("resolveConversationalAgentRuntime", () => {
     const registry = new ToolRegistry(new FakeLogger());
 
     expect(() =>
-      resolveConversationalAgentRuntime({
+      resolveFullAgentRuntime({
         agent: parsedAgent("invalid-provider", {
           mode: "agent",
           provider: "not-a-provider",
@@ -351,7 +351,7 @@ describe("resolveConversationalAgentRuntime", () => {
     const registry = new ToolRegistry(new FakeLogger());
 
     expect(() =>
-      resolveConversationalAgentRuntime({
+      resolveFullAgentRuntime({
         agent: {
           agentId: "pi-crew-runner",
           enabled: true,
@@ -393,8 +393,8 @@ describe("resolveConversationalAgentRuntime", () => {
   });
 });
 
-describe("buildConversationalAgentResponderFactory", () => {
-  it("fails closed when a single configured conversational agent receives another profileId", () => {
+describe("buildFullAgentResponderFactory", () => {
+  it("fails closed when a single configured full agent receives another profileId", () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-profile-mismatch-"));
     writeProfile(
       profilesRoot,
@@ -411,7 +411,7 @@ describe("buildConversationalAgentResponderFactory", () => {
       ].join("\n"),
       "Runner soul.",
     );
-    const factory = buildConversationalAgentResponderFactoryForAgents({
+    const factory = buildFullAgentResponderFactoryForAgents({
       agents: [
         parsedAgent("runner-profile", {
           mode: "agent",
@@ -428,7 +428,7 @@ describe("buildConversationalAgentResponderFactory", () => {
     });
 
     expect(() => factory.createResponder({ profileId: "other-profile" })).toThrow(
-      /No configured conversational agent matches profile other-profile/,
+      /No configured full agent matches profile other-profile/,
     );
   });
 
@@ -452,7 +452,7 @@ describe("buildConversationalAgentResponderFactory", () => {
       "Runner soul.",
     );
     const registry = new ToolRegistry(new FakeLogger());
-    const factory = buildConversationalAgentResponderFactory({
+    const factory = buildFullAgentResponderFactory({
       agent: {
         agentId: "pi-crew-runner",
         enabled: true,

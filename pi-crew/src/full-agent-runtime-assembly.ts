@@ -1,4 +1,4 @@
-/** Assemble Agent-backed ordinary conversational runtimes from installed config. */
+/** Assemble Agent-backed ordinary fullAgent runtimes from installed config. */
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getModels, getProviders } from "@earendil-works/pi-ai";
 import type { Api, KnownProvider, Model } from "@earendil-works/pi-ai";
@@ -18,25 +18,25 @@ import {
   type ToolPolicy,
 } from "@pi-crew/profiles";
 import {
-  ConversationalAgentResponder,
-  ConversationalAgentResponderFactory,
+  FullAgentResponder,
+  FullAgentResponderFactory,
   createDelegatedFanOutTool,
   createDelegatedSpawnTool,
   createDelegationHelperTools,
   type AgentResponderFactory,
   type AgentResponderFactoryContext,
-  type ConversationalAgentFactory,
-  type ConversationalAgentRuntimeBuilder,
-  type ConversationalTurnHistory,
+  type FullAgentFactory,
+  type FullAgentRuntimeBuilder,
+  type FullAgentTurnHistory,
   type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import {
-  type ConversationalPolicyInput,
-  createConversationalPolicy,
+  type FullAgentPolicyInput,
+  createFullAgentPolicy,
   SessionToolFilter,
 } from "@pi-crew/tools";
 import type { CrewConfig } from "./config.js";
-import { createConversationalMcpAgentTool } from "./conversational-mcp-tool.js";
+import { createFullAgentMcpAgentTool } from "./full-agent-mcp-tool.js";
 import { createLocalCodeTools, localCodeToolNames } from "./local-code-tools.js";
 import { createDenChannelReadbackTool } from "./den-channel-readback-tool.js";
 import type { DenChannelReadbackToolConfig } from "./den-channel-readback-tool.js";
@@ -48,7 +48,7 @@ import {
   toolAllowedByProfilePolicy,
   toolMatchesSelectedSet,
 } from "./tool-selection.js";
-export interface ConversationalRuntimeModelConfig {
+export interface FullAgentRuntimeModelConfig {
   readonly provider: string;
   readonly modelName: string;
   readonly modelBaseUrl?: string;
@@ -56,17 +56,17 @@ export interface ConversationalRuntimeModelConfig {
   readonly temperature?: number;
   readonly maxTokens?: number;
 }
-export interface ResolvedConversationalAgentRuntime {
+export interface ResolvedFullAgentRuntime {
   readonly profile: Profile;
-  readonly model: ConversationalRuntimeModelConfig;
+  readonly model: FullAgentRuntimeModelConfig;
   readonly agentModel: Model<Api>;
   readonly systemPrompt: string;
   readonly tools: readonly AgentTool[];
   readonly executionPolicy: ExecutionPolicy;
   readonly inventory: EffectiveToolInventory;
 }
-export interface ResolveConversationalAgentRuntimeInput {
-  readonly agent: CrewConfig["conversationalAgents"][number];
+export interface ResolveFullAgentRuntimeInput {
+  readonly agent: CrewConfig["fullAgents"][number];
   readonly profilesRoot?: string;
   readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
@@ -74,7 +74,7 @@ export interface ResolveConversationalAgentRuntimeInput {
   readonly sessionToolFilter?: SessionToolFilter;
   readonly defaultDenProjectId?: string;
 }
-export interface ConversationalDelegationRuntimeConfig {
+export interface FullAgentDelegationRuntimeConfig {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
   readonly parentDelegationConstraints?: DelegationConstraints;
   readonly allowedRuntimes?: readonly EffectiveDelegationRuntime[];
@@ -83,36 +83,36 @@ export interface DenChannelReadbackRuntimeConfig extends Omit<
   DenChannelReadbackToolConfig,
   "allowedChannelIds"
 > {}
-export interface BuildConversationalAgentResponderFactoryInput extends ResolveConversationalAgentRuntimeInput {
+export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRuntimeInput {
   readonly eventBus?: EventBus;
-  readonly history?: ConversationalTurnHistory;
-  readonly agentFactory?: ConversationalAgentFactory;
-  readonly delegation?: ConversationalDelegationRuntimeConfig;
+  readonly history?: FullAgentTurnHistory;
+  readonly agentFactory?: FullAgentFactory;
+  readonly delegation?: FullAgentDelegationRuntimeConfig;
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
   readonly defaultDenProjectId?: string;
 }
-export interface BuildConversationalAgentResponderFactoryForAgentsInput {
-  readonly agents: readonly CrewConfig["conversationalAgents"][number][];
+export interface BuildFullAgentResponderFactoryForAgentsInput {
+  readonly agents: readonly CrewConfig["fullAgents"][number][];
   readonly profilesRoot?: string;
   readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
   readonly eventBus: EventBus;
-  readonly history?: ConversationalTurnHistory;
+  readonly history?: FullAgentTurnHistory;
   readonly env?: Readonly<Record<string, string | undefined>>;
-  readonly agentFactory?: ConversationalAgentFactory;
-  readonly delegation?: ConversationalDelegationRuntimeConfig;
+  readonly agentFactory?: FullAgentFactory;
+  readonly delegation?: FullAgentDelegationRuntimeConfig;
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
   readonly defaultDenProjectId?: string;
 }
-class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
+class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
   constructor(
-    private readonly input: BuildConversationalAgentResponderFactoryInput,
+    private readonly input: BuildFullAgentResponderFactoryInput,
     private readonly logger: Logger,
     private readonly eventBus: EventBus,
   ) {}
-  build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
+  build(context: AgentResponderFactoryContext): FullAgentResponder {
     const filter = new SessionToolFilter(this.eventBus, this.logger);
-    const runtime = resolveConversationalAgentRuntime({ ...this.input, sessionToolFilter: filter });
+    const runtime = resolveFullAgentRuntime({ ...this.input, sessionToolFilter: filter });
     const withReadback = addChannelReadbackTool(
       runtime,
       this.input.agent,
@@ -128,12 +128,12 @@ class StaticConversationalRuntimeBuilder implements ConversationalAgentRuntimeBu
     );
   }
 }
-class ProfileMappedConversationalRuntimeBuilder implements ConversationalAgentRuntimeBuilder {
-  constructor(private readonly input: BuildConversationalAgentResponderFactoryForAgentsInput) {}
-  build(context: AgentResponderFactoryContext): ConversationalAgentResponder {
+class ProfileMappedFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
+  constructor(private readonly input: BuildFullAgentResponderFactoryForAgentsInput) {}
+  build(context: AgentResponderFactoryContext): FullAgentResponder {
     const agent = selectAgentForContext(this.input.agents, context.profileId);
     const filter = new SessionToolFilter(this.input.eventBus, this.input.logger);
-    const runtime = resolveConversationalAgentRuntime({
+    const runtime = resolveFullAgentRuntime({
       ...this.input,
       agent,
       sessionToolFilter: filter,
@@ -149,46 +149,46 @@ class ProfileMappedConversationalRuntimeBuilder implements ConversationalAgentRu
     );
   }
 }
-export function buildConversationalAgentResponderFactory(
-  input: BuildConversationalAgentResponderFactoryInput,
+export function buildFullAgentResponderFactory(
+  input: BuildFullAgentResponderFactoryInput,
 ): AgentResponderFactory {
   if (input.eventBus === undefined) {
-    throw new ConfigurationError("Conversational Agent responder factory requires an EventBus");
+    throw new ConfigurationError("FullAgent Agent responder factory requires an EventBus");
   }
-  resolveConversationalAgentRuntime(input);
-  return new ConversationalAgentResponderFactory(
-    new StaticConversationalRuntimeBuilder(input, input.logger, input.eventBus),
+  resolveFullAgentRuntime(input);
+  return new FullAgentResponderFactory(
+    new StaticFullAgentRuntimeBuilder(input, input.logger, input.eventBus),
   );
 }
-export function buildConversationalAgentResponderFactoryForAgents(
-  input: BuildConversationalAgentResponderFactoryForAgentsInput,
+export function buildFullAgentResponderFactoryForAgents(
+  input: BuildFullAgentResponderFactoryForAgentsInput,
 ): AgentResponderFactory {
   const enabled = input.agents.filter((agent) => agent.enabled);
   if (enabled.length === 0) {
     throw new ConfigurationError(
-      "Conversational Agent runtime assembly requires at least one enabled agent",
+      "FullAgent Agent runtime assembly requires at least one enabled agent",
     );
   }
   for (const agent of enabled) {
-    resolveConversationalAgentRuntime({ ...input, agent });
+    resolveFullAgentRuntime({ ...input, agent });
   }
-  return new ConversationalAgentResponderFactory(
-    new ProfileMappedConversationalRuntimeBuilder({ ...input, agents: enabled }),
+  return new FullAgentResponderFactory(
+    new ProfileMappedFullAgentRuntimeBuilder({ ...input, agents: enabled }),
   );
 }
-export function resolveConversationalAgentRuntime(
-  input: ResolveConversationalAgentRuntimeInput,
-): ResolvedConversationalAgentRuntime {
+export function resolveFullAgentRuntime(
+  input: ResolveFullAgentRuntimeInput,
+): ResolvedFullAgentRuntime {
   if (!input.agent.enabled) {
     throw new ConfigurationError(
-      `Conversational agent "${input.agent.agentId}" is disabled and cannot be assembled`,
+      `Full agent "${input.agent.agentId}" is disabled and cannot be assembled`,
     );
   }
   const profile = loadProfile(input.agent.profileId, input.profilesRoot);
   const surface = input.mcpSurfaceManager.surfaceForProfile(profile);
   const model = resolveModelConfig(input.agent, profile, input.env ?? process.env);
-  const executionPolicy = buildConversationalExecutionPolicy(input.agent, profile);
-  const tools = selectConversationalTools({
+  const executionPolicy = buildFullAgentExecutionPolicy(input.agent, profile);
+  const tools = selectFullAgentTools({
     allow: input.agent.runtime.tools.allow,
     profileToolPolicy: profile.toolPolicy,
     mcpTools: surface.registry.listTools(),
@@ -217,13 +217,13 @@ export function resolveConversationalAgentRuntime(
   };
 }
 function createResponder(
-  runtime: ResolvedConversationalAgentRuntime,
+  runtime: ResolvedFullAgentRuntime,
   logger: Logger,
   eventBus: EventBus,
-  history?: ConversationalTurnHistory,
-  agentFactory?: ConversationalAgentFactory,
-): ConversationalAgentResponder {
-  return new ConversationalAgentResponder({
+  history?: FullAgentTurnHistory,
+  agentFactory?: FullAgentFactory,
+): FullAgentResponder {
+  return new FullAgentResponder({
     ...(agentFactory !== undefined ? { agentFactory } : {}),
     eventBus,
     history,
@@ -237,10 +237,10 @@ function createResponder(
   });
 }
 function addChannelReadbackTool(
-  runtime: ResolvedConversationalAgentRuntime,
-  agent: CrewConfig["conversationalAgents"][number],
+  runtime: ResolvedFullAgentRuntime,
+  agent: CrewConfig["fullAgents"][number],
   channelReadback: DenChannelReadbackRuntimeConfig | undefined,
-): ResolvedConversationalAgentRuntime {
+): ResolvedFullAgentRuntime {
   if (channelReadback === undefined) return runtime;
   const requestedSets = requestedToolSets(agent.runtime.tools.allow, runtime.profile.toolPolicy);
   if (!requestedSets.some((entry) => toolMatchesSelectedSet("den_channels_read_recent", entry)))
@@ -258,10 +258,10 @@ function addChannelReadbackTool(
   };
 }
 function addDelegationTool(
-  runtime: ResolvedConversationalAgentRuntime,
-  agent: CrewConfig["conversationalAgents"][number],
+  runtime: ResolvedFullAgentRuntime,
+  agent: CrewConfig["fullAgents"][number],
   context: AgentResponderFactoryContext,
-  delegation: ConversationalDelegationRuntimeConfig | undefined,
+  delegation: FullAgentDelegationRuntimeConfig | undefined,
 ): readonly AgentTool[] {
   if (delegation === undefined || !agentAllowsDelegation(agent, runtime)) return runtime.tools;
   const parentSessionId = context.sessionId ?? agent.session.sessionId;
@@ -284,7 +284,7 @@ function addDelegationTool(
   ];
 }
 function createAllowedDelegationHelperTools(
-  runtime: ResolvedConversationalAgentRuntime,
+  runtime: ResolvedFullAgentRuntime,
   options: Parameters<typeof createDelegationHelperTools>[0],
 ): readonly AgentTool[] {
   return createDelegationHelperTools(options)
@@ -296,7 +296,7 @@ function createAllowedDelegationHelperTools(
         runtime.executionPolicy.allowedTools.includes(tool.name),
     ) as unknown as readonly AgentTool[];
 }
-function parentPolicyForDelegation(runtime: ResolvedConversationalAgentRuntime): ExecutionPolicy {
+function parentPolicyForDelegation(runtime: ResolvedFullAgentRuntime): ExecutionPolicy {
   if (runtime.executionPolicy.allowedTools.length > 0) return runtime.executionPolicy;
   return {
     ...runtime.executionPolicy,
@@ -304,8 +304,8 @@ function parentPolicyForDelegation(runtime: ResolvedConversationalAgentRuntime):
   };
 }
 function agentAllowsDelegation(
-  agent: CrewConfig["conversationalAgents"][number],
-  runtime: ResolvedConversationalAgentRuntime,
+  agent: CrewConfig["fullAgents"][number],
+  runtime: ResolvedFullAgentRuntime,
 ): boolean {
   const requestedSets = requestedToolSets(agent.runtime.tools.allow, runtime.profile.toolPolicy);
   const requested = requestedSets.some(
@@ -324,8 +324,8 @@ function agentAllowsDelegation(
   );
 }
 function parentRuntimeFor(
-  agent: CrewConfig["conversationalAgents"][number],
-  runtime: ResolvedConversationalAgentRuntime,
+  agent: CrewConfig["fullAgents"][number],
+  runtime: ResolvedFullAgentRuntime,
 ): EffectiveDelegationRuntime {
   return {
     profileId: agent.profileId,
@@ -334,42 +334,42 @@ function parentRuntimeFor(
   };
 }
 function selectAgentForContext(
-  agents: readonly CrewConfig["conversationalAgents"][number][],
+  agents: readonly CrewConfig["fullAgents"][number][],
   profileId: string,
-): CrewConfig["conversationalAgents"][number] {
+): CrewConfig["fullAgents"][number] {
   if (agents.length === 1) {
     const only = agents[0];
     if (only === undefined) {
-      throw new ConfigurationError("No enabled conversational agent is available");
+      throw new ConfigurationError("No enabled full agent is available");
     }
     if (only.profileId !== profileId) {
       throw new ConfigurationError(
-        `No configured conversational agent matches profile ${profileId}`,
+        `No configured full agent matches profile ${profileId}`,
       );
     }
     return only;
   }
   const match = agents.find((agent) => agent.profileId === profileId);
   if (match === undefined) {
-    throw new ConfigurationError(`No configured conversational agent matches profile ${profileId}`);
+    throw new ConfigurationError(`No configured full agent matches profile ${profileId}`);
   }
   return match;
 }
 function resolveModelConfig(
-  agent: CrewConfig["conversationalAgents"][number],
+  agent: CrewConfig["fullAgents"][number],
   profile: Profile,
   env: Readonly<Record<string, string | undefined>>,
-): ConversationalRuntimeModelConfig {
+): FullAgentRuntimeModelConfig {
   const provider = agent.runtime.provider ?? profile.modelConfig?.provider;
   const modelName = agent.runtime.model ?? profile.modelConfig?.model;
   if (provider === undefined || modelName === undefined) {
     throw new ConfigurationError(
-      `Conversational agent "${agent.agentId}" requires a resolved runtime provider and model`,
+      `Full agent "${agent.agentId}" requires a resolved runtime provider and model`,
     );
   }
   if (profile.toolPolicy === undefined) {
     throw new ConfigurationError(
-      `Conversational agent "${agent.agentId}" requires profile toolPolicy when runtime.toolPolicy.mode is profile`,
+      `Full agent "${agent.agentId}" requires profile toolPolicy when runtime.toolPolicy.mode is profile`,
     );
   }
   const apiKey = resolveApiKey(agent.runtime.apiKeyEnv ?? profile.modelConfig?.apiKeyEnv, env);
@@ -382,7 +382,7 @@ function resolveModelConfig(
     maxTokens: profile.modelConfig?.maxTokens,
   };
 }
-function createAgentModel(config: ConversationalRuntimeModelConfig): Model<Api> {
+function createAgentModel(config: FullAgentRuntimeModelConfig): Model<Api> {
   if (isKnownProvider(config.provider)) {
     const registered = getModels(config.provider).find((model) => model.id === config.modelName);
     if (registered !== undefined) {
@@ -394,12 +394,12 @@ function createAgentModel(config: ConversationalRuntimeModelConfig): Model<Api> 
     }
     if (config.modelBaseUrl === undefined) {
       throw new ConfigurationError(
-        `Conversational model ${config.provider}/${config.modelName} is not registered and has no OpenAI-compatible baseUrl`,
+        `FullAgent model ${config.provider}/${config.modelName} is not registered and has no OpenAI-compatible baseUrl`,
       );
     }
   } else if (config.modelBaseUrl === undefined) {
     throw new ConfigurationError(
-      `Conversational provider ${config.provider} is not registered and has no OpenAI-compatible baseUrl`,
+      `FullAgent provider ${config.provider} is not registered and has no OpenAI-compatible baseUrl`,
     );
   }
   return {
@@ -426,22 +426,22 @@ function resolveApiKey(
   const value = env[apiKeyEnv];
   if (value === undefined || value.trim() === "") {
     throw new ConfigurationError(
-      `Required conversational agent API key env ${apiKeyEnv} is not set`,
+      `Required full agent API key env ${apiKeyEnv} is not set`,
     );
   }
   return value;
 }
-function buildConversationalExecutionPolicy(
-  agent: CrewConfig["conversationalAgents"][number],
+function buildFullAgentExecutionPolicy(
+  agent: CrewConfig["fullAgents"][number],
   profile: Profile,
 ): ExecutionPolicy {
-  const input: ConversationalPolicyInput = {
+  const input: FullAgentPolicyInput = {
     policyId: `conv-${agent.agentId}-${agent.session.sessionId}`,
     deniedTools: [...(profile.toolPolicy?.deny ?? [])],
   };
-  return createConversationalPolicy(input);
+  return createFullAgentPolicy(input);
 }
-function selectConversationalTools(input: {
+function selectFullAgentTools(input: {
   readonly allow: readonly string[];
   readonly profileToolPolicy: ToolPolicy | undefined;
   readonly mcpTools: readonly AgentTool[];
@@ -474,7 +474,7 @@ function selectConversationalTools(input: {
     .filter((tool) => allowedSet.has(tool.name))
     .map((tool) => {
       if (localToolNameSet.has(tool.name)) return tool;
-      return createConversationalMcpAgentTool(tool as unknown as Parameters<typeof createConversationalMcpAgentTool>[0], input.mcpClient, {
+      return createFullAgentMcpAgentTool(tool as unknown as Parameters<typeof createFullAgentMcpAgentTool>[0], input.mcpClient, {
         sender: input.defaultSender,
         projectId: input.defaultProjectId,
       });

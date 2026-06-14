@@ -1,4 +1,4 @@
-/** Tests for Agent-backed conversational responder boundary. */
+/** Tests for Agent-backed fullAgent responder boundary. */
 
 import type { AgentEvent, AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
@@ -7,13 +7,13 @@ import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { describe, expect, it } from "vitest";
 import { AgentInstanceImpl } from "../../instances/agent-instance.js";
 import {
-  ConversationalAgentResponder,
-  type ConversationalAgentAdapter,
-  type ConversationalAgentFactory,
-  type ConversationalAgentFactoryInput,
-} from "../../instances/conversational-agent-responder.js";
+  FullAgentResponder,
+  type FullAgentAdapter,
+  type FullAgentFactory,
+  type FullAgentFactoryInput,
+} from "../../instances/full-agent-responder.js";
 
-class FakeConversationalAgent implements ConversationalAgentAdapter {
+class FakeFullAgent implements FullAgentAdapter {
   readonly prompts: AgentMessage[][] = [];
   readonly #listeners: Array<(event: AgentEvent, signal: AbortSignal) => Promise<void> | void> = [];
   readonly #signal = new AbortController().signal;
@@ -107,15 +107,15 @@ class FakeConversationalAgent implements ConversationalAgentAdapter {
   }
 }
 
-class CapturingConversationalAgentFactory implements ConversationalAgentFactory {
-  readonly agent: FakeConversationalAgent;
-  readonly created: ConversationalAgentFactoryInput[] = [];
+class CapturingFullAgentFactory implements FullAgentFactory {
+  readonly agent: FakeFullAgent;
+  readonly created: FullAgentFactoryInput[] = [];
 
   constructor(response: string | AssistantMessage, emitFullLifecycle = false) {
-    this.agent = new FakeConversationalAgent(response, emitFullLifecycle);
+    this.agent = new FakeFullAgent(response, emitFullLifecycle);
   }
 
-  create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
+  create(input: FullAgentFactoryInput): FullAgentAdapter {
     this.created.push(input);
     return this.agent;
   }
@@ -204,14 +204,14 @@ function createTextMessage(text: string): ChannelMessage {
   };
 }
 
-describe("ConversationalAgentResponder", () => {
-  it("runs an Agent-backed conversational turn and returns assistant text", async () => {
-    const factory = new CapturingConversationalAgentFactory("model says hello");
-    const responder = new ConversationalAgentResponder({
+describe("FullAgentResponder", () => {
+  it("runs an Agent-backed fullAgent turn and returns assistant text", async () => {
+    const factory = new CapturingFullAgentFactory("model says hello");
+    const responder = new FullAgentResponder({
       agentFactory: factory,
       eventBus: new FakeEventBus(),
       logger: new FakeLogger(),
-      systemPrompt: "You are a conversational pi-crew agent.",
+      systemPrompt: "You are a fullAgent pi-crew agent.",
       model: runtimeModel,
       apiKey: "runtime-key",
       temperature: 0.4,
@@ -228,7 +228,7 @@ describe("ConversationalAgentResponder", () => {
         sessionId: "inst-conv-1",
         profileId: "system-architect",
         instanceId: "inst-conv-1",
-        systemPrompt: "You are a conversational pi-crew agent.",
+        systemPrompt: "You are a fullAgent pi-crew agent.",
         model: runtimeModel,
         apiKey: "runtime-key",
         temperature: 0.4,
@@ -248,10 +248,10 @@ describe("ConversationalAgentResponder", () => {
   });
 
   it("returns model errors as visible channel text instead of blank messages", async () => {
-    const factory = new CapturingConversationalAgentFactory(
+    const factory = new CapturingFullAgentFactory(
       createErrorAssistantMessage("402 insufficient credits"),
     );
-    const responder = new ConversationalAgentResponder({
+    const responder = new FullAgentResponder({
       agentFactory: factory,
       eventBus: new FakeEventBus(),
       logger: new FakeLogger(),
@@ -273,8 +273,8 @@ describe("ConversationalAgentResponder", () => {
 
   it("emits typed conversation turn lifecycle events without worker correlation", async () => {
     const bus = new FakeEventBus();
-    const responder = new ConversationalAgentResponder({
-      agentFactory: new CapturingConversationalAgentFactory("ok"),
+    const responder = new FullAgentResponder({
+      agentFactory: new CapturingFullAgentFactory("ok"),
       eventBus: bus,
       logger: new FakeLogger(),
       systemPrompt: "System prompt",
@@ -309,8 +309,8 @@ describe("ConversationalAgentResponder", () => {
 
   it("bridges Agent message and tool lifecycle events without worker completion semantics", async () => {
     const bus = new FakeEventBus();
-    const responder = new ConversationalAgentResponder({
-      agentFactory: new CapturingConversationalAgentFactory("ok", true),
+    const responder = new FullAgentResponder({
+      agentFactory: new CapturingFullAgentFactory("ok", true),
       eventBus: bus,
       logger: new FakeLogger(),
       systemPrompt: "System prompt",

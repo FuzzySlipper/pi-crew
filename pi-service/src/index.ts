@@ -58,17 +58,17 @@ export {
   EchoAgentResponderFactory,
 } from "./instances/agent-responder.js";
 export {
-  ConversationalAgentResponder,
-  ConversationalAgentResponderFactory,
-  DefaultConversationalAgentFactory,
-  type ConversationalAgentAdapter,
-  type ConversationalAgentFactory,
-  type ConversationalAgentFactoryInput,
-  type ConversationalAgentResponderConfig,
-  type ConversationalAgentRuntimeBuilder,
-  type ConversationalAgentState,
-  type ConversationalTurnHistory,
-} from "./instances/conversational-agent-responder.js";
+  FullAgentResponder,
+  FullAgentResponderFactory,
+  DefaultFullAgentFactory,
+  type FullAgentAdapter,
+  type FullAgentFactory,
+  type FullAgentFactoryInput,
+  type FullAgentResponderConfig,
+  type FullAgentRuntimeBuilder,
+  type FullAgentState,
+  type FullAgentTurnHistory,
+} from "./instances/full-agent-responder.js";
 export {
   type DeterministicArithmeticRequest,
   type DeterministicArithmeticResult,
@@ -266,12 +266,12 @@ export {
 } from "./admin/admin-server.js";
 export { DirectDebugSessionService } from "./admin/direct-debug-session-service.js";
 export {
-  ConversationalSessionResetError,
-  ConversationalSessionResetService,
-  type ConversationalSessionResetDeps,
+  FullSessionResetError,
+  FullSessionResetService,
+  type FullSessionResetDeps,
   type SessionResetRequest,
   type SessionResetResult,
-} from "./admin/conversational-session-reset-service.js";
+} from "./admin/full-session-reset-service.js";
 export {
   createSlashCommandRouter,
   type SlashCommandName,

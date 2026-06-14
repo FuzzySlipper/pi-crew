@@ -69,11 +69,11 @@ class DefaultSlashCommandRouter implements SlashCommandRouter {
   async tryHandle(request: SlashCommandRequest): Promise<SlashCommandResult> {
     const parsed = parseSlashCommand(request.input);
     if (parsed === null) return { handled: false };
-    if (request.session.kind !== "conversational") {
+    if (request.session.kind !== "full") {
       return handled(
         parsed.command,
         false,
-        "Slash commands are only available for conversational sessions.",
+        "Slash commands are only available for full-agent sessions.",
         {
           sessionId: request.session.id,
           kind: request.session.kind,
@@ -145,14 +145,14 @@ class DefaultSlashCommandRouter implements SlashCommandRouter {
       return handled(
         "new",
         false,
-        "Session reset was recognized as a control-plane command, but full /new rotation is not wired for this frontend. Missing seam: conversational session reset handler.",
+        "Session reset was recognized as a control-plane command, but full /new rotation is not wired for this frontend. Missing seam: full-agent session reset handler.",
         {
           sessionId: request.session.id,
           profileId: request.session.profileId,
           requestedBy,
           reason: normalizedReason,
           requestedAt: this.#now().toISOString(),
-          missingSeam: "conversational_session_reset_handler",
+          missingSeam: "fullAgent_session_reset_handler",
         },
       );
     }

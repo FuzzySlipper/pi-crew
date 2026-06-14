@@ -95,9 +95,9 @@ const DenConfigSchema = z.object({
   channelsMemberRole: z.string().default(""),
   /** Concrete runtime instance id used for the active ordinary-channel subscription. */
   channelsAgentInstanceId: z.string().default(""),
-  /** Durable conversational session owner id bound to the active subscription. */
+  /** Durable full-agent session owner id bound to the active subscription. */
   channelsSessionOwnerId: z.string().default(""),
-  /** Durable conversational session id bound to the active subscription. */
+  /** Durable full-agent session id bound to the active subscription. */
   channelsSessionId: z.string().default(""),
   /** Deterministic subscription identity for the active ordinary-channel subscription. */
   channelsSubscriptionIdentity: z.string().default(""),

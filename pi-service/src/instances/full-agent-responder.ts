@@ -1,4 +1,4 @@
-/** Agent-backed responder for ordinary conversational sessions. */
+/** Agent-backed responder for ordinary full-agent sessions. */
 
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import { Agent } from "@earendil-works/pi-agent-core";
@@ -19,24 +19,24 @@ import type {
   AgentResponderFactoryContext,
 } from "./agent-responder.js";
 
-export interface ConversationalAgentState {
+export interface FullAgentState {
   readonly messages: AgentMessage[];
 }
 
-export interface ConversationalTurnHistory {
+export interface FullAgentTurnHistory {
   loadRecent(sessionId: string, limit: number): Promise<AgentMessage[]>;
   append(sessionId: string, message: AgentMessage): Promise<void>;
 }
 
-export interface ConversationalAgentAdapter {
-  readonly state: ConversationalAgentState;
+export interface FullAgentAdapter {
+  readonly state: FullAgentState;
   subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void;
   prompt(messages: AgentMessage[]): Promise<void>;
   waitForIdle(): Promise<void>;
   abort(): void;
 }
 
-export interface ConversationalAgentFactoryInput {
+export interface FullAgentFactoryInput {
   readonly profileId: string;
   readonly sessionId: string;
   readonly instanceId: string;
@@ -48,12 +48,12 @@ export interface ConversationalAgentFactoryInput {
   readonly tools?: readonly AgentTool[];
 }
 
-export interface ConversationalAgentFactory {
-  create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter;
+export interface FullAgentFactory {
+  create(input: FullAgentFactoryInput): FullAgentAdapter;
 }
 
-export interface ConversationalAgentResponderConfig {
-  readonly agentFactory?: ConversationalAgentFactory;
+export interface FullAgentResponderConfig {
+  readonly agentFactory?: FullAgentFactory;
   readonly eventBus: EventBus;
   readonly logger: Logger;
   readonly model?: Model<Api>;
@@ -62,24 +62,24 @@ export interface ConversationalAgentResponderConfig {
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly tools?: readonly AgentTool[];
-  readonly history?: ConversationalTurnHistory;
+  readonly history?: FullAgentTurnHistory;
   readonly historyLimit?: number;
 }
 
-export interface ConversationalAgentRuntimeBuilder {
+export interface FullAgentRuntimeBuilder {
   build(context: AgentResponderFactoryContext): AgentResponder;
 }
 
-export class ConversationalAgentResponderFactory implements AgentResponderFactory {
-  constructor(private readonly builder: ConversationalAgentRuntimeBuilder) {}
+export class FullAgentResponderFactory implements AgentResponderFactory {
+  constructor(private readonly builder: FullAgentRuntimeBuilder) {}
 
   createResponder(context: AgentResponderFactoryContext): AgentResponder {
     return this.builder.build(context);
   }
 }
 
-export class DefaultConversationalAgentFactory implements ConversationalAgentFactory {
-  create(input: ConversationalAgentFactoryInput): ConversationalAgentAdapter {
+export class DefaultFullAgentFactory implements FullAgentFactory {
+  create(input: FullAgentFactoryInput): FullAgentAdapter {
     return new Agent({
       sessionId: input.sessionId,
       getApiKey: () => input.apiKey,
@@ -98,8 +98,8 @@ export class DefaultConversationalAgentFactory implements ConversationalAgentFac
   }
 }
 
-export class ConversationalAgentResponder implements AgentResponder {
-  readonly #agentFactory: ConversationalAgentFactory;
+export class FullAgentResponder implements AgentResponder {
+  readonly #agentFactory: FullAgentFactory;
   readonly #eventBus: EventBus;
   readonly #logger: Logger;
   readonly #model: Model<Api> | undefined;
@@ -108,11 +108,11 @@ export class ConversationalAgentResponder implements AgentResponder {
   readonly #temperature: number | undefined;
   readonly #maxTokens: number | undefined;
   readonly #tools: readonly AgentTool[] | undefined;
-  readonly #history: ConversationalTurnHistory | undefined;
+  readonly #history: FullAgentTurnHistory | undefined;
   readonly #historyLimit: number;
 
-  constructor(config: ConversationalAgentResponderConfig) {
-    this.#agentFactory = config.agentFactory ?? new DefaultConversationalAgentFactory();
+  constructor(config: FullAgentResponderConfig) {
+    this.#agentFactory = config.agentFactory ?? new DefaultFullAgentFactory();
     this.#eventBus = config.eventBus;
     this.#logger = config.logger;
     this.#model = config.model;
@@ -137,7 +137,7 @@ export class ConversationalAgentResponder implements AgentResponder {
       maxTokens: this.#maxTokens,
       tools: this.#tools,
     });
-    this.#logger.debug("Starting Agent-backed conversational response", {
+    this.#logger.debug("Starting Agent-backed fullAgent response", {
       profileId: request.profileId,
       instanceId: request.instanceId,
       channelId: request.message.channelId,
@@ -153,7 +153,7 @@ export class ConversationalAgentResponder implements AgentResponder {
       await agent.waitForIdle();
       const response = responseFromMessages(agent.state.messages, request.profileId);
       await this.#appendTurn(request.sessionId, userMessage, agent.state.messages);
-      this.#logger.debug("Completed Agent-backed conversational response", {
+      this.#logger.debug("Completed Agent-backed fullAgent response", {
         profileId: request.profileId,
         instanceId: request.instanceId,
       });
@@ -303,7 +303,7 @@ function responseFromMessages(
 ): ChannelContent {
   const assistant = lastAssistantMessage(messages);
   if (assistant === undefined) {
-    throw new ConfigurationError("Conversational Agent completed without an assistant response");
+    throw new ConfigurationError("FullAgent Agent completed without an assistant response");
   }
   const text = assistant.content
     .filter(isTextContent)
@@ -347,5 +347,5 @@ function isTextContent(part: AssistantMessage["content"][number]): part is TextC
 }
 
 function assertNever(value: never): never {
-  throw new ConfigurationError(`Unhandled conversational Agent event: ${JSON.stringify(value)}`);
+  throw new ConfigurationError(`Unhandled fullAgent Agent event: ${JSON.stringify(value)}`);
 }
