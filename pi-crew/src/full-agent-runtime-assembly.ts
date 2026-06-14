@@ -1,4 +1,3 @@
-/** Assemble Agent-backed ordinary fullAgent runtimes from installed config. */
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getModels, getProviders } from "@earendil-works/pi-ai";
 import type { Api, KnownProvider, Model } from "@earendil-works/pi-ai";
@@ -79,10 +78,7 @@ export interface FullAgentDelegationRuntimeConfig {
   readonly parentDelegationConstraints?: DelegationConstraints;
   readonly allowedRuntimes?: readonly EffectiveDelegationRuntime[];
 }
-export interface DenChannelReadbackRuntimeConfig extends Omit<
-  DenChannelReadbackToolConfig,
-  "allowedChannelIds"
-> {}
+export interface DenChannelReadbackRuntimeConfig extends Omit<DenChannelReadbackToolConfig, "allowedChannelIds"> {}
 export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRuntimeInput {
   readonly eventBus?: EventBus;
   readonly history?: FullAgentTurnHistory;
@@ -119,12 +115,22 @@ class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
       this.input.channelReadback,
     );
     const tools = addDelegationTool(withReadback, this.input.agent, context, this.input.delegation);
+    const toolsProvider = () => {
+      const freshRuntime = resolveFullAgentRuntime({ ...this.input, sessionToolFilter: filter });
+      const freshWithReadback = addChannelReadbackTool(
+        freshRuntime,
+        this.input.agent,
+        this.input.channelReadback,
+      );
+      return addDelegationTool(freshWithReadback, this.input.agent, context, this.input.delegation);
+    };
     return createResponder(
       { ...runtime, tools },
       this.logger,
       this.eventBus,
       this.input.history,
       this.input.agentFactory,
+      toolsProvider,
     );
   }
 }
@@ -140,12 +146,22 @@ class ProfileMappedFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
     });
     const withReadback = addChannelReadbackTool(runtime, agent, this.input.channelReadback);
     const tools = addDelegationTool(withReadback, agent, context, this.input.delegation);
+    const toolsProvider = () => {
+      const freshRuntime = resolveFullAgentRuntime({
+        ...this.input,
+        agent,
+        sessionToolFilter: filter,
+      });
+      const freshWithReadback = addChannelReadbackTool(freshRuntime, agent, this.input.channelReadback);
+      return addDelegationTool(freshWithReadback, agent, context, this.input.delegation);
+    };
     return createResponder(
       { ...runtime, tools },
       this.input.logger,
       this.input.eventBus,
       this.input.history,
       this.input.agentFactory,
+      toolsProvider,
     );
   }
 }
@@ -222,6 +238,7 @@ function createResponder(
   eventBus: EventBus,
   history?: FullAgentTurnHistory,
   agentFactory?: FullAgentFactory,
+  toolsProvider?: () => readonly AgentTool[],
 ): FullAgentResponder {
   return new FullAgentResponder({
     ...(agentFactory !== undefined ? { agentFactory } : {}),
@@ -234,6 +251,7 @@ function createResponder(
     systemPrompt: runtime.systemPrompt,
     temperature: runtime.model.temperature,
     tools: runtime.tools,
+    toolsProvider,
   });
 }
 function addChannelReadbackTool(

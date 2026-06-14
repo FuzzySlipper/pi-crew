@@ -1,12 +1,3 @@
-/**
- * Typed event system for the pi-crew gateway.
- *
- * Dot-style event names provide a flat, machine-readable namespace
- * that maps naturally to subscription patterns without hierarchical
- * routing complexity.
- *
- * @module pi-core/events
- */
 
 import type { ChannelMembershipStatus, ChannelSubscriptionStatus } from "./channel-presence.js";
 import type {
@@ -15,8 +6,6 @@ import type {
   DelegationSpawnRequest,
   EffectiveDelegationRuntime,
 } from "./delegation.js";
-
-// ── Event payloads ──────────────────────────────────────────────
 
 /** Optional Den worker correlation carried by runtime-originated events. */
 export interface DenWorkerCorrelationPayload {
@@ -181,6 +170,23 @@ export interface ContextCompactionPayload {
   };
   readonly preservedRawTurnCount: number;
   readonly headings: readonly string[];
+  readonly error?: string;
+}
+
+export interface McpReloadPayload {
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly endpoint: string;
+  readonly toolProfile?: string;
+  readonly requestedBy: string;
+  readonly reason: string;
+  readonly oldToolNames: readonly string[];
+  readonly newToolNames: readonly string[];
+  readonly addedToolNames: readonly string[];
+  readonly removedToolNames: readonly string[];
+  readonly durationMs: number;
+  readonly serverCount: number;
+  readonly reloadedAt: string;
   readonly error?: string;
 }
 
@@ -416,14 +422,6 @@ export interface WorkerCloseoutAssessedPayload {
   readonly workerRole: string;
 }
 
-// ── GatewayEvent union ──────────────────────────────────────────
-
-/**
- * Discriminated union of all gateway lifecycle events.
- *
- * The `event` field uses dot-style names (e.g. `"session.created"`).
- * Narrow on `event` to access the typed payload.
- */
 export type GatewayEvent =
   | { event: "session.created"; payload: SessionCreatedPayload }
   | { event: "session.routing"; payload: SessionRoutingPayload }
@@ -447,6 +445,9 @@ export type GatewayEvent =
   | { event: "context.compaction.started"; payload: ContextCompactionPayload }
   | { event: "context.compaction.completed"; payload: ContextCompactionPayload }
   | { event: "context.compaction.failed"; payload: ContextCompactionPayload }
+  | { event: "mcp.reload.started"; payload: McpReloadPayload }
+  | { event: "mcp.reload.completed"; payload: McpReloadPayload }
+  | { event: "mcp.reload.failed"; payload: McpReloadPayload }
   | { event: "worker.stuck"; payload: WorkerStuckPayload }
   | { event: "gateway.shutdown"; payload: GatewayShutdownPayload }
   | { event: "tool.denied"; payload: ToolDeniedPayload }
@@ -469,20 +470,11 @@ export type GatewayEvent =
   | { event: "operator.control_completed"; payload: OperatorControlCompletedPayload }
   | { event: "worker.closeout_assessed"; payload: WorkerCloseoutAssessedPayload };
 
-/**
- * Helper to extract the payload type for a specific event name.
- *
- * @example
- * ```ts
- * type P = EventPayload<"session.created">; // SessionCreatedPayload
- * ```
- */
+/** Helper to extract the payload type for a specific event name. */
 export type EventPayload<E extends GatewayEvent["event"]> = Extract<
   GatewayEvent,
   { event: E }
 >["payload"];
-
-// ── EventBus interface ──────────────────────────────────────────
 
 export interface EventBus {
   emit(event: GatewayEvent): void;

@@ -62,6 +62,7 @@ export interface FullAgentResponderConfig {
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly tools?: readonly AgentTool[];
+  readonly toolsProvider?: () => readonly AgentTool[];
   readonly history?: FullAgentTurnHistory;
   readonly historyLimit?: number;
 }
@@ -108,6 +109,7 @@ export class FullAgentResponder implements AgentResponder {
   readonly #temperature: number | undefined;
   readonly #maxTokens: number | undefined;
   readonly #tools: readonly AgentTool[] | undefined;
+  readonly #toolsProvider: (() => readonly AgentTool[]) | undefined;
   readonly #history: FullAgentTurnHistory | undefined;
   readonly #historyLimit: number;
 
@@ -121,6 +123,7 @@ export class FullAgentResponder implements AgentResponder {
     this.#temperature = config.temperature;
     this.#maxTokens = config.maxTokens;
     this.#tools = config.tools;
+    this.#toolsProvider = config.toolsProvider;
     this.#history = config.history;
     this.#historyLimit = config.historyLimit ?? 24;
   }
@@ -135,7 +138,7 @@ export class FullAgentResponder implements AgentResponder {
       apiKey: this.#apiKey,
       temperature: this.#temperature,
       maxTokens: this.#maxTokens,
-      tools: this.#tools,
+      tools: this.#toolsProvider?.() ?? this.#tools,
     });
     this.#logger.debug("Starting Agent-backed fullAgent response", {
       profileId: request.profileId,
