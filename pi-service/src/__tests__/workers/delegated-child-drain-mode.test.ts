@@ -11,8 +11,8 @@ describe("buildDrainModePrompt", () => {
       requiredEvidence: { taskIds: ["2403"] },
     });
 
-    expect(prompt).toContain("Do not call more tools");
-    expect(prompt).toContain("<delegated_implementation_result>");
+    expect(prompt).toContain("Do not call investigative/workflow tools");
+    expect(prompt).toContain("post_delegated_implementation_result");
     expect(prompt).toContain("structured blocked or insufficient_evidence result");
   });
 });
