@@ -171,6 +171,19 @@ export interface ContextPressurePayload {
   readonly maxTokens: number;
 }
 
+export interface ContextCompactionPayload {
+  readonly sessionId: string;
+  readonly artifactId: string;
+  readonly compactedTurnRange: {
+    readonly startMessageId: number;
+    readonly endMessageId: number;
+    readonly messageCount: number;
+  };
+  readonly preservedRawTurnCount: number;
+  readonly headings: readonly string[];
+  readonly error?: string;
+}
+
 /** Fired when a worker signals it cannot make progress. */
 export interface WorkerStuckPayload {
   readonly workerIdentity: string;
@@ -431,6 +444,9 @@ export type GatewayEvent =
   | { event: "turn.exhausted"; payload: TurnExhaustedPayload }
   | { event: "checkpoint.waiting"; payload: CheckpointWaitingPayload }
   | { event: "context.pressure"; payload: ContextPressurePayload }
+  | { event: "context.compaction.started"; payload: ContextCompactionPayload }
+  | { event: "context.compaction.completed"; payload: ContextCompactionPayload }
+  | { event: "context.compaction.failed"; payload: ContextCompactionPayload }
   | { event: "worker.stuck"; payload: WorkerStuckPayload }
   | { event: "gateway.shutdown"; payload: GatewayShutdownPayload }
   | { event: "tool.denied"; payload: ToolDeniedPayload }
@@ -468,29 +484,13 @@ export type EventPayload<E extends GatewayEvent["event"]> = Extract<
 
 // ── EventBus interface ──────────────────────────────────────────
 
-/**
- * Type-safe event bus contract.
- *
- * The gateway composes modules by having them emit and subscribe to
- * events on a shared bus.  No module imports from another module
- * directly — the bus is the decoupling mechanism.
- */
 export interface EventBus {
-  /**
-   * Emit a typed gateway event to all registered listeners.
-   */
   emit(event: GatewayEvent): void;
 
-  /**
-   * Subscribe to a specific event name.  Returns an unsubscribe function.
-   */
   on<E extends GatewayEvent["event"]>(
     event: E,
     handler: (payload: EventPayload<E>) => void,
   ): () => void;
 
-  /**
-   * Remove a specific handler for an event.
-   */
   off<E extends GatewayEvent["event"]>(event: E, handler: (payload: EventPayload<E>) => void): void;
 }

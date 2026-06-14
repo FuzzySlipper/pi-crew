@@ -93,6 +93,7 @@ export interface DiagnosticSessionProjection {
   readonly lastActivityAt: string;
   readonly lastGatewayEvent: GatewayEvent["event"] | null;
   readonly contextPressure: DiagnosticContextPressure | null;
+  readonly contextCompaction: DiagnosticContextCompaction | null;
   readonly drainState: "active" | "inactive" | "unknown";
   readonly recentErrorCount: number;
   readonly presenceStatus: "active" | "idle" | "degraded" | "offline" | "unknown";
@@ -103,6 +104,14 @@ export interface DiagnosticSessionProjection {
 export interface DiagnosticContextPressure {
   readonly usedTokens: number;
   readonly maxTokens: number;
+}
+
+export interface DiagnosticContextCompaction {
+  readonly artifactId: string;
+  readonly status: "started" | "completed" | "failed";
+  readonly compactedMessageCount: number;
+  readonly preservedRawTurnCount: number;
+  readonly headings: readonly string[];
 }
 
 export interface DiagnosticsOverview {

@@ -198,6 +198,33 @@ describe("DiagnosticsService", () => {
     });
   });
 
+  it("projects latest full-agent context compaction artifact", async () => {
+    const eventBus = new FakeEventBus();
+    const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
+    const store = new InMemorySessionStore();
+    await store.save(fullSession("session-compact"));
+    eventBus.emit({
+      event: "context.compaction.completed",
+      payload: {
+        sessionId: "session-compact",
+        artifactId: "blackboard:session-compact:context-1-8",
+        compactedTurnRange: { startMessageId: 1, endMessageId: 8, messageCount: 8 },
+        preservedRawTurnCount: 4,
+        headings: ["1 user", "2 assistant"],
+      },
+    });
+
+    const overview = await makeService(store, journal).projectOverview();
+
+    expect(overview.sessions[0]?.contextCompaction).toEqual({
+      artifactId: "blackboard:session-compact:context-1-8",
+      status: "completed",
+      compactedMessageCount: 8,
+      preservedRawTurnCount: 4,
+      headings: ["1 user", "2 assistant"],
+    });
+  });
+
   it("classifies full-agent sessions with turn errors as pi_crew_local", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
@@ -277,9 +304,7 @@ describe("DiagnosticsService", () => {
     expect(overview.sessions[0]).toMatchObject({
       sessionId: "session-conv-legacy",
       channelBindings: ["legacy-channel-id"],
-      channelBindingDetails: [
-        { providerId: "legacy", channelId: "legacy-channel-id" },
-      ],
+      channelBindingDetails: [{ providerId: "legacy", channelId: "legacy-channel-id" }],
     });
   });
 
@@ -377,10 +402,7 @@ function workerStuck(sessionId: string, assignmentId: string, runId: string): Ga
 
 // ── Full-agent session fixtures ──────────────────────────
 
-function fullSession(
-  sessionId: string,
-  overrides: Partial<SessionRecord> = {},
-): SessionRecord {
+function fullSession(sessionId: string, overrides: Partial<SessionRecord> = {}): SessionRecord {
   return {
     id: sessionId,
     profileId: "conv-agent",
@@ -419,10 +441,7 @@ function turnErrored(sessionId: string, error: string): GatewayEvent {
   };
 }
 
-function sessionPresence(
-  sessionId: string,
-  subscriptionStatus: string,
-): GatewayEvent {
+function sessionPresence(sessionId: string, subscriptionStatus: string): GatewayEvent {
   return {
     event: "session.presence",
     payload: {

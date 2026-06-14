@@ -183,7 +183,7 @@ export class Crew {
       this.#eventBus,
       this.#logger,
       this.#mcpSurfaceManager,
-      new MessageRepositoryTurnHistory(messageRepository),
+      new MessageRepositoryTurnHistory(messageRepository, { eventBus: this.#eventBus }),
       { lifecycle: fullAgentDelegationLifecycle.port },
       {
         baseUrl: config.den.channelsUrl,

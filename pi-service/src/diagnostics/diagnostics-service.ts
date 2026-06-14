@@ -7,6 +7,7 @@ import type {
   DiagnosticClassification,
   DiagnosticClassificationKind,
   DiagnosticContextPressure,
+  DiagnosticContextCompaction,
   DiagnosticEventJournal,
   DiagnosticEventRecord,
   DiagnosticSessionProjection,
@@ -57,8 +58,9 @@ export class DiagnosticsService {
       fullSessions: sessions.filter((session) => session.kind === "full").length,
       activeAssignmentsLocal: projectedSessions.filter((session) => session.workerBinding !== null)
         .length,
-      stuckWorkers: projectedSessions.filter((session) => session.localLifecycleState === "worker.stuck")
-        .length,
+      stuckWorkers: projectedSessions.filter(
+        (session) => session.localLifecycleState === "worker.stuck",
+      ).length,
       checkpointWaiting: projectedSessions.filter(
         (session) => session.localLifecycleState === "checkpoint.waiting",
       ).length,
@@ -105,7 +107,9 @@ export class DiagnosticsService {
     return [...active, ...idle];
   }
 
-  async #readDenAssignments(sessions: readonly SessionRecord[]): Promise<Map<string, DenAssignmentStatus>> {
+  async #readDenAssignments(
+    sessions: readonly SessionRecord[],
+  ): Promise<Map<string, DenAssignmentStatus>> {
     const ids = sessions
       .map((session) => session.workerBinding?.assignmentId)
       .filter((id): id is string => id !== undefined);
@@ -122,7 +126,7 @@ export class DiagnosticsService {
     const sessionEvents = findSessionEvents(session, recentEvents);
     const lastEvent = sessionEvents.at(-1) ?? null;
     const denAssignment = session.workerBinding
-      ? assignments.get(session.workerBinding.assignmentId) ?? null
+      ? (assignments.get(session.workerBinding.assignmentId) ?? null)
       : null;
     const contextPressure = findContextPressure(session.id, sessionEvents);
     const recentErrorCount = countRecentErrors(session.id, sessionEvents);
@@ -144,6 +148,7 @@ export class DiagnosticsService {
       lastActivityAt: session.lastActiveAt,
       lastGatewayEvent: lastEvent?.event ?? null,
       contextPressure,
+      contextCompaction: findContextCompaction(session.id, sessionEvents),
       drainState: findDrainState(session.id, sessionEvents),
       recentErrorCount,
       presenceStatus,
@@ -163,7 +168,10 @@ interface OverviewClassificationInput {
 
 function classifyOverview(input: OverviewClassificationInput): DiagnosticClassification {
   if (input.denCoreStatus === "unreachable") {
-    return { kind: "den_core_unreachable", summary: "Den Core is unreachable; Den remains authoritative." };
+    return {
+      kind: "den_core_unreachable",
+      summary: "Den Core is unreachable; Den remains authoritative.",
+    };
   }
   if (input.denChannelsStatus === "unreachable") {
     return { kind: "den_channels_unreachable", summary: "Den Channels is unreachable." };
@@ -172,15 +180,24 @@ function classifyOverview(input: OverviewClassificationInput): DiagnosticClassif
     return { kind: "mcp_unreachable", summary: "Den MCP is unreachable." };
   }
   if (input.sessionClassifications.includes("workflow_disagreement")) {
-    return { kind: "workflow_disagreement", summary: "Local runtime and Den assignment state disagree." };
+    return {
+      kind: "workflow_disagreement",
+      summary: "Local runtime and Den assignment state disagree.",
+    };
   }
-  if (input.runtimeDbStatus === "failed" || input.sessionClassifications.includes("pi_crew_local")) {
+  if (
+    input.runtimeDbStatus === "failed" ||
+    input.sessionClassifications.includes("pi_crew_local")
+  ) {
     return { kind: "pi_crew_local", summary: "Local pi-crew runtime evidence requires attention." };
   }
   if (input.sessionClassifications.includes("unknown")) {
     return { kind: "unknown", summary: "Diagnostics have insufficient evidence." };
   }
-  return { kind: "healthy", summary: "Local runtime projection agrees with reachable Den services." };
+  return {
+    kind: "healthy",
+    summary: "Local runtime projection agrees with reachable Den services.",
+  };
 }
 
 function classifySession(
@@ -188,7 +205,11 @@ function classifySession(
   denAssignment: DenAssignmentStatus | null,
   events: readonly DiagnosticEventRecord[],
 ): DiagnosticClassificationKind {
-  if (session.kind === "worker" && session.state === "active" && denAssignment?.isActive === false) {
+  if (
+    session.kind === "worker" &&
+    session.state === "active" &&
+    denAssignment?.isActive === false
+  ) {
     return "workflow_disagreement";
   }
   if (events.some((event) => event.event === "worker.stuck")) return "pi_crew_local";
@@ -218,7 +239,10 @@ function eventMatchesSession(event: DiagnosticEventRecord, session: SessionRecor
   if (payload.sessionId === session.id) return true;
   const binding = session.workerBinding;
   if (binding === null) return false;
-  return payload.assignmentId === binding.assignmentId || String(payload.assignmentId) === binding.assignmentId;
+  return (
+    payload.assignmentId === binding.assignmentId ||
+    String(payload.assignmentId) === binding.assignmentId
+  );
 }
 
 function findContextPressure(
@@ -231,6 +255,34 @@ function findContextPressure(
   if (payload?.sessionId !== sessionId) return null;
   if (typeof payload.usedTokens !== "number" || typeof payload.maxTokens !== "number") return null;
   return { usedTokens: payload.usedTokens, maxTokens: payload.maxTokens };
+}
+
+function findContextCompaction(
+  sessionId: string,
+  events: readonly DiagnosticEventRecord[],
+): DiagnosticContextCompaction | null {
+  const compaction = findLastEvent(events, (event) =>
+    event.event.startsWith("context.compaction."),
+  );
+  if (!compaction) return null;
+  const payload = asRecord(compaction.payload);
+  if (payload?.sessionId !== sessionId) return null;
+  const range = asRecord(payload.compactedTurnRange);
+  if (typeof payload.artifactId !== "string" || typeof range?.messageCount !== "number")
+    return null;
+  return {
+    artifactId: payload.artifactId,
+    status:
+      compaction.event === "context.compaction.failed"
+        ? "failed"
+        : compaction.event === "context.compaction.started"
+          ? "started"
+          : "completed",
+    compactedMessageCount: range.messageCount,
+    preservedRawTurnCount:
+      typeof payload.preservedRawTurnCount === "number" ? payload.preservedRawTurnCount : 0,
+    headings: Array.isArray(payload.headings) ? payload.headings.filter(isString) : [],
+  };
 }
 
 function findDrainState(
@@ -268,7 +320,9 @@ function evidenceRefs(
     refs.push(`worker.stuck:${session.workerBinding.assignmentId}`);
   }
   if (denAssignment?.isActive === false) {
-    refs.push(`den.assignment.${denAssignment.terminalState ?? "terminal"}:${denAssignment.assignmentId}`);
+    refs.push(
+      `den.assignment.${denAssignment.terminalState ?? "terminal"}:${denAssignment.assignmentId}`,
+    );
   }
   return refs;
 }
@@ -276,6 +330,10 @@ function evidenceRefs(
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null) return null;
   return value as Record<string, unknown>;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }
 
 function uptimeSeconds(startedAt: string, current: string): number {
@@ -288,9 +346,7 @@ function uptimeSeconds(startedAt: string, current: string): number {
 
 function countRecentErrors(sessionId: string, events: readonly DiagnosticEventRecord[]): number {
   return events.filter(
-    (event) =>
-      event.event === "turn.errored" &&
-      asRecord(event.payload)?.sessionId === sessionId,
+    (event) => event.event === "turn.errored" && asRecord(event.payload)?.sessionId === sessionId,
   ).length;
 }
 
@@ -309,8 +365,7 @@ function findPresenceStatus(
   const presenceEvent = findLastEvent(
     events,
     (event) =>
-      event.event === "session.presence" &&
-      asRecord(event.payload)?.sessionId === session.id,
+      event.event === "session.presence" && asRecord(event.payload)?.sessionId === session.id,
   );
   if (presenceEvent !== null) {
     const payload = asRecord(presenceEvent.payload);

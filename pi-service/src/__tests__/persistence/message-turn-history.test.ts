@@ -3,6 +3,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { Logger } from "@pi-crew/core";
+import { FakeEventBus } from "@pi-crew/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, unlinkSync } from "node:fs";
 import { RuntimeDb } from "../../persistence/runtime-db.js";
@@ -103,9 +104,45 @@ describe("MessageRepositoryTurnHistory", () => {
     }
 
     expect(await history.loadRecent("sess-long", 3)).toEqual([
+      expect.objectContaining({ role: "user" }),
       userMessage("message-502", 502),
       userMessage("message-503", 503),
       userMessage("message-504", 504),
+    ]);
+  });
+
+  it("preserves old full-agent turns as a durable compacted context artifact", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    await sessions.save(session("sess-compact"));
+    const eventBus = new FakeEventBus();
+    const repository = new SqliteMessageRepository(db.handle);
+    const history = new MessageRepositoryTurnHistory(repository, {
+      eventBus,
+      clock: () => "2026-06-14T00:00:00.000Z",
+    });
+
+    await history.append("sess-compact", userMessage("decision: use blackboard headings", 1));
+    await history.append("sess-compact", assistantMessage("acknowledged", 2));
+    await history.append("sess-compact", userMessage("recent question", 3));
+
+    const prompt = await history.loadRecent("sess-compact", 1);
+    const artifactRows = await repository.getBySession("sess-compact");
+    const artifactRow = artifactRows.find((row) => row.role === "system");
+
+    expect(prompt).toHaveLength(2);
+    expect(prompt[0]).toEqual(
+      expect.objectContaining({
+        role: "user",
+        content: expect.stringContaining("Full-agent compacted context headings"),
+      }),
+    );
+    expect(JSON.stringify(prompt[0])).not.toContain("decision: use blackboard headings");
+    expect(prompt.at(-1)).toEqual(userMessage("recent question", 3));
+    expect(artifactRow?.content).toContain("full_agent_context_artifact");
+    expect(eventBus.emitted.map((event) => event.event)).toEqual([
+      "context.compaction.started",
+      "blackboard.written",
+      "context.compaction.completed",
     ]);
   });
 });

@@ -11,7 +11,8 @@ const DEFAULT_MAX_RECORDS = 100;
 const REDACTED = "[REDACTED]";
 const SECRET_KEY_PATTERN = /(api[_-]?key|authorization|cookie|password|secret|token)/i;
 const TOKEN_TEXT_PATTERN = /(bearer\s+)[a-z0-9._~+/=-]+/gi;
-const SECRET_ASSIGNMENT_PATTERN = /(api[_-]?key|authorization|password|secret|token)\s*[:=]\s*[^\s,}]+/gi;
+const SECRET_ASSIGNMENT_PATTERN =
+  /(api[_-]?key|authorization|password|secret|token)\s*[:=]\s*[^\s,}]+/gi;
 
 const JOURNALED_EVENTS: readonly GatewayEvent["event"][] = [
   "session.created",
@@ -29,6 +30,9 @@ const JOURNALED_EVENTS: readonly GatewayEvent["event"][] = [
   "turn.exhausted",
   "checkpoint.waiting",
   "context.pressure",
+  "context.compaction.started",
+  "context.compaction.completed",
+  "context.compaction.failed",
   "worker.stuck",
   "gateway.shutdown",
   "tool.denied",
