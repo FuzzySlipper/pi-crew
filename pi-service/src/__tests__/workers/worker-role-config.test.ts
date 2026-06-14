@@ -278,8 +278,34 @@ describe("resolveProfileId", () => {
 // ── resolveRoleConfig ──────────────────────────────────────────
 
 describe("resolveRoleConfig", () => {
-  it("returns coder defaults from the validated default mapping", () => {
+  it("returns undefined for default bindings (profile-owned config model)", () => {
+    // DESIGN: Default bindings only map role→profileId. Config is owned by profiles,
+    // not bindings. Callers needing config should load the profile or provide explicit
+    // config in the binding. Rationale: separates identity (role→profile) from
+    // runtime configuration (model, tools, prompts).
     const mapping = loadWorkerRoleMapping(makeValidMapping());
+    expect(resolveRoleConfig(mapping, "coder")).toBeUndefined();
+    expect(resolveRoleConfig(mapping, "reviewer")).toBeUndefined();
+    expect(resolveRoleConfig(mapping, "validator")).toBeUndefined();
+    expect(resolveRoleConfig(mapping, "packet-auditor")).toBeUndefined();
+  });
+
+  it("returns coder config when explicitly provided in binding", () => {
+    const mapping = loadWorkerRoleMapping(
+      withBinding({
+        role: "coder",
+        profileId: "coder-worker",
+        config: {
+          systemPromptSource: "coder-worker",
+          mcpToolSet: ["filesystem", "terminal", "git", "den", "delegation"],
+          drainEssentialTools: [
+            "context_status",
+            "post_structured_completion",
+            "request_checkpoint",
+          ],
+        },
+      }),
+    );
     const config = resolveRoleConfig(mapping, "coder");
 
     expect(config?.systemPromptSource).toBe("coder-worker");
@@ -291,8 +317,22 @@ describe("resolveRoleConfig", () => {
     ]);
   });
 
-  it("returns reviewer defaults from the validated default mapping", () => {
-    const mapping = loadWorkerRoleMapping(makeValidMapping());
+  it("returns reviewer config when explicitly provided in binding", () => {
+    const mapping = loadWorkerRoleMapping(
+      withBinding({
+        role: "reviewer",
+        profileId: "reviewer-worker",
+        config: {
+          systemPromptSource: "reviewer-worker",
+          mcpToolSet: ["filesystem_readonly", "git_diff_log", "den"],
+          drainEssentialTools: [
+            "context_status",
+            "post_structured_completion",
+            "request_checkpoint",
+          ],
+        },
+      }),
+    );
     const config = resolveRoleConfig(mapping, "reviewer");
 
     expect(config?.systemPromptSource).toBe("reviewer-worker");
@@ -304,9 +344,26 @@ describe("resolveRoleConfig", () => {
     ]);
   });
 
-  it("keeps request_checkpoint available in default supervised role drain tools", () => {
-    const mapping = loadWorkerRoleMapping(makeValidMapping());
-    for (const role of ["packet-auditor", "packet_auditor", "coder", "reviewer"]) {
+  it("keeps request_checkpoint available when drain tools are explicitly configured", () => {
+    // When bindings include drainEssentialTools, request_checkpoint should be present
+    // for supervised roles. This test verifies the config round-trips correctly.
+    const supervisedRoles = ["packet-auditor", "packet_auditor", "coder", "reviewer"];
+    const bindingsWithDrain = DEFAULT_WORKER_ROLE_BINDINGS.map((binding) =>
+      supervisedRoles.includes(binding.role)
+        ? {
+            ...binding,
+            config: {
+              drainEssentialTools: [
+                "context_status",
+                "post_structured_completion",
+                "request_checkpoint",
+              ],
+            },
+          }
+        : binding,
+    );
+    const mapping = loadWorkerRoleMapping({ bindings: bindingsWithDrain });
+    for (const role of supervisedRoles) {
       expect(resolveRoleConfig(mapping, role)?.drainEssentialTools).toContain("request_checkpoint");
     }
   });
@@ -332,13 +389,15 @@ describe("resolveRoleConfig", () => {
     expect(config?.deterministicMode).toBe(false);
   });
 
-  it("returns validator defaults from the validated default mapping", () => {
+  it("returns validator config when explicitly provided in binding", () => {
     const mapping = loadWorkerRoleMapping(
       withBinding({
-        role: "coder",
-        profileId: "coder-worker",
+        role: "validator",
+        profileId: "validator-worker",
         config: {
-          mcpToolSet: ["file"],
+          executionMode: "llmAgent",
+          systemPromptSource: "validator-worker",
+          mcpToolSet: ["filesystem_readonly", "terminal", "den"],
         },
       }),
     );
@@ -353,7 +412,6 @@ describe("resolveRoleConfig", () => {
     expect(resolveRoleConfig(mapping, "unknown-role")).toBeUndefined();
   });
 });
-
 // ── Concrete role example: PacketAuditor with full config ──────
 
 describe("Concrete role: packet-auditor with full config", () => {
