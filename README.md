@@ -92,7 +92,7 @@ Non-Den runtime-local tools are deliberately separate from Den MCP discovery:
 | Surface | Tools | Notes |
 | ------- | ----- | ----- |
 | Conversational delegation/helper built-ins | `spawn_subagent`, `fan_out_subagents`, `scout_codebase`, `summarize_files`, `find_relevant_paths` | Model-callable by conversational agents only when runtime/profile policy selects and permits them. |
-| Delegated-child local code tools | `read_file`, `write_file`, `search_files`, `terminal`, `git_status`, `git_diff` | Model-callable inside delegated child runs through the local `ToolProvider`, bounded to `PI_CREW_LOCAL_TOOL_ROOT` or `/home/dev/pi-crew`; they are listed in diagnostics as local built-ins but are not directly exposed as conversational parent tools. |
+| Delegated-child and prime local code tools | `read_file`, `write_file`, `search_files`, `terminal`, `git_status`, `git_diff` | Model-callable when runtime/profile policy selects and permits them, bounded to `PI_CREW_LOCAL_TOOL_ROOT` or `/home/dev/pi-crew`; prime coding profiles can use them directly while orchestrator profiles should omit/deny them if they should only coordinate through children. |
 | Slash/control commands | `/help`, `/status`, `/session`, `/new`, `/reload-mcp`, `/tools` | Control-plane inputs, not model-callable tools. |
 
 Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.

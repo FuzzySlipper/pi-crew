@@ -37,6 +37,7 @@ import {
 } from "@pi-crew/tools";
 import type { CrewConfig } from "./config.js";
 import { createConversationalMcpAgentTool } from "./conversational-mcp-tool.js";
+import { createLocalCodeTools, localCodeToolNames } from "./local-code-tools.js";
 import { createDenChannelReadbackTool } from "./den-channel-readback-tool.js";
 import type { DenChannelReadbackToolConfig } from "./den-channel-readback-tool.js";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
@@ -451,9 +452,12 @@ function selectConversationalTools(input: {
   readonly defaultSender: string;
   readonly defaultProjectId?: string;
 }): AgentTool[] {
+  const requestedSets = requestedToolSets(input.allow, input.profileToolPolicy);
+  const localTools = createLocalCodeTools();
+  const localToolNameSet = new Set<string>(localCodeToolNames);
   const beforePolicy = selectToolsBeforeSessionPolicy({
-    tools: input.mcpTools,
-    requestedSets: requestedToolSets(input.allow, input.profileToolPolicy),
+    tools: [...input.mcpTools, ...localTools],
+    requestedSets,
     profileToolPolicy: input.profileToolPolicy,
   });
   const afterPolicy =
@@ -468,10 +472,11 @@ function selectConversationalTools(input: {
   const allowedSet = new Set(afterPolicy);
   return beforePolicy
     .filter((tool) => allowedSet.has(tool.name))
-    .map((tool) =>
-      createConversationalMcpAgentTool(tool as Parameters<typeof createConversationalMcpAgentTool>[0], input.mcpClient, {
+    .map((tool) => {
+      if (localToolNameSet.has(tool.name)) return tool;
+      return createConversationalMcpAgentTool(tool as unknown as Parameters<typeof createConversationalMcpAgentTool>[0], input.mcpClient, {
         sender: input.defaultSender,
         projectId: input.defaultProjectId,
-      }),
-    );
+      });
+    });
 }

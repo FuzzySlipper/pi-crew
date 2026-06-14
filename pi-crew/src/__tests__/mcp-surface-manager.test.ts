@@ -50,11 +50,33 @@ describe("MCP profile surfaces", () => {
       profile: profile("prime", "worker-coder"),
       mcpEndpoint: "http://den/mcp?tool_profile=worker-coder",
       mcpTools: [],
-      selectedToolNames: new Set(["spawn_subagent"]),
+      selectedToolNames: new Set(["spawn_subagent", "read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"]),
     });
     const local = inv.builtInTools.filter((tool) => tool.category === "local");
     expect(local.map((tool) => tool.name)).toEqual(["read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"]);
-    expect(local.every((tool) => !tool.modelCallable && tool.reason === "not_model_callable")).toBe(true);
+    expect(local.every((tool) => tool.modelCallable && tool.selected && tool.reason === "selected")).toBe(true);
+  });
+
+  it("lets orchestrator profiles deny local code tools while keeping Den MCP tools", () => {
+    const restricted = { ...profile("runner", "runner"), toolPolicy: { mode: "deny_list" as const, deny: ["read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"] } };
+    const inv = buildEffectiveToolInventory({
+      agent: {
+        agentId: "runner",
+        enabled: true,
+        profileId: "runner",
+        profileIdentity: "runner",
+        memberIdentity: "runner",
+        session: { ownerId: "owner", sessionId: "sess-runner", maxHistoryMessages: 20 },
+        channels: [],
+        runtime: { mode: "agent", tools: { allow: ["all"] }, toolPolicy: { mode: "profile" } },
+        lifecycle: { turnTimeoutMs: 1 },
+      },
+      profile: restricted,
+      mcpEndpoint: "http://den/mcp?tool_profile=runner",
+      mcpTools: [],
+      selectedToolNames: new Set(["spawn_subagent"]),
+    });
+    expect(inv.builtInTools.filter((tool) => tool.category === "local").map((tool) => tool.reason)).toEqual(["profile_denied", "profile_denied", "profile_denied", "profile_denied", "profile_denied", "profile_denied"]);
   });
 });
 

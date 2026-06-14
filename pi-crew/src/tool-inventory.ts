@@ -5,6 +5,7 @@ import type { CrewConfig } from "./config.js";
 import {
   buildToolSelectionInventory,
   requestedToolSets,
+  toolAllowedByProfilePolicy,
   type ToolSelectionEntry,
 } from "./tool-selection.js";
 
@@ -61,8 +62,7 @@ function buildBuiltInInventory(
 ): readonly BuiltInToolInventoryEntry[] {
   return BUILT_IN_TOOLS.map((tool) => {
     const requested = requestedSets.some((set) => set === "all" || set === tool.name || set === tool.category);
-    const permitted = profile.toolPolicy?.mode !== "allow_list" ||
-      (profile.toolPolicy.allow ?? []).some((set) => set === "all" || set === tool.name || set === tool.category);
+    const permitted = toolAllowedByProfilePolicy(tool.name, profile.toolPolicy);
     const selected = selectedNames.has(tool.name) || (tool.modelCallable && requested && permitted);
     return {
       ...tool,
@@ -78,10 +78,10 @@ const BUILT_IN_TOOLS: readonly Omit<BuiltInToolInventoryEntry, "selected" | "rea
   { name: "scout_codebase", category: "helper", modelCallable: true },
   { name: "summarize_files", category: "helper", modelCallable: true },
   { name: "find_relevant_paths", category: "helper", modelCallable: true },
-  { name: "read_file", category: "local", modelCallable: false },
-  { name: "write_file", category: "local", modelCallable: false },
-  { name: "search_files", category: "local", modelCallable: false },
-  { name: "terminal", category: "local", modelCallable: false },
-  { name: "git_status", category: "local", modelCallable: false },
-  { name: "git_diff", category: "local", modelCallable: false },
+  { name: "read_file", category: "local", modelCallable: true },
+  { name: "write_file", category: "local", modelCallable: true },
+  { name: "search_files", category: "local", modelCallable: true },
+  { name: "terminal", category: "local", modelCallable: true },
+  { name: "git_status", category: "local", modelCallable: true },
+  { name: "git_diff", category: "local", modelCallable: true },
 ];
