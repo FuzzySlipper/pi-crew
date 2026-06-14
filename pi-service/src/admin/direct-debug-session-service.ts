@@ -12,6 +12,7 @@ import type {
   DirectDebugTurnResult,
 } from "./admin-server.js";
 import { createContextDiagnosticReport } from "../diagnostics/context-diagnostics.js";
+import { createSlashCommandRouter, type SlashCommandRouter } from "./slash-command-router.js";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { ChannelBinding, SessionRecord } from "../sessions/types.js";
 
@@ -27,11 +28,13 @@ export class DirectDebugSessionService {
   readonly #sessionManager: SessionManager;
   readonly #diagnostics: DiagnosticsProjector;
   readonly #idFactory: () => string;
+  readonly #slashCommands: SlashCommandRouter;
 
   constructor(deps: DirectDebugSessionServiceDeps) {
     this.#sessionManager = deps.sessionManager;
     this.#diagnostics = deps.diagnostics;
     this.#idFactory = deps.idFactory ?? (() => `direct-debug-${Date.now().toString(36)}`);
+    this.#slashCommands = createSlashCommandRouter({ diagnostics: deps.diagnostics });
   }
 
   async runTurn(input: DirectDebugTurnInput): Promise<DirectDebugTurnResult> {
@@ -43,6 +46,23 @@ export class DirectDebugSessionService {
     const channelId = firstChannelId(session);
     if (channelId === null) {
       throw new DirectDebugSessionError(`Session ${input.sessionId} has no channel binding`);
+    }
+    const command = await this.#slashCommands.tryHandle({
+      session,
+      input: input.message,
+      requestedBy: readSource(input.metadata),
+    });
+    if (command.handled) {
+      return {
+        sessionId: input.sessionId,
+        turnId: this.#idFactory(),
+        message: command.message,
+        toolCalls: [],
+        delegationHandles: [],
+        events: [],
+        diagnostics: input.contextDiagnostics === true ? command.evidence : null,
+        diagnosticOnly: true,
+      };
     }
     const provider = new CapturingDirectDebugChannelProvider();
     const turnId = this.#idFactory();

@@ -69,6 +69,26 @@ describe("DirectDebugSessionService", () => {
     });
   });
 
+  it("handles slash commands without routing to the LLM path", async () => {
+    const manager = new FakeSessionManager(conversation);
+    const service = new DirectDebugSessionService({
+      sessionManager: manager,
+      diagnostics: diagnostics(),
+      idFactory: () => "turn-debug-command",
+    });
+
+    const result = await service.runTurn({
+      sessionId: "sess-prime-coder",
+      message: "/help",
+      contextDiagnostics: true,
+    });
+
+    expect(manager.routedMessages).toHaveLength(0);
+    expect(result.message).toContain("Control-plane commands");
+    expect(result.message).toContain("/status");
+    expect(result.diagnostics).toEqual({ commandSurface: "control-plane" });
+  });
+
   it("rejects worker sessions and sessions without a channel binding", async () => {
     const workerService = new DirectDebugSessionService({
       sessionManager: new FakeSessionManager(worker),

@@ -69,6 +69,17 @@ Implementation note: the pi.dev TUI source under `/home/research/pi-fleet/pi/pac
 
 Known limitation: `/debug/*` is intentionally unauthenticated for the initial high-trust LAN/local diagnostic pass. Do not expose it outside the trusted operator network until a later hardening task adds auth/roles/TLS/CSRF posture.
 
+### Control-plane slash commands
+
+Direct diagnostic turns intercept recognized slash commands before building LLM input. Current command set:
+
+- `/help` — list control-plane commands.
+- `/status` or `/session` — return current session/profile/instance/presence diagnostics.
+- `/reload-mcp` — currently returns a precise limitation; a narrow MCP hot-reload seam is not yet implemented.
+- `/new [reason]` — currently recognized as a control-plane reset boundary but returns a limitation until configured conversational session rotation and pre-reset capture are implemented.
+
+Unrecognized slash commands and non-command text continue through the normal conversational runtime.
+
 ## Runtime and deployment caveat
 
 The live service can be deployed as a persistent runtime, but deployment state is not inferred from this checkout alone. Treat Den task threads, completion packets, review rounds, live smoke evidence, and operator deployment notes as authoritative for what is running. Code review/merge and live deployment/smoke are separate gates.

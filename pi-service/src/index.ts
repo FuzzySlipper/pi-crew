@@ -266,6 +266,14 @@ export {
 } from "./admin/admin-server.js";
 export { DirectDebugSessionService } from "./admin/direct-debug-session-service.js";
 export {
+  createSlashCommandRouter,
+  type SlashCommandName,
+  type SlashCommandRequest,
+  type SlashCommandResult,
+  type SlashCommandRouter,
+  type SlashCommandRouterDeps,
+} from "./admin/slash-command-router.js";
+export {
   createContextDiagnosticReport,
   type ContextDiagnosticCategory,
   type ContextDiagnosticCategorySummary,
