@@ -11,6 +11,7 @@ import type {
   DirectDebugTurnInput,
   DirectDebugTurnResult,
 } from "./admin-server.js";
+import { createContextDiagnosticReport } from "../diagnostics/context-diagnostics.js";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { ChannelBinding, SessionRecord } from "../sessions/types.js";
 
@@ -59,14 +60,24 @@ export class DirectDebugSessionService {
       },
     });
     const overview = await this.#diagnostics.projectOverview();
+    const message = provider.lastText() ?? "";
     return {
       sessionId: input.sessionId,
       turnId,
-      message: provider.lastText() ?? "",
+      message,
       toolCalls: [],
       delegationHandles: [],
       events: overview.recentEvents.slice(-50),
-      diagnostics: input.contextDiagnostics === true ? { sessionId: input.sessionId } : null,
+      diagnostics:
+        input.contextDiagnostics === true
+          ? createContextDiagnosticReport({
+              sessionId: input.sessionId,
+              turnId,
+              userMessage: input.message,
+              assistantMessage: message,
+              events: overview.recentEvents,
+            })
+          : null,
       diagnosticOnly: true,
     };
   }

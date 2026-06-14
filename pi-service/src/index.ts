@@ -266,6 +266,14 @@ export {
 } from "./admin/admin-server.js";
 export { DirectDebugSessionService } from "./admin/direct-debug-session-service.js";
 export {
+  createContextDiagnosticReport,
+  type ContextDiagnosticCategory,
+  type ContextDiagnosticCategorySummary,
+  type ContextDiagnosticContributor,
+  type ContextDiagnosticInput,
+  type ContextDiagnosticReport,
+} from "./diagnostics/context-diagnostics.js";
+export {
   RemediationControlService,
   type ConfigValidationResult,
   type DenEvidence,

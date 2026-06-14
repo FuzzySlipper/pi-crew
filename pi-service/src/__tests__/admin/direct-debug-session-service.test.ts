@@ -44,7 +44,11 @@ describe("DirectDebugSessionService", () => {
       idFactory: () => "turn-debug-1",
     });
 
-    const result = await service.runTurn({ sessionId: "sess-prime-coder", message: "hello" });
+    const result = await service.runTurn({
+      sessionId: "sess-prime-coder",
+      message: "hello",
+      contextDiagnostics: true,
+    });
 
     expect(manager.routedMessages).toHaveLength(1);
     expect(manager.routedMessages[0]?.message).toMatchObject({
@@ -58,6 +62,10 @@ describe("DirectDebugSessionService", () => {
       turnId: "turn-debug-1",
       message: "captured response",
       diagnosticOnly: true,
+    });
+    expect(result.diagnostics).toMatchObject({
+      sessionId: "sess-prime-coder",
+      turnId: "turn-debug-1",
     });
   });
 
