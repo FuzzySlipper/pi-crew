@@ -122,6 +122,7 @@ export {
   type PolicyEnforcedPayload,
   type CompletionPostedPayload,
   type SessionRehydratedPayload,
+  type SessionResetPayload,
   type SessionPresenceBindingPayload,
   type SessionPresencePayload,
   type DelegationVisibilityPayload,

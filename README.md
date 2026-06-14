@@ -76,9 +76,9 @@ Direct diagnostic turns intercept recognized slash commands before building LLM 
 - `/help` — list control-plane commands.
 - `/status` or `/session` — return current session/profile/instance/presence diagnostics.
 - `/reload-mcp` — currently returns a precise limitation; a narrow MCP hot-reload seam is not yet implemented.
-- `/new [reason]` — currently recognized as a control-plane reset boundary but returns a limitation until configured conversational session rotation and pre-reset capture are implemented.
+- `/new [reason]` — resets the configured conversational session boundary: releases the old instance, deletes persisted turn history for that session, reacquires a fresh instance with the same configured session/channel binding, and returns old/new instance ids plus archived message count/reset timestamp.
 
-Unrecognized slash commands and non-command text continue through the normal conversational runtime.
+Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
 
 ## Runtime and deployment caveat
 

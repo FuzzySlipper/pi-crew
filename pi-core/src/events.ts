@@ -261,6 +261,17 @@ export interface SessionRehydratedPayload {
   readonly reason: "idle_session" | "instance_missing";
 }
 
+/** Fired when /new resets a conversational session boundary. */
+export interface SessionResetPayload {
+  readonly sessionId: string;
+  readonly oldInstanceId: string | null;
+  readonly newInstanceId: string | null;
+  readonly requestedBy: string;
+  readonly reason: string;
+  readonly resetAt: string;
+  readonly archivedMessageCount: number;
+}
+
 /** Fired when a conversational session needs provider presence reconciliation. */
 export interface SessionPresenceBindingPayload {
   readonly providerId?: string;
@@ -357,7 +368,10 @@ export interface DelegationKilledPayload extends DelegationVisibilityPayload {
 }
 
 /** Fired when a delegated session is detected as orphaned. */
-export interface DelegationOrphanDetectedPayload extends Omit<DelegationVisibilityPayload, "childSessionId"> {
+export interface DelegationOrphanDetectedPayload extends Omit<
+  DelegationVisibilityPayload,
+  "childSessionId"
+> {
   readonly orphanSessionId: string;
   readonly lastKnownParentSessionId: string;
   readonly idleDurationMs: number;
@@ -401,6 +415,7 @@ export type GatewayEvent =
   | { event: "session.created"; payload: SessionCreatedPayload }
   | { event: "session.routing"; payload: SessionRoutingPayload }
   | { event: "session.expired"; payload: SessionExpiredPayload }
+  | { event: "session.reset"; payload: SessionResetPayload }
   | { event: "tool.called"; payload: ToolCalledPayload }
   | { event: "tool.completed"; payload: ToolCompletedPayload }
   | { event: "blackboard.written"; payload: BlackboardWrittenPayload }

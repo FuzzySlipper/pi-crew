@@ -266,6 +266,13 @@ export {
 } from "./admin/admin-server.js";
 export { DirectDebugSessionService } from "./admin/direct-debug-session-service.js";
 export {
+  ConversationalSessionResetError,
+  ConversationalSessionResetService,
+  type ConversationalSessionResetDeps,
+  type SessionResetRequest,
+  type SessionResetResult,
+} from "./admin/conversational-session-reset-service.js";
+export {
   createSlashCommandRouter,
   type SlashCommandName,
   type SlashCommandRequest,

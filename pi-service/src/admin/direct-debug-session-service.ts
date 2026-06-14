@@ -12,13 +12,19 @@ import type {
   DirectDebugTurnResult,
 } from "./admin-server.js";
 import { createContextDiagnosticReport } from "../diagnostics/context-diagnostics.js";
-import { createSlashCommandRouter, type SlashCommandRouter } from "./slash-command-router.js";
+import {
+  createSlashCommandRouter,
+  type SlashCommandRouter,
+  type SlashCommandResetRequest,
+  type SlashCommandResetResult,
+} from "./slash-command-router.js";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { ChannelBinding, SessionRecord } from "../sessions/types.js";
 
 interface DirectDebugSessionServiceDeps {
   readonly sessionManager: SessionManager;
   readonly diagnostics: DiagnosticsProjector;
+  readonly resetSession?: (request: SlashCommandResetRequest) => Promise<SlashCommandResetResult>;
   readonly idFactory?: () => string;
 }
 
@@ -34,7 +40,10 @@ export class DirectDebugSessionService {
     this.#sessionManager = deps.sessionManager;
     this.#diagnostics = deps.diagnostics;
     this.#idFactory = deps.idFactory ?? (() => `direct-debug-${Date.now().toString(36)}`);
-    this.#slashCommands = createSlashCommandRouter({ diagnostics: deps.diagnostics });
+    this.#slashCommands = createSlashCommandRouter({
+      diagnostics: deps.diagnostics,
+      resetSession: deps.resetSession,
+    });
   }
 
   async runTurn(input: DirectDebugTurnInput): Promise<DirectDebugTurnResult> {

@@ -14,6 +14,7 @@ import {
   RuntimeDb,
   AdminServer,
   DirectDebugSessionService,
+  ConversationalSessionResetService,
   RemediationControlService,
   ExtensionActivator,
   createServiceExtensionContext,
@@ -104,14 +105,8 @@ export class Crew {
   #started = false;
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
-    // DESIGN: Validate configured profile IDs before runtime routing.
-    // Rationale: SessionManager receives policy, not global fallback magic.
     loadProfile(config.sessions.fallbackProfileId, resolveCrewInstallLayout(config).profilesRoot);
-
-    // DESIGN: Worker role mapping is config-parse validated and injected.
-    // Rationale: avoid hardcoded role-to-profile switches in WorkerRuntime.
     this.#workerRoleMapping = config.workers;
-
     this.#logger = logger ?? new FakeLogger();
     this.#eventBus = eventBus ?? new FakeEventBus();
     const hookRegistry = new InMemoryHookRegistry(this.#logger);
@@ -174,17 +169,14 @@ export class Crew {
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
 
     const conversationalDelegationLifecycle = createDeferredDelegationLifecyclePort();
-    // DESIGN: Wrap the conversational responder factory with a session-kind-aware
-    // router. Rationale: Worker sessions must bypass conversational agent assembly
-    // and get a lightweight echo responder instead. The routing decision is explicit
-    // at the responder factory boundary, not hidden inside the conversational factory.
+    const messageRepository = new SqliteMessageRepository(this.#runtimeDb.handle);
     const conversationalFactory = buildRuntimeResponderFactory(
       config,
       this.#eventBus,
       this.#logger,
       this.#mcpToolRegistry,
       this.#mcpClient,
-      new MessageRepositoryTurnHistory(new SqliteMessageRepository(this.#runtimeDb.handle)),
+      new MessageRepositoryTurnHistory(messageRepository),
       { lifecycle: conversationalDelegationLifecycle.port },
       {
         baseUrl: config.den.channelsUrl,
@@ -221,6 +213,12 @@ export class Crew {
     );
     configureConversationalSessionManager(this.#sessionManager, config);
 
+    const sessionResetService = new ConversationalSessionResetService({
+      sessionStore,
+      instancePool: this.#instancePool,
+      messageRepository,
+      eventBus: this.#eventBus,
+    });
     this.#adminServer = config.admin.enabled
       ? new AdminServer({
           config: this.#gatewayConfig.admin,
@@ -228,6 +226,7 @@ export class Crew {
           directDebug: new DirectDebugSessionService({
             sessionManager: this.#sessionManager,
             diagnostics,
+            resetSession: (request) => sessionResetService.reset(request),
           }),
           controls: new RemediationControlService({
             diagnostics,

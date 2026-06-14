@@ -5,8 +5,24 @@ import type { SessionRecord } from "../sessions/types.js";
 
 export type SlashCommandName = "help" | "status" | "session" | "new" | "reload-mcp";
 
+export interface SlashCommandResetResult {
+  readonly oldSessionId: string;
+  readonly newSessionId: string;
+  readonly oldInstanceId: string | null;
+  readonly newInstanceId: string | null;
+  readonly archivedMessageCount: number;
+  readonly resetAt: string;
+}
+
+export interface SlashCommandResetRequest {
+  readonly sessionId: string;
+  readonly requestedBy: string;
+  readonly reason: string;
+}
+
 export interface SlashCommandRouterDeps {
   readonly diagnostics: DiagnosticsProjector;
+  readonly resetSession?: (request: SlashCommandResetRequest) => Promise<SlashCommandResetResult>;
   readonly now?: () => Date;
 }
 
@@ -41,10 +57,12 @@ export function createSlashCommandRouter(deps: SlashCommandRouterDeps): SlashCom
 
 class DefaultSlashCommandRouter implements SlashCommandRouter {
   readonly #diagnostics: DiagnosticsProjector;
+  readonly #resetSession?: (request: SlashCommandResetRequest) => Promise<SlashCommandResetResult>;
   readonly #now: () => Date;
 
   constructor(deps: SlashCommandRouterDeps) {
     this.#diagnostics = deps.diagnostics;
+    this.#resetSession = deps.resetSession;
     this.#now = deps.now ?? (() => new Date());
   }
 
@@ -120,18 +138,45 @@ class DefaultSlashCommandRouter implements SlashCommandRouter {
     );
   }
 
-  #newSession(request: SlashCommandRequest, reason: string): SlashCommandResult {
+  async #newSession(request: SlashCommandRequest, reason: string): Promise<SlashCommandResult> {
+    const normalizedReason = reason.trim().length > 0 ? reason.trim() : "not_provided";
+    const requestedBy = request.requestedBy ?? "unknown";
+    if (this.#resetSession === undefined) {
+      return handled(
+        "new",
+        false,
+        "Session reset was recognized as a control-plane command, but full /new rotation is not wired for this frontend. Missing seam: conversational session reset handler.",
+        {
+          sessionId: request.session.id,
+          profileId: request.session.profileId,
+          requestedBy,
+          reason: normalizedReason,
+          requestedAt: this.#now().toISOString(),
+          missingSeam: "conversational_session_reset_handler",
+        },
+      );
+    }
+    const reset = await this.#resetSession({
+      sessionId: request.session.id,
+      requestedBy,
+      reason: normalizedReason,
+    });
     return handled(
       "new",
-      false,
-      "Session reset was recognized as a control-plane command, but full /new rotation is not yet enabled from this router. Missing seam: recreate conversational instance while preserving configured-agent binding and pre-reset capture.",
+      true,
+      [
+        "Session reset complete.",
+        `oldSessionId: ${reset.oldSessionId}`,
+        `newSessionId: ${reset.newSessionId}`,
+        `oldInstanceId: ${reset.oldInstanceId ?? "none"}`,
+        `newInstanceId: ${reset.newInstanceId ?? "none"}`,
+        `archivedMessageCount: ${String(reset.archivedMessageCount)}`,
+        `resetAt: ${reset.resetAt}`,
+      ].join("\n"),
       {
-        sessionId: request.session.id,
-        profileId: request.session.profileId,
-        requestedBy: request.requestedBy ?? "unknown",
-        reason: reason.trim().length > 0 ? reason : "not_provided",
-        requestedAt: this.#now().toISOString(),
-        missingSeam: "configured_conversational_session_rotation",
+        ...reset,
+        requestedBy,
+        reason: normalizedReason,
       },
     );
   }

@@ -47,6 +47,39 @@ describe("SlashCommandRouter", () => {
     expect(reload).toMatchObject({ handled: true, command: "reload-mcp", ok: false });
     expect(reload.message).toContain("not yet available");
   });
+
+  it("executes /new through an injected reset handler and returns reset evidence", async () => {
+    const router = createSlashCommandRouter({
+      diagnostics: diagnostics(),
+      resetSession: () =>
+        Promise.resolve({
+          oldSessionId: "sess-prime-coder",
+          newSessionId: "sess-prime-coder",
+          oldInstanceId: "inst-1",
+          newInstanceId: "inst-2",
+          archivedMessageCount: 7,
+          resetAt: "2026-06-13T00:01:00.000Z",
+        }),
+    });
+
+    const result = await router.tryHandle({
+      session,
+      input: "/new task 2417 smoke",
+      requestedBy: "pi-crew-runner",
+    });
+
+    expect(result).toMatchObject({ handled: true, command: "new", ok: true });
+    expect(result.message).toContain("Session reset complete");
+    expect(result.message).toContain("oldSessionId: sess-prime-coder");
+    expect(result.message).toContain("newInstanceId: inst-2");
+    expect(result.evidence).toMatchObject({
+      oldSessionId: "sess-prime-coder",
+      newSessionId: "sess-prime-coder",
+      requestedBy: "pi-crew-runner",
+      reason: "task 2417 smoke",
+      archivedMessageCount: 7,
+    });
+  });
 });
 
 function diagnostics(): { projectOverview(): Promise<DiagnosticsOverview> } {
