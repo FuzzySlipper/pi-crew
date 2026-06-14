@@ -17,11 +17,35 @@ export interface MetricsProjector {
   projectPrometheus(): Promise<string>;
 }
 
+export interface DirectDebugTurnInput {
+  readonly sessionId: string;
+  readonly message: string;
+  readonly emitDenVisibility?: boolean;
+  readonly contextDiagnostics?: boolean;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+export interface DirectDebugTurnResult {
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly message: string;
+  readonly toolCalls: readonly unknown[];
+  readonly delegationHandles: readonly unknown[];
+  readonly events: readonly unknown[];
+  readonly diagnostics: unknown;
+  readonly diagnosticOnly: boolean;
+}
+
+export interface DirectDebugServicePort {
+  runTurn(input: DirectDebugTurnInput): Promise<DirectDebugTurnResult>;
+}
+
 export interface AdminServerDeps {
   readonly config: AdminConfig;
   readonly diagnostics: DiagnosticsProjector;
   readonly metrics?: MetricsProjector;
   readonly controls?: RemediationControlService;
+  readonly directDebug?: DirectDebugServicePort;
 }
 
 interface RouteContext {
@@ -36,6 +60,7 @@ export class AdminServer {
   readonly #diagnostics: DiagnosticsProjector;
   readonly #metrics: MetricsProjector | null;
   readonly #controls: RemediationControlService | null;
+  readonly #directDebug: DirectDebugServicePort | null;
   #server: Server | null = null;
 
   constructor(deps: AdminServerDeps) {
@@ -43,6 +68,7 @@ export class AdminServer {
     this.#diagnostics = deps.diagnostics;
     this.#metrics = deps.metrics ?? null;
     this.#controls = deps.controls ?? null;
+    this.#directDebug = deps.directDebug ?? null;
   }
 
   get host(): string {
@@ -87,6 +113,10 @@ export class AdminServer {
     const url = new URL(req.url ?? "/", `http://${this.#config.host}:${String(this.port)}`);
     if (method === "GET" && url.pathname === "/health") {
       writeJson(res, 200, { status: "ok", uptime: process.uptime() });
+      return;
+    }
+    if (url.pathname.startsWith("/debug/")) {
+      await this.#routeDebug(method, url, req, res);
       return;
     }
     if (!url.pathname.startsWith("/admin/")) {
@@ -205,6 +235,70 @@ export class AdminServer {
     writeJson(res, 404, { error: "not_found" });
   }
 
+  async #routeDebug(
+    method: string,
+    url: URL,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    const overview = await this.#diagnostics.projectOverview();
+    if (method === "GET" && url.pathname === "/debug/sessions") {
+      writeJson(res, 200, { sessions: overview.sessions });
+      return;
+    }
+    if (
+      method === "GET" &&
+      url.pathname.startsWith("/debug/sessions/") &&
+      url.pathname.endsWith("/events")
+    ) {
+      writeJson(res, 200, { events: limitedEvents(overview, url) });
+      return;
+    }
+    if (method === "GET" && url.pathname.startsWith("/debug/sessions/")) {
+      const sessionId = decodeURIComponent(url.pathname.slice("/debug/sessions/".length));
+      writeJson(
+        res,
+        200,
+        overview.sessions.find((session) => session.sessionId === sessionId) ?? {
+          error: "not_found",
+        },
+      );
+      return;
+    }
+    if (
+      method === "POST" &&
+      url.pathname.startsWith("/debug/sessions/") &&
+      url.pathname.endsWith("/turn")
+    ) {
+      if (this.#directDebug === null) {
+        writeJson(res, 404, { error: "not_found", detail: "direct_debug_service_unavailable" });
+        return;
+      }
+      const sessionId = decodeURIComponent(
+        url.pathname.slice("/debug/sessions/".length, -"/turn".length),
+      );
+      const body = parseRecord(await readBody(req));
+      const message = readOptionalString(body, "message");
+      if (message === undefined || message.trim() === "") {
+        writeJson(res, 400, { error: "message_required" });
+        return;
+      }
+      writeJson(
+        res,
+        200,
+        await this.#directDebug.runTurn({
+          sessionId,
+          message,
+          contextDiagnostics: body["contextDiagnostics"] === true,
+          emitDenVisibility: body["emitDenVisibility"] === true,
+          metadata: readRecord(body["metadata"]),
+        }),
+      );
+      return;
+    }
+    writeJson(res, 404, { error: "not_found" });
+  }
+
   #authorized(req: IncomingMessage): boolean {
     if (this.#config.bearerToken === null) return true;
     const authorization = req.headers.authorization;
@@ -291,6 +385,18 @@ function parseRecord(body: string): Record<string, unknown> {
 function readString(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === "string" ? value : "";
+}
+
+function readOptionalString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function readRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Readonly<Record<string, unknown>>;
+  }
+  return undefined;
 }
 
 function limitedEvents(overview: DiagnosticsOverview, url: URL) {

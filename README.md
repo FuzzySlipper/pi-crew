@@ -54,6 +54,21 @@ npm test -- pi-core/src/test-helpers/fake-event-bus.test.ts
 npm test -- pi-crew/src/__tests__/crew.test.ts
 ```
 
+## Direct diagnostic chat
+
+`pi-crew-debug` is a first-pass high-trust diagnostic client for existing service-backed conversational sessions. It talks to the local admin debug API and bypasses Den Channels transport/wake/projection while still routing the turn through `SessionManager`, the conversational runtime, tools, and delegation lifecycle.
+
+```bash
+PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug sessions
+PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug ask --session sess-prime-coder "hello"
+PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug events --session sess-prime-coder --limit 20
+PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug chat --session sess-prime-coder
+```
+
+Implementation note: the pi.dev TUI source under `/home/research/pi-fleet/pi/packages/` was inspected. The package is a local terminal UI/agent stack, not a small remote-session client seam, so the first working #2410 path uses the minimal standalone CLI instead of force-fitting the TUI. Future work can wrap the same `/debug/*` API in a richer TUI.
+
+Known limitation: `/debug/*` is intentionally unauthenticated for the initial high-trust LAN/local diagnostic pass. Do not expose it outside the trusted operator network until a later hardening task adds auth/roles/TLS/CSRF posture.
+
 ## Runtime and deployment caveat
 
 The live service can be deployed as a persistent runtime, but deployment state is not inferred from this checkout alone. Treat Den task threads, completion packets, review rounds, live smoke evidence, and operator deployment notes as authoritative for what is running. Code review/merge and live deployment/smoke are separate gates.

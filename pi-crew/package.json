@@ -8,6 +8,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "pi-crew-debug": "./src/debug-cli.ts"
+  },
   "dependencies": {
     "@pi-crew/channels": "*",
     "@pi-crew/core": "*",

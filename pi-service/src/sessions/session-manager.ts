@@ -1,13 +1,3 @@
-/**
- * SessionManager — multi-session orchestrator for pi-service.
- *
- * Routes inbound messages to the correct session, creates new sessions
- * as a visible fallback, manages channel bindings, handles worker
- * session lifecycle, and enforces LRU idle-eviction.
- *
- * @module pi-service/sessions/session-manager
- */
-
 import type {
   Logger,
   EventBus,
@@ -107,6 +97,12 @@ export interface SessionManager {
    * @param message — The inbound message.
    */
   routeMessage(channel: ChannelProvider, message: ChannelMessage): Promise<void>;
+
+  routeDiagnosticMessage(
+    sessionId: string,
+    channel: ChannelProvider,
+    message: ChannelMessage,
+  ): Promise<void>;
 
   /**
    * Archive a session.
@@ -219,6 +215,16 @@ export class SessionManagerImpl implements SessionManager {
     const record = await this.resolveSession(message);
     await this.turnCoordinator.run(record.id, () =>
       this.processQueuedTurn(channel, message, record.id),
+    );
+  }
+
+  async routeDiagnosticMessage(
+    sessionId: string,
+    channel: ChannelProvider,
+    message: ChannelMessage,
+  ): Promise<void> {
+    await this.turnCoordinator.run(sessionId, () =>
+      this.processQueuedTurn(channel, message, sessionId),
     );
   }
 

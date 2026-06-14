@@ -1,6 +1,11 @@
 /** Test fixtures for WorkerRuntime tests. */
 
-import type { CompletionPacket, CompletionPostResult } from "@pi-crew/core";
+import type {
+  CompletionPacket,
+  CompletionPostResult,
+  ChannelMessage,
+  ChannelProvider,
+} from "@pi-crew/core";
 import type { CompletionPoster } from "@pi-crew/tools";
 import type {
   WorkerExecutor,
@@ -89,10 +94,19 @@ export class FakeSessionManager implements SessionManager {
     return Promise.resolve();
   }
 
-  async routeMessage(provider: unknown, message: unknown): Promise<void> {
+  async routeMessage(provider: ChannelProvider, message: ChannelMessage): Promise<void> {
     void provider;
     void message;
     await Promise.resolve();
+  }
+
+  async routeDiagnosticMessage(
+    sessionId: string,
+    provider: ChannelProvider,
+    message: ChannelMessage,
+  ): Promise<void> {
+    void sessionId;
+    await this.routeMessage(provider, message);
   }
 
   evictIdle(maxSessions?: number): Promise<number> {

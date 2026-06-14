@@ -260,7 +260,11 @@ export {
   isLoopbackHost,
   type AdminServerDeps,
   type DiagnosticsProjector,
+  type DirectDebugServicePort,
+  type DirectDebugTurnInput,
+  type DirectDebugTurnResult,
 } from "./admin/admin-server.js";
+export { DirectDebugSessionService } from "./admin/direct-debug-session-service.js";
 export {
   RemediationControlService,
   type ConfigValidationResult,

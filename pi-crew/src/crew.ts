@@ -13,6 +13,7 @@ import {
   InstanceFactoryImpl,
   RuntimeDb,
   AdminServer,
+  DirectDebugSessionService,
   RemediationControlService,
   ExtensionActivator,
   createServiceExtensionContext,
@@ -202,27 +203,6 @@ export class Crew {
       this.#logger,
     );
 
-    this.#adminServer = config.admin.enabled
-      ? new AdminServer({
-          config: this.#gatewayConfig.admin,
-          diagnostics,
-          controls: new RemediationControlService({
-            diagnostics,
-            auditRepository: this.#auditRepository,
-            eventBus: this.#eventBus,
-            sessionStore,
-            instancePool: this.#instancePool,
-            evidencePoster: createDenAdminEvidencePoster({
-              mcpClient: this.#mcpClient,
-              projectId: "pi-crew",
-              sender: "pi-crew",
-              logger: this.#logger,
-            }),
-            validateConfig: validateGatewayConfig,
-          }),
-        })
-      : null;
-
     const agentFactory = new AgentFactoryImpl(
       this.#instancePool,
       sessionStore,
@@ -240,6 +220,31 @@ export class Crew {
       createFallbackChannelBinding(config),
     );
     configureConversationalSessionManager(this.#sessionManager, config);
+
+    this.#adminServer = config.admin.enabled
+      ? new AdminServer({
+          config: this.#gatewayConfig.admin,
+          diagnostics,
+          directDebug: new DirectDebugSessionService({
+            sessionManager: this.#sessionManager,
+            diagnostics,
+          }),
+          controls: new RemediationControlService({
+            diagnostics,
+            auditRepository: this.#auditRepository,
+            eventBus: this.#eventBus,
+            sessionStore,
+            instancePool: this.#instancePool,
+            evidencePoster: createDenAdminEvidencePoster({
+              mcpClient: this.#mcpClient,
+              projectId: "pi-crew",
+              sender: "pi-crew",
+              logger: this.#logger,
+            }),
+            validateConfig: validateGatewayConfig,
+          }),
+        })
+      : null;
 
     const delegationBridge = new SessionManagerDelegationSessionBridge({
       sessionManager: this.#sessionManager,

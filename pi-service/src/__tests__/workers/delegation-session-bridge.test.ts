@@ -120,6 +120,10 @@ class FakeSessionManager implements SessionManager {
     return Promise.resolve();
   }
 
+  routeDiagnosticMessage(): Promise<void> {
+    return Promise.resolve();
+  }
+
   async archive(sessionId: string): Promise<void> {
     const record = await this.store.get(sessionId);
     if (record === null) return;
