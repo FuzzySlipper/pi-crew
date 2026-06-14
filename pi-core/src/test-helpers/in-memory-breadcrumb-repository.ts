@@ -77,7 +77,10 @@ export class InMemoryBreadcrumbRepository
         results.push(breadcrumb);
       }
     }
-    return Promise.resolve(results);
+    const ordered = filter.order === "newest" ? results.reverse() : results;
+    return Promise.resolve(
+      filter.limit === undefined ? ordered : ordered.slice(0, Math.max(0, filter.limit)),
+    );
   }
 
   deleteById(id: string): Promise<void> {

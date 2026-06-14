@@ -1,4 +1,4 @@
-import type { Logger, EventBus, ChannelProvider } from "@pi-crew/core";
+import type { Logger, EventBus, ChannelProvider, AgentWorkBreadcrumbRepository } from "@pi-crew/core";
 import { ConfigurationError, FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
 import type { DenChannelsAdapterConfig } from "@pi-crew/channels/den-channels/den-channels-adapter";
@@ -30,6 +30,7 @@ import {
   SqliteAuditRepository,
   SqlitePendingChildRepository,
   SqliteAgentWorkBreadcrumbRepository,
+  HttpAgentWorkLifecyclePublisher, PublishingAgentWorkBreadcrumbRepository,
   ParentLifecycleBreadcrumbExtension,
   SqliteSessionRepository,
   SqliteMessageRepository,
@@ -92,7 +93,7 @@ export class Crew {
   readonly #adminServer: AdminServer | null;
   readonly #runtimeDb: RuntimeDb;
   readonly #auditRepository: SqliteAuditRepository;
-  readonly #agentWorkBreadcrumbRepository: SqliteAgentWorkBreadcrumbRepository;
+  readonly #agentWorkBreadcrumbRepository: AgentWorkBreadcrumbRepository;
   readonly #workerRoleMapping: WorkerRoleMappingConfig;
   readonly #channelProvider: ChannelProvider;
   readonly #mcpClient: MCPClient;
@@ -143,7 +144,14 @@ export class Crew {
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
     const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
-    this.#agentWorkBreadcrumbRepository = new SqliteAgentWorkBreadcrumbRepository(this.#runtimeDb.handle);
+    const sqliteAgentWorkBreadcrumbRepository = new SqliteAgentWorkBreadcrumbRepository(this.#runtimeDb.handle);
+    this.#agentWorkBreadcrumbRepository = new PublishingAgentWorkBreadcrumbRepository({
+      inner: sqliteAgentWorkBreadcrumbRepository,
+      publisher: new HttpAgentWorkLifecyclePublisher({
+        baseUrl: config.den.channelsUrl, token: config.den.channelsToken, logger: this.#logger,
+      }),
+      logger: this.#logger,
+    });
     const diagnostics = createCrewDiagnostics({
       eventBus: this.#eventBus,
       runtimeDb: this.#runtimeDb,

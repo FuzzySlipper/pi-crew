@@ -398,12 +398,20 @@ function agentWorkFilter(url: URL): BreadcrumbCorrelationFilter {
     toolCallId: optionalParam(url, "toolCallId"),
     eventFamily: eventFamilyParam(url),
     eventType: optionalParam(url, "eventType"),
+    limit: limitParam(url, 80, 500),
+    order: "newest",
   };
 }
 
 function optionalParam(url: URL, key: string): string | undefined {
   const value = url.searchParams.get(key);
   return value === null || value.trim() === "" ? undefined : value;
+}
+
+function limitParam(url: URL, defaultLimit: number, maxLimit: number): number {
+  const raw = Number(url.searchParams.get("limit") ?? String(defaultLimit));
+  if (!Number.isInteger(raw)) return defaultLimit;
+  return Math.max(1, Math.min(raw, maxLimit));
 }
 
 function eventFamilyParam(url: URL): BreadcrumbCorrelationFilter["eventFamily"] {

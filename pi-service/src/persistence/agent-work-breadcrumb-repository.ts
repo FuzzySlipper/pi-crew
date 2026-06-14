@@ -80,11 +80,13 @@ export class SqliteAgentWorkBreadcrumbRepository implements AgentWorkBreadcrumbR
 
   queryByCorrelation(filter: BreadcrumbCorrelationFilter): Promise<AgentWorkBreadcrumb[]> {
     const { where, params } = whereFor(filter);
+    const order = filter.order === "newest" ? "DESC" : "ASC";
+    const limit = limitFor(filter.limit);
     const rows = this.#db.prepare(`
       SELECT id, row_json FROM agent_work_breadcrumbs ${where}
-      ORDER BY created_at ASC, id ASC
-      LIMIT 500
-    `).all(...params) as BreadcrumbRow[];
+      ORDER BY created_at ${order}, id ${order}
+      LIMIT ?
+    `).all(...params, limit) as BreadcrumbRow[];
     return Promise.resolve(rows.map(parseBreadcrumb));
   }
 
@@ -191,4 +193,9 @@ function add(clauses: string[], params: unknown[], column: string, value: unknow
   if (value === undefined) return;
   clauses.push(`${column} = ?`);
   params.push(value);
+}
+
+function limitFor(limit: number | undefined): number {
+  if (limit === undefined || !Number.isInteger(limit)) return 500;
+  return Math.max(1, Math.min(limit, 500));
 }

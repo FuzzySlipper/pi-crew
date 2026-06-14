@@ -200,6 +200,12 @@ export {
 } from "./workers/delegated-spawn-tool.js";
 export { DenDelegationProjectionExtension } from "./workers/den-delegation-projection.js";
 export {
+  HttpAgentWorkLifecyclePublisher,
+  PublishingAgentWorkBreadcrumbRepository,
+  toLifecyclePayload,
+  type AgentWorkLifecyclePublisher,
+} from "./workers/agent-work-lifecycle-publisher.js";
+export {
   ParentLifecycleBreadcrumbExtension,
   type ParentBreadcrumbBinding,
 } from "./workers/parent-lifecycle-breadcrumb-extension.js";

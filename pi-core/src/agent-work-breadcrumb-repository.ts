@@ -41,6 +41,10 @@ export interface BreadcrumbCorrelationFilter {
   readonly eventType?: string;
   /** Filter by grouping key. */
   readonly groupingKey?: string;
+  /** Maximum rows to return after filtering. */
+  readonly limit?: number;
+  /** Result ordering. Defaults to repository-native ordering. */
+  readonly order?: "oldest" | "newest";
 }
 
 // ── Update payload ──────────────────────────────────────────────
