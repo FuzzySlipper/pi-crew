@@ -151,13 +151,17 @@ function matchesFilter(
     }
   }
 
-  // Child session ID — delegation events only
+  // Child session ID — delegation child or child-owned tool events
   if (filter.childSessionId !== undefined) {
-    if (breadcrumb.eventFamily !== "delegation") return false;
-    if (
-      (breadcrumb as DelegationLifecycleBreadcrumb).childSessionId !==
-      filter.childSessionId
-    ) {
+    if (breadcrumb.eventFamily === "delegation") {
+      if ((breadcrumb as DelegationLifecycleBreadcrumb).childSessionId !== filter.childSessionId) {
+        return false;
+      }
+    } else if (breadcrumb.eventFamily === "tool") {
+      if ((breadcrumb as ToolEventBreadcrumb).ownerSessionId !== filter.childSessionId) {
+        return false;
+      }
+    } else {
       return false;
     }
   }
@@ -213,5 +217,5 @@ function applyUpdates(
     }
   }
 
-  return merged as AgentWorkBreadcrumb;
+  return merged as unknown as AgentWorkBreadcrumb;
 }

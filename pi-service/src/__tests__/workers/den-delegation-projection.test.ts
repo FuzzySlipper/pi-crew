@@ -12,7 +12,6 @@ import type {
 } from "@pi-crew/core";
 import { DenDelegationProjectionExtension } from "../../workers/den-delegation-projection.js";
 import type { ServiceExtensionContext } from "../../extension-activator.js";
-
 function createContext(
   overrides: Partial<Pick<ServiceExtensionContext, "eventBus" | "logger">> = {},
 ): ServiceExtensionContext {

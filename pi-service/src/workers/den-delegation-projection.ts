@@ -8,13 +8,25 @@ import type {
   DelegationTurnVisiblePayload,
   EventPayload,
   Logger,
+  type AgentWorkBreadcrumbRepository,
 } from "@pi-crew/core";
 import type { ServiceExtension, ServiceExtensionContext } from "../extension-activator.js";
+import { DelegationBreadcrumbSink } from "./delegation-breadcrumb-sink.js";
 import {
   projectDelegationMessageToChannel,
   type DelegationChannelProjectionConfig,
 } from "./den-delegation-channel-projection.js";
 import { appendDelegationProjectionToFile } from "./delegation-projection-file-sink.js";
+
+import {
+  formatCompletedMessage,
+  formatKilledMessage,
+  formatOrphanMessage,
+  formatSpawnedMessage,
+  formatTimeoutMessage,
+  formatToolVisibleMessage,
+  type ProjectedMessage,
+} from "./den-delegation-message-formatters.js";
 
 const DEFAULT_TURN_COOLDOWN_MS = 5_000;
 const DEFAULT_TOOL_COOLDOWN_MS = 5_000;
@@ -78,120 +90,6 @@ interface CoalescedToolState {
   lastProjectedAt: number;
 }
 
-// ── Event formatters ─────────────────────────────────────────────
-
-interface ProjectedMessage {
-  readonly eventName: string;
-  readonly summary: string;
-  readonly details: Record<string, unknown>;
-}
-
-function formatSpawnedMessage(payload: DelegationSpawnedPayload): ProjectedMessage {
-  return {
-    eventName: "delegation.spawned",
-    summary: `Subagent spawned: depth ${payload.lineage.depth}, profile ${payload.effectiveRuntime?.profileId ?? "unknown"}`,
-    details: {
-      childSessionId: payload.childSessionId,
-      parentSessionId: payload.lineage.parentSessionId,
-      rootSessionId: payload.lineage.rootSessionId,
-      depth: payload.lineage.depth,
-      profileId: payload.effectiveRuntime?.profileId,
-      provider: payload.effectiveRuntime?.provider,
-      model: payload.effectiveRuntime?.model,
-      task: payload.task?.slice(0, 200),
-      policyId: payload.policyId,
-    },
-  };
-}
-
-function formatCompletedMessage(payload: DelegationCompletedPayload): ProjectedMessage {
-  return {
-    eventName: "delegation.completed",
-    summary: `Subagent completed: ${payload.result.outcome} — ${payload.result.summary.slice(0, 200)}`,
-    details: {
-      childSessionId: payload.childSessionId,
-      profileId: payload.result.effectiveRuntime?.profileId,
-      provider: payload.result.effectiveRuntime?.provider,
-      model: payload.result.effectiveRuntime?.model,
-      outcome: payload.result.outcome,
-      failureCategory: payload.result.failureCategory,
-      tokensConsumed: payload.result.tokensConsumed,
-      turnsUsed: payload.result.turnsUsed,
-      durationMs: payload.result.durationMs,
-      error: payload.result.error,
-      recoveryGuidance: payload.result.recoveryGuidance,
-      evidenceChecked: payload.result.evidenceChecked,
-      structureRepair: payload.result.structureRepair,
-      artifactCount: payload.result.artifacts?.length ?? 0,
-    },
-  };
-}
-
-function formatKilledMessage(payload: DelegationKilledPayload): ProjectedMessage {
-  return {
-    eventName: "delegation.killed",
-    summary: `Subagent killed: ${payload.reason} (initiated by ${payload.initiatedBy})`,
-    details: {
-      childSessionId: payload.childSessionId,
-      reason: payload.reason,
-      initiatedBy: payload.initiatedBy,
-      lineage: payload.lineage,
-    },
-  };
-}
-
-function formatTimeoutMessage(payload: DelegationTimeoutPayload): ProjectedMessage {
-  return {
-    eventName: "delegation.timeout",
-    summary: `Subagent timed out: ${payload.elapsedMs}ms elapsed, ${payload.timeoutMs}ms limit`,
-    details: {
-      childSessionId: payload.childSessionId,
-      timeoutMs: payload.timeoutMs,
-      elapsedMs: payload.elapsedMs,
-    },
-  };
-}
-
-function formatOrphanMessage(payload: DelegationOrphanDetectedPayload): ProjectedMessage {
-  return {
-    eventName: "delegation.orphan_detected",
-    summary: `Subagent orphaned: session ${payload.orphanSessionId}, idle ${payload.idleDurationMs}ms`,
-    details: {
-      orphanSessionId: payload.orphanSessionId,
-      lastKnownParentSessionId: payload.lastKnownParentSessionId,
-      idleDurationMs: payload.idleDurationMs,
-    },
-  };
-}
-
-function formatToolVisibleMessage(
-  payload: DelegationToolVisiblePayload,
-  projectToolCalledEvents: boolean = PROJECT_TOOL_CALLED_EVENTS,
-): ProjectedMessage | null {
-  // Skip "called" phase events unless explicitly enabled
-  if (payload.phase === "called" && !projectToolCalledEvents) return null;
-
-  const summary =
-    payload.phase === "completed"
-      ? `Subagent used tool: ${payload.toolName} completed (${payload.durationMs ?? 0}ms)`
-      : payload.phase === "denied"
-        ? `Subagent tool denied: ${payload.toolName} — ${payload.reason ?? "policy"}`
-        : `Subagent tool called: ${payload.toolName}`;
-
-  return {
-    eventName: "delegation.tool_visible",
-    summary,
-    details: {
-      childSessionId: payload.childSessionId,
-      toolName: payload.toolName,
-      toolCallId: payload.toolCallId,
-      phase: payload.phase,
-      durationMs: payload.durationMs,
-      reason: payload.reason,
-    },
-  };
-}
-
 // ── The projection extension ─────────────────────────────────────
 
 export interface DenDelegationProjectionConfig extends DelegationChannelProjectionConfig {
@@ -216,6 +114,22 @@ export interface DenDelegationProjectionConfig extends DelegationChannelProjecti
   readonly localLogEnabled?: boolean;
   /** Local append-only text log path used when localLogEnabled is true. */
   readonly localLogPath?: string;
+  /** Durable structured breadcrumb repository. */
+  readonly breadcrumbRepository?: AgentWorkBreadcrumbRepository;
+  /** Project id for structured breadcrumbs. Default: config.den.channelsProjectId or pi-crew. */
+  readonly projectId?: string;
+  /** Parent agent identity used for delegated child grouping. Default: pi-crew. */
+  readonly parentAgentIdentity?: string;
+}
+
+interface ProjectionRuntimeConfig {
+  readonly loggerEnabled: boolean;
+  readonly turnCooldownMs: number;
+  readonly toolCooldownMs: number;
+  readonly projectToolCalledEvents: boolean;
+  readonly channelEnabled: boolean;
+  readonly localLogEnabled: boolean;
+  readonly localLogPath: string;
 }
 
 export class DenDelegationProjectionExtension implements ServiceExtension {
@@ -223,13 +137,12 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
   readonly description =
     "Projects delegation lifecycle events (spawned, completed, killed, timeout, turn/tool visible) to Den-visible surface with rate limiting.";
 
-  readonly #config: Required<
-    Omit<DenDelegationProjectionConfig, keyof DelegationChannelProjectionConfig>
-  >;
+  readonly #config: ProjectionRuntimeConfig;
   readonly #channelConfig: DelegationChannelProjectionConfig;
   readonly #unsubscribers: Array<() => void> = [];
   readonly #turnStates = new Map<string, CoalescedTurnState>();
   readonly #toolStates = new Map<string, CoalescedToolState>();
+  readonly #breadcrumbSink: DelegationBreadcrumbSink | null;
 
   constructor(config: DenDelegationProjectionConfig = {}) {
     this.#channelConfig = {
@@ -237,6 +150,13 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
       channelId: config.channelId,
       channelEnabled: config.channelEnabled ?? true,
     };
+    this.#breadcrumbSink = config.breadcrumbRepository === undefined
+      ? null
+      : new DelegationBreadcrumbSink(config.breadcrumbRepository, {
+          projectId: config.projectId ?? "pi-crew",
+          channelId: config.channelId ?? "unknown",
+          parentAgentIdentity: config.parentAgentIdentity ?? "pi-crew",
+        });
     this.#config = {
       loggerEnabled: config.loggerEnabled ?? true,
       turnCooldownMs: config.turnCooldownMs ?? DEFAULT_TURN_COOLDOWN_MS,
@@ -253,12 +173,14 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     const logger = context.logger;
 
     this.#unsubscribers.push(
-      eventBus.on("delegation.spawned", (payload) =>
+      eventBus.on("delegation.spawned", (payload) => {
+        this.recordBreadcrumb(context, () => this.#breadcrumbSink?.spawned(payload));
         this.projectOrCoalesce(context, "delegation.spawned", payload, () =>
           formatSpawnedMessage(payload),
-        ),
-      ),
+        );
+      }),
       eventBus.on("delegation.completed", (payload) => {
+        this.recordBreadcrumb(context, () => this.#breadcrumbSink?.completed(payload));
         // Clean up coalescing state for this child
         this.#cleanupChildState(payload.childSessionId);
         this.projectOrCoalesce(context, "delegation.completed", payload, () =>
@@ -266,18 +188,21 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
         );
       }),
       eventBus.on("delegation.killed", (payload) => {
+        this.recordBreadcrumb(context, () => this.#breadcrumbSink?.killed(payload));
         this.#cleanupChildState(payload.childSessionId);
         this.projectOrCoalesce(context, "delegation.killed", payload, () =>
           formatKilledMessage(payload),
         );
       }),
       eventBus.on("delegation.timeout", (payload) => {
+        this.recordBreadcrumb(context, () => this.#breadcrumbSink?.timeout(payload));
         this.#cleanupChildState(payload.childSessionId);
         this.projectOrCoalesce(context, "delegation.timeout", payload, () =>
           formatTimeoutMessage(payload),
         );
       }),
       eventBus.on("delegation.orphan_detected", (payload) => {
+        this.recordBreadcrumb(context, () => this.#breadcrumbSink?.orphaned(payload));
         this.#cleanupChildState(payload.orphanSessionId);
         this.projectOrCoalesce(context, "delegation.orphan_detected", payload, () =>
           formatOrphanMessage(payload),
@@ -346,6 +271,7 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
 
     // Always project on error
     if (payload.phase === "errored") {
+      this.recordBreadcrumb(context, () => this.#breadcrumbSink?.turn(payload, state.turnCount));
       this.logProjection(context, "delegation.turn_visible", {
         summary: `Subagent turn errored: ${payload.childSessionId} turn ${payload.turnNumber}`,
         childSessionId: payload.childSessionId,
@@ -360,6 +286,7 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
 
     // Rate limit: project only if cooldown has elapsed
     if (now - state.lastProjectedAt >= cooldownMs) {
+      this.recordBreadcrumb(context, () => this.#breadcrumbSink?.turn(payload, state.turnCount));
       // Use the coalesced state for the projection
       this.logProjection(context, "delegation.turn_visible", {
         summary: `Subagent turn ${payload.phase}: ${payload.childSessionId} turn ${payload.turnNumber}`,
@@ -379,8 +306,12 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
   ): void {
     // Skip "called" phase projections unless enabled
     if (payload.phase === "called" && !this.#config.projectToolCalledEvents) {
-      // Still track for coalesced summary
-      this.updateToolCoalescing(payload);
+      // Still track for coalesced summary and structured spinner/readback state.
+      const state = this.updateToolCoalescing(payload);
+      this.recordBreadcrumb(context, () => this.#breadcrumbSink?.tool(payload, {
+        called: state.toolCallCount,
+        completed: state.completedCount,
+      }));
       return;
     }
 
@@ -390,6 +321,10 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
 
     // Always project terminal tool outcomes so called/completed pairs are visible.
     if (payload.phase === "denied" || payload.phase === "completed") {
+      this.recordBreadcrumb(context, () => this.#breadcrumbSink?.tool(payload, {
+        called: state.toolCallCount,
+        completed: state.completedCount,
+      }));
       this.projectOrCoalesce(context, "delegation.tool_visible", payload, () =>
         formatToolVisibleMessage(payload),
       );
@@ -399,6 +334,10 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
 
     // Rate limit: project only if cooldown has elapsed
     if (now - state.lastProjectedAt >= cooldownMs) {
+      this.recordBreadcrumb(context, () => this.#breadcrumbSink?.tool(payload, {
+        called: state.toolCallCount,
+        completed: state.completedCount,
+      }));
       const message = formatToolVisibleMessage(payload, this.#config.projectToolCalledEvents);
       if (message !== null) {
         this.logProjection(context, message.eventName, {
@@ -490,6 +429,20 @@ export class DenDelegationProjectionExtension implements ServiceExtension {
     context.logger.info(`delegation.event.${eventName}`, {
       extensionId: this.id,
       ...details,
+    });
+  }
+
+  private recordBreadcrumb(
+    context: ServiceExtensionContext,
+    write: () => Promise<unknown> | undefined,
+  ): void {
+    const promise = write();
+    if (promise === undefined) return;
+    void promise.catch((error: unknown) => {
+      context.logger.warn("delegation.breadcrumb.persist_failed", {
+        extensionId: this.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
   }
 

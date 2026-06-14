@@ -10,6 +10,7 @@ export { SqliteMessageRepository } from "./message-repository.js";
 export { SqlitePendingChildRepository } from "./pending-child-repository.js";
 export { MessageRepositoryTurnHistory } from "./message-turn-history.js";
 export { SqliteAuditRepository } from "./audit-repository.js";
+export { SqliteAgentWorkBreadcrumbRepository } from "./agent-work-breadcrumb-repository.js";
 export { StartupHydrator, type HydrationResult } from "./startup-hydration.js";
 
 export {

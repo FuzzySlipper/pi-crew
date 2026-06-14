@@ -98,6 +98,7 @@ export {
   SqliteSessionRepository,
   SqliteMessageRepository,
   SqlitePendingChildRepository,
+  SqliteAgentWorkBreadcrumbRepository,
   MessageRepositoryTurnHistory,
   SqliteAuditRepository,
   StartupHydrator,
@@ -198,6 +199,10 @@ export {
   type DelegatedSpawnLifecyclePort,
 } from "./workers/delegated-spawn-tool.js";
 export { DenDelegationProjectionExtension } from "./workers/den-delegation-projection.js";
+export {
+  ParentLifecycleBreadcrumbExtension,
+  type ParentBreadcrumbBinding,
+} from "./workers/parent-lifecycle-breadcrumb-extension.js";
 export {
   createDelegationHelperTools,
   type DelegatedHelperToolResult,

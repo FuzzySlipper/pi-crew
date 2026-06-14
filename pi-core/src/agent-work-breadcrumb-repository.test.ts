@@ -326,6 +326,7 @@ describe("InMemoryBreadcrumbRepository", () => {
 
     it("filters by childSessionId", async () => {
       const results = await repo.queryByCorrelation({
+        eventFamily: "delegation",
         childSessionId: "sess-child-q1",
       });
       expect(results).toHaveLength(1);

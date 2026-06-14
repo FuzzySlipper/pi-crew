@@ -1,6 +1,10 @@
 /** Read-only local admin diagnostics HTTP server. */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import type {
+  AgentWorkBreadcrumbRepository,
+  BreadcrumbCorrelationFilter,
+} from "@pi-crew/core";
 import type { AdminConfig } from "../config.js";
 import { redactDiagnosticValue } from "../diagnostics/event-journal.js";
 import type { DiagnosticsOverview } from "../diagnostics/types.js";
@@ -51,6 +55,7 @@ export interface AdminServerDeps {
   readonly controls?: RemediationControlService;
   readonly directDebug?: DirectDebugServicePort;
   readonly toolInventory?: ToolInventoryProjector;
+  readonly agentWorkBreadcrumbs?: AgentWorkBreadcrumbRepository;
 }
 
 interface RouteContext {
@@ -67,6 +72,7 @@ export class AdminServer {
   readonly #controls: RemediationControlService | null;
   readonly #directDebug: DirectDebugServicePort | null;
   readonly #toolInventory: ToolInventoryProjector | null;
+  readonly #agentWorkBreadcrumbs: AgentWorkBreadcrumbRepository | null;
   #server: Server | null = null;
 
   constructor(deps: AdminServerDeps) {
@@ -76,6 +82,7 @@ export class AdminServer {
     this.#controls = deps.controls ?? null;
     this.#directDebug = deps.directDebug ?? null;
     this.#toolInventory = deps.toolInventory ?? null;
+    this.#agentWorkBreadcrumbs = deps.agentWorkBreadcrumbs ?? null;
   }
 
   get host(): string {
@@ -199,6 +206,16 @@ export class AdminServer {
     }
     if (pathname === "/admin/diagnostics/events") {
       writeJson(context.res, 200, { events: limitedEvents(overview, context.url) });
+      return;
+    }
+    if (pathname === "/admin/agent-work/events") {
+      if (this.#agentWorkBreadcrumbs === null) {
+        writeJson(context.res, 404, { error: "not_found" });
+        return;
+      }
+      writeJson(context.res, 200, {
+        events: await this.#agentWorkBreadcrumbs.queryByCorrelation(agentWorkFilter(context.url)),
+      });
       return;
     }
     writeJson(context.res, 404, { error: "not_found" });
@@ -370,6 +387,29 @@ function findAssignment(overview: DiagnosticsOverview, pathname: string) {
       (assignment) => assignment.workerBinding?.assignmentId === assignmentId,
     ) ?? { error: "not_found" }
   );
+}
+
+function agentWorkFilter(url: URL): BreadcrumbCorrelationFilter {
+  return {
+    projectId: optionalParam(url, "projectId"),
+    channelId: optionalParam(url, "channelId"),
+    sessionId: optionalParam(url, "sessionId"),
+    childSessionId: optionalParam(url, "childSessionId"),
+    toolCallId: optionalParam(url, "toolCallId"),
+    eventFamily: eventFamilyParam(url),
+    eventType: optionalParam(url, "eventType"),
+  };
+}
+
+function optionalParam(url: URL, key: string): string | undefined {
+  const value = url.searchParams.get(key);
+  return value === null || value.trim() === "" ? undefined : value;
+}
+
+function eventFamilyParam(url: URL): BreadcrumbCorrelationFilter["eventFamily"] {
+  const value = optionalParam(url, "eventFamily");
+  if (value === "parent" || value === "delegation" || value === "tool") return value;
+  return undefined;
 }
 
 async function readControlRequest(req: IncomingMessage): Promise<RemediationRequest> {

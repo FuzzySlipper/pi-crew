@@ -29,6 +29,8 @@ import {
   SessionManagerDelegationSessionBridge,
   SqliteAuditRepository,
   SqlitePendingChildRepository,
+  SqliteAgentWorkBreadcrumbRepository,
+  ParentLifecycleBreadcrumbExtension,
   SqliteSessionRepository,
   SqliteMessageRepository,
   MessageRepositoryTurnHistory,
@@ -90,6 +92,7 @@ export class Crew {
   readonly #adminServer: AdminServer | null;
   readonly #runtimeDb: RuntimeDb;
   readonly #auditRepository: SqliteAuditRepository;
+  readonly #agentWorkBreadcrumbRepository: SqliteAgentWorkBreadcrumbRepository;
   readonly #workerRoleMapping: WorkerRoleMappingConfig;
   readonly #channelProvider: ChannelProvider;
   readonly #mcpClient: MCPClient;
@@ -140,6 +143,7 @@ export class Crew {
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
     const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
+    this.#agentWorkBreadcrumbRepository = new SqliteAgentWorkBreadcrumbRepository(this.#runtimeDb.handle);
     const diagnostics = createCrewDiagnostics({
       eventBus: this.#eventBus,
       runtimeDb: this.#runtimeDb,
@@ -246,6 +250,7 @@ export class Crew {
             validateConfig: validateGatewayConfig,
           }),
           toolInventory: { projectTools: (sessionId) => this.#projectTools(sessionId) },
+          agentWorkBreadcrumbs: this.#agentWorkBreadcrumbRepository,
         })
       : null;
 
@@ -291,6 +296,18 @@ export class Crew {
             config.delegation.projection.localLogPath ??
             `${config.install.root}/delegation-projections.log`,
           projectToolCalledEvents: config.delegation.projection.projectToolCalledEvents,
+          breadcrumbRepository: this.#agentWorkBreadcrumbRepository,
+          projectId: config.den.channelsProjectId,
+          parentAgentIdentity: "pi-crew",
+        }),
+        new ParentLifecycleBreadcrumbExtension({
+          repository: this.#agentWorkBreadcrumbRepository,
+          logger: this.#logger,
+          bindings: config.fullAgents.filter((agent) => agent.enabled).map((agent) => ({
+            sessionId: agent.session.sessionId, channelId: agent.channels[0]?.channelId ?? config.den.channelsSubscriptionChannelId,
+            projectId: config.den.channelsProjectId, agentIdentity: agent.memberIdentity, profileId: agent.profileId,
+            provider: agent.runtime.provider, model: agent.runtime.model,
+          })),
         }),
       ],
       context: createServiceExtensionContext({
@@ -410,51 +427,21 @@ export class Crew {
     return { inventories: agents.map((agent) => resolveFullAgentRuntime({ agent, profilesRoot, mcpSurfaceManager: this.#mcpSurfaceManager, logger: this.#logger, defaultDenProjectId: this.#config.den.channelsProjectId }).inventory) };
   }
 
-  get config(): CrewConfig {
-    return this.#config;
-  }
-  get logger(): Logger {
-    return this.#logger;
-  }
-  get eventBus(): EventBus {
-    return this.#eventBus;
-  }
-  get gateway(): Gateway {
-    return this.#gateway;
-  }
-  get runtimeDb(): RuntimeDb {
-    return this.#runtimeDb;
-  }
-  get channelProvider(): ChannelProvider {
-    return this.#channelProvider;
-  }
-  get mcpClient(): MCPClient {
-    return this.#mcpClient;
-  }
-  get mcpToolRegistry(): McpToolRegistry {
-    return this.#mcpToolRegistry;
-  }
-  get denCompletionPoster(): CompletionPoster {
-    return this.#denCompletionPoster;
-  }
-  get sessionManager(): SessionManagerImpl {
-    return this.#sessionManager;
-  }
-  get instancePool(): InstancePoolImpl {
-    return this.#instancePool;
-  }
-  get breadcrumbManager(): BreadcrumbManager {
-    return this.#breadcrumbManager;
-  }
-  get auditLogger(): AuditLogger {
-    return this.#auditLogger;
-  }
-  get toolPolicyEnforcer(): ToolPolicyEnforcer {
-    return this.#toolPolicyEnforcer;
-  }
-  get agentRegistry(): AgentRuntimeRegistry {
-    return this.#agentRegistry;
-  }
+  get config(): CrewConfig { return this.#config; }
+  get logger(): Logger { return this.#logger; }
+  get eventBus(): EventBus { return this.#eventBus; }
+  get gateway(): Gateway { return this.#gateway; }
+  get runtimeDb(): RuntimeDb { return this.#runtimeDb; }
+  get channelProvider(): ChannelProvider { return this.#channelProvider; }
+  get mcpClient(): MCPClient { return this.#mcpClient; }
+  get mcpToolRegistry(): McpToolRegistry { return this.#mcpToolRegistry; }
+  get denCompletionPoster(): CompletionPoster { return this.#denCompletionPoster; }
+  get sessionManager(): SessionManagerImpl { return this.#sessionManager; }
+  get instancePool(): InstancePoolImpl { return this.#instancePool; }
+  get breadcrumbManager(): BreadcrumbManager { return this.#breadcrumbManager; }
+  get auditLogger(): AuditLogger { return this.#auditLogger; }
+  get toolPolicyEnforcer(): ToolPolicyEnforcer { return this.#toolPolicyEnforcer; }
+  get agentRegistry(): AgentRuntimeRegistry { return this.#agentRegistry; }
   get workerRuntimeHooks(): Pick<WorkerRuntimeConfig, "hookRegistry" | "toolPolicySessionRegistry"> {
     return { hookRegistry: this.#registry.hookRegistry, toolPolicySessionRegistry: this.#registry.toolPolicySessionRegistry };
   }

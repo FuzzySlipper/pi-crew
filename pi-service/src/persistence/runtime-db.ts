@@ -33,6 +33,7 @@ const MIGRATIONS: Migration[] = [
   { version: 4, name: "004_session_instance_id", sql: "" },
   { version: 5, name: "005_pending_delegated_children", sql: "" },
   { version: 6, name: "006_full_session_kind", sql: "" },
+  { version: 7, name: "007_agent_work_breadcrumbs", sql: "" },
 ];
 
 // ── RuntimeDb ─────────────────────────────────────────────────────
