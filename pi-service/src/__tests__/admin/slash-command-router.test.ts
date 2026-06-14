@@ -35,7 +35,7 @@ describe("SlashCommandRouter", () => {
     expect(normal.handled).toBe(false);
   });
 
-  it("rejects worker sessions and returns precise reload limitation", async () => {
+  it("rejects worker sessions and reports an unwired reload seam precisely", async () => {
     const router = createSlashCommandRouter({ diagnostics: diagnostics() });
     const worker = { ...session, kind: "worker" as const, channelBindings: [] };
 
@@ -45,7 +45,66 @@ describe("SlashCommandRouter", () => {
     expect(workerResult).toMatchObject({ handled: true, command: "status", ok: false });
     expect(workerResult.message).toContain("full-agent sessions");
     expect(reload).toMatchObject({ handled: true, command: "reload-mcp", ok: false });
-    expect(reload.message).toContain("not yet available");
+    expect(reload.message).toContain("tool-surface reload handler is not wired");
+    expect(reload.evidence).toMatchObject({
+      sessionId: "sess-prime-coder",
+      profileId: "prime-coder",
+      missingSeam: "mcp_tool_surface_reload_handler",
+    });
+  });
+
+  it("executes /reload-mcp through an injected reload handler without reset evidence", async () => {
+    let resetCalled = false;
+    const router = createSlashCommandRouter({
+      diagnostics: diagnostics(),
+      resetSession: () => {
+        resetCalled = true;
+        return Promise.resolve({
+          oldSessionId: "sess-prime-coder",
+          newSessionId: "sess-prime-coder",
+          oldInstanceId: "inst-1",
+          newInstanceId: "inst-2",
+          archivedMessageCount: 7,
+          resetAt: "2026-06-13T00:01:00.000Z",
+        });
+      },
+      reloadMcp: (request) =>
+        Promise.resolve({
+          ok: true,
+          sessionId: request.sessionId,
+          profileId: request.profileId,
+          endpoint: "http://den/mcp?tool_profile=runner",
+          oldToolNames: ["get_task"],
+          newToolNames: ["get_task", "send_message"],
+          addedToolNames: ["send_message"],
+          removedToolNames: [],
+          durationMs: 12,
+          serverCount: 1,
+          reloadedAt: "2026-06-13T00:02:00.000Z",
+        }),
+    });
+
+    const result = await router.tryHandle({
+      session,
+      input: "/reload-mcp after profile edit",
+      requestedBy: "pi-crew-runner",
+    });
+
+    expect(resetCalled).toBe(false);
+    expect(result).toMatchObject({ handled: true, command: "reload-mcp", ok: true });
+    expect(result.message).toContain("MCP tool surface reload complete");
+    expect(result.message).toContain("sessionId: sess-prime-coder");
+    expect(result.message).toContain("added: send_message");
+    expect(result.evidence).toMatchObject({
+      sessionId: "sess-prime-coder",
+      profileId: "prime-coder",
+      requestedBy: "pi-crew-runner",
+      reason: "after profile edit",
+      addedToolNames: ["send_message"],
+    });
+    expect(result.evidence).not.toHaveProperty("oldSessionId");
+    expect(result.evidence).not.toHaveProperty("newSessionId");
+    expect(result.evidence).not.toHaveProperty("archivedMessageCount");
   });
 
   it("executes /new through an injected reset handler and returns reset evidence", async () => {

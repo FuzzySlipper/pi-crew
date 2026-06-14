@@ -89,6 +89,44 @@ describe("DirectDebugSessionService", () => {
     expect(result.diagnostics).toEqual({ commandSurface: "control-plane" });
   });
 
+  it("handles /reload-mcp without routing to the LLM path", async () => {
+    const manager = new FakeSessionManager(conversation);
+    const service = new DirectDebugSessionService({
+      sessionManager: manager,
+      diagnostics: diagnostics(),
+      reloadMcp: (request) =>
+        Promise.resolve({
+          ok: true,
+          sessionId: request.sessionId,
+          profileId: request.profileId,
+          endpoint: "http://den/mcp",
+          oldToolNames: ["get_task"],
+          newToolNames: ["get_task", "send_message"],
+          addedToolNames: ["send_message"],
+          removedToolNames: [],
+          durationMs: 9,
+          serverCount: 1,
+          reloadedAt: "2026-06-13T00:02:00.000Z",
+        }),
+      idFactory: () => "turn-debug-reload",
+    });
+
+    const result = await service.runTurn({
+      sessionId: "sess-prime-coder",
+      message: "/reload-mcp smoke",
+      contextDiagnostics: true,
+    });
+
+    expect(manager.routedMessages).toHaveLength(0);
+    expect(result.sessionId).toBe("sess-prime-coder");
+    expect(result.message).toContain("MCP tool surface reload complete");
+    expect(result.diagnostics).toMatchObject({
+      sessionId: "sess-prime-coder",
+      profileId: "prime-coder",
+      addedToolNames: ["send_message"],
+    });
+  });
+
   it("rejects worker sessions and sessions without a channel binding", async () => {
     const workerService = new DirectDebugSessionService({
       sessionManager: new FakeSessionManager(worker),

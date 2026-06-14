@@ -75,8 +75,10 @@ Direct diagnostic turns intercept recognized slash commands before building LLM 
 
 - `/help` — list control-plane commands.
 - `/status` or `/session` — return current session/profile/instance/presence diagnostics.
-- `/reload-mcp` — currently returns a precise limitation; a narrow MCP hot-reload seam is not yet implemented.
+- `/reload-mcp [reason]` — reloads the MCP-discovered/tool surface for the current full-agent profile while preserving the configured session id, instance, channel binding, and persisted message history. It reports old/new tool counts plus added/removed tool names.
 - `/new [reason]` — resets the configured full-agent session boundary: releases the old instance, deletes persisted turn history for that session, reacquires a fresh instance with the same configured session/channel binding, and returns old/new instance ids plus archived message count/reset timestamp.
+
+`/reload-mcp` and `/new` are intentionally not aliases. Use `/reload-mcp` to pick up MCP/tool changes without losing context; use `/new` only when the operator wants a fresh conversation boundary.
 
 Admin diagnostics exposes the effective model-callable tool inventory without treating slash commands as tools:
 

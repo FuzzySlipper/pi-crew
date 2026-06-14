@@ -15,6 +15,8 @@ import { createContextDiagnosticReport } from "../diagnostics/context-diagnostic
 import {
   createSlashCommandRouter,
   type SlashCommandRouter,
+  type SlashCommandMcpReloadRequest,
+  type SlashCommandMcpReloadResult,
   type SlashCommandResetRequest,
   type SlashCommandResetResult,
 } from "./slash-command-router.js";
@@ -25,6 +27,7 @@ interface DirectDebugSessionServiceDeps {
   readonly sessionManager: SessionManager;
   readonly diagnostics: DiagnosticsProjector;
   readonly resetSession?: (request: SlashCommandResetRequest) => Promise<SlashCommandResetResult>;
+  readonly reloadMcp?: (request: SlashCommandMcpReloadRequest) => Promise<SlashCommandMcpReloadResult>;
   readonly idFactory?: () => string;
 }
 
@@ -43,6 +46,7 @@ export class DirectDebugSessionService {
     this.#slashCommands = createSlashCommandRouter({
       diagnostics: deps.diagnostics,
       resetSession: deps.resetSession,
+      reloadMcp: deps.reloadMcp,
     });
   }
 

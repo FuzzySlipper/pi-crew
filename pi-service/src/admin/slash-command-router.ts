@@ -20,9 +20,32 @@ export interface SlashCommandResetRequest {
   readonly reason: string;
 }
 
+export interface SlashCommandMcpReloadRequest {
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly requestedBy: string;
+  readonly reason: string;
+}
+
+export interface SlashCommandMcpReloadResult {
+  readonly ok: boolean;
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly endpoint: string;
+  readonly oldToolNames: readonly string[];
+  readonly newToolNames: readonly string[];
+  readonly addedToolNames: readonly string[];
+  readonly removedToolNames: readonly string[];
+  readonly durationMs: number;
+  readonly serverCount: number;
+  readonly reloadedAt: string;
+  readonly error?: string;
+}
+
 export interface SlashCommandRouterDeps {
   readonly diagnostics: DiagnosticsProjector;
   readonly resetSession?: (request: SlashCommandResetRequest) => Promise<SlashCommandResetResult>;
+  readonly reloadMcp?: (request: SlashCommandMcpReloadRequest) => Promise<SlashCommandMcpReloadResult>;
   readonly now?: () => Date;
 }
 
@@ -58,11 +81,13 @@ export function createSlashCommandRouter(deps: SlashCommandRouterDeps): SlashCom
 class DefaultSlashCommandRouter implements SlashCommandRouter {
   readonly #diagnostics: DiagnosticsProjector;
   readonly #resetSession?: (request: SlashCommandResetRequest) => Promise<SlashCommandResetResult>;
+  readonly #reloadMcp?: (request: SlashCommandMcpReloadRequest) => Promise<SlashCommandMcpReloadResult>;
   readonly #now: () => Date;
 
   constructor(deps: SlashCommandRouterDeps) {
     this.#diagnostics = deps.diagnostics;
     this.#resetSession = deps.resetSession;
+    this.#reloadMcp = deps.reloadMcp;
     this.#now = deps.now ?? (() => new Date());
   }
 
@@ -83,7 +108,7 @@ class DefaultSlashCommandRouter implements SlashCommandRouter {
     if (parsed.command === "help") return this.#help();
     if (parsed.command === "status" || parsed.command === "session")
       return this.#status(request.session, parsed.command);
-    if (parsed.command === "reload-mcp") return this.#reloadMcp(request.session);
+    if (parsed.command === "reload-mcp") return this.#reloadMcpCommand(request, parsed.argument);
     return this.#newSession(request, parsed.argument);
   }
 
@@ -96,7 +121,7 @@ class DefaultSlashCommandRouter implements SlashCommandRouter {
         "- /help — list commands",
         "- /status or /session — show current session diagnostics",
         "- /new [reason] — request a session reset boundary",
-        "- /reload-mcp — report MCP reload availability",
+        "- /reload-mcp [reason] — reload MCP/tool surface without resetting the session",
       ].join("\n"),
       { commandSurface: "control-plane" },
     );
@@ -129,12 +154,45 @@ class DefaultSlashCommandRouter implements SlashCommandRouter {
     );
   }
 
-  #reloadMcp(session: SessionRecord): SlashCommandResult {
+  async #reloadMcpCommand(request: SlashCommandRequest, reason: string): Promise<SlashCommandResult> {
+    const normalizedReason = reason.trim().length > 0 ? reason.trim() : "manual_reload";
+    const requestedBy = request.requestedBy ?? "unknown";
+    if (this.#reloadMcp === undefined) {
+      return handled(
+        "reload-mcp",
+        false,
+        "MCP reload was recognized as a control-plane command, but the tool-surface reload handler is not wired for this frontend.",
+        {
+          sessionId: request.session.id,
+          profileId: request.session.profileId,
+          requestedBy,
+          reason: normalizedReason,
+          missingSeam: "mcp_tool_surface_reload_handler",
+        },
+      );
+    }
+    const reload = await this.#reloadMcp({
+      sessionId: request.session.id,
+      profileId: request.session.profileId,
+      requestedBy,
+      reason: normalizedReason,
+    });
     return handled(
       "reload-mcp",
-      false,
-      "MCP hot reload is not yet available from the slash command router; use the admin config reload/control path or service restart until a narrow MCP reload seam is added.",
-      { sessionId: session.id, missingSeam: "mcp_client_hot_reload" },
+      reload.ok,
+      [
+        reload.ok ? "MCP tool surface reload complete." : "MCP tool surface reload failed.",
+        `sessionId: ${reload.sessionId}`,
+        `profileId: ${reload.profileId}`,
+        `endpoint: ${reload.endpoint}`,
+        `oldToolCount: ${String(reload.oldToolNames.length)}`,
+        `newToolCount: ${String(reload.newToolNames.length)}`,
+        `added: ${reload.addedToolNames.join(", ") || "none"}`,
+        `removed: ${reload.removedToolNames.join(", ") || "none"}`,
+        `durationMs: ${String(reload.durationMs)}`,
+        ...(reload.error === undefined ? [] : [`error: ${reload.error}`]),
+      ].join("\n"),
+      { ...reload, requestedBy, reason: normalizedReason },
     );
   }
 

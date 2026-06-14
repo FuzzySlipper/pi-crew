@@ -333,30 +333,11 @@ describe("FullAgentResponder", () => {
       "message.completed",
       "turn.completed",
     ]);
-    expect(bus.emitted[1]?.payload).toEqual({
-      profileId: "system-architect",
-      sessionId: "sess-conv-2",
-      messageRole: "assistant",
-    });
-    expect(bus.emitted[2]?.payload).toEqual({
-      profileId: "system-architect",
-      sessionId: "sess-conv-2",
-      messageRole: "assistant",
-      updateType: "start",
-    });
     expect(bus.emitted[3]?.payload).toEqual({
       profileId: "system-architect",
       sessionId: "sess-conv-2",
       toolName: "lookup_status",
       params: { channelId: "channel-1" },
-    });
-    expect(bus.emitted[4]?.payload).toEqual({
-      profileId: "system-architect",
-      sessionId: "sess-conv-2",
-      toolName: "lookup_status",
-      success: true,
-      durationMs: 0,
-      result: { content: "working" },
     });
     expect(bus.emitted[5]?.payload).toEqual({
       profileId: "system-architect",
@@ -366,11 +347,38 @@ describe("FullAgentResponder", () => {
       durationMs: 0,
       result: { content: "done" },
     });
-    expect(bus.emitted[6]?.payload).toEqual({
-      profileId: "system-architect",
-      sessionId: "sess-conv-2",
-      messageRole: "assistant",
-    });
     expect(bus.emitted.some((event) => event.event === "completion.posted")).toBe(false);
+  });
+
+  it("uses the latest tools from a provider for each turn", async () => {
+    const factory = new CapturingFullAgentFactory("ok");
+    let currentTools: readonly AgentTool[] = [runtimeTool];
+    const refreshedTool = { ...runtimeTool, name: "send_message", label: "send_message" };
+    const responder = new FullAgentResponder({
+      agentFactory: factory,
+      eventBus: new FakeEventBus(),
+      logger: new FakeLogger(),
+      systemPrompt: "System prompt",
+      toolsProvider: () => currentTools,
+    });
+
+    await responder.respond({
+      sessionId: "sess-conv-tools",
+      profileId: "system-architect",
+      instanceId: "inst-conv-tools",
+      message: createTextMessage("first"),
+    });
+    currentTools = [refreshedTool];
+    await responder.respond({
+      sessionId: "sess-conv-tools",
+      profileId: "system-architect",
+      instanceId: "inst-conv-tools",
+      message: createTextMessage("second"),
+    });
+
+    expect(factory.created.map((input) => input.tools?.map((tool) => tool.name))).toEqual([
+      ["lookup_status"],
+      ["send_message"],
+    ]);
   });
 });

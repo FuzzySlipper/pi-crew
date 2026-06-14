@@ -234,6 +234,11 @@ export class Crew {
             sessionManager: this.#sessionManager,
             diagnostics,
             resetSession: (request) => sessionResetService.reset(request),
+            reloadMcp: (request) =>
+              this.#mcpSurfaceManager.reloadForProfile(
+                loadProfile(request.profileId, resolveCrewInstallLayout(this.#config).profilesRoot),
+                request,
+              ),
           }),
           controls: new RemediationControlService({
             diagnostics,
