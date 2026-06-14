@@ -192,6 +192,48 @@ export {
 // ── Repository ────────────────────────────────────────────────
 export { type Repository } from "./repository.js";
 
+// ── Agent-work breadcrumbs ────────────────────────────────────
+export {
+  type AgentWorkEventFamily,
+  type AgentWorkBreadcrumbState,
+  type AgentWorkSeverity,
+  type AgentWorkToolResultClass,
+  type AgentWorkToolPhase,
+  type ParentLifecycleEventType,
+  type DelegationLifecycleEventType,
+  type AgentWorkEventType,
+  type AgentWorkEvidence,
+  type AgentWorkBreadcrumbBase,
+  type ParentLifecycleFields,
+  type DelegationLifecycleFields,
+  type DelegationCompletionFields,
+  type ToolEventFields,
+  type ParentLifecycleBreadcrumb,
+  type DelegationLifecycleBreadcrumb,
+  type ToolEventBreadcrumb,
+  type AgentWorkBreadcrumb,
+  type CreateParentBreadcrumbInput,
+  type CreateDelegationBreadcrumbInput,
+  type CreateToolBreadcrumbInput,
+  BreadcrumbValidationError,
+  FORBIDDEN_RAW_FIELDS,
+  MAX_TASK_EXCERPT_LENGTH,
+  MAX_SUMMARY_LENGTH,
+  findForbiddenRawFields,
+  truncateText,
+  createParentBreadcrumb,
+  createDelegationBreadcrumb,
+  createToolBreadcrumb,
+  parentGroupingKey,
+  delegationGroupingKey,
+} from "./agent-work-breadcrumbs.js";
+
+export {
+  type AgentWorkBreadcrumbRepository,
+  type BreadcrumbCorrelationFilter,
+  type BreadcrumbUpdateFields,
+} from "./agent-work-breadcrumb-repository.js";
+
 // ── Channel ───────────────────────────────────────────────────
 export {
   type ChannelProvider,
@@ -245,6 +287,7 @@ export {
 // ── Test helpers ───────────────────────────────────────────────
 // Co-located in test-helpers/ but exported directly (no nested barrel).
 export { InMemoryRepository } from "./test-helpers/in-memory-repository.js";
+export { InMemoryBreadcrumbRepository } from "./test-helpers/in-memory-breadcrumb-repository.js";
 export { FakeEventBus } from "./test-helpers/fake-event-bus.js";
 export { SpyEventBus, type SpyEventRecord } from "./test-helpers/spy-event-bus.js";
 export { FakeLogger, type LogEntry } from "./test-helpers/fake-logger.js";
