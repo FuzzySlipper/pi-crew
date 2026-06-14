@@ -20,19 +20,8 @@ describe("prime-coder profile", () => {
     expect(profile.name).toBe("Prime Coder");
     expect(profile.modelConfig).toMatchObject({ provider: "den-router", model: "grok" });
     expect(profile.runtimeConfig).toMatchObject({ maxIterations: 48 });
-    expect(profile.toolPolicy).toEqual({
-      mode: "allow_list",
-      allow: expect.arrayContaining([
-        "den",
-        "filesystem",
-        "terminal",
-        "git",
-        "delegation",
-        "scout_codebase",
-        "summarize_files",
-        "find_relevant_paths",
-      ]),
-    });
+    expect(profile.mcpConfig).toEqual({ toolProfile: "worker-coder" });
+    expect(profile.toolPolicy).toEqual({ mode: "allow_all" });
     expect(profile.systemPrompt).toContain("Prime/assistant operating model");
     expect(profile.systemPrompt).toContain("Use assistant helpers for broad discovery");
     expect(profile.systemPrompt).toContain(

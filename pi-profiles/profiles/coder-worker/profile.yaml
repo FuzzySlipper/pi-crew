@@ -3,6 +3,8 @@ name: "Coder Worker"
 description: "Implements scoped Den coding assignments with tests and structured completion."
 modelConfig:
   temperature: 0.15
+mcpConfig:
+  toolProfile: worker-coder
 toolPolicy:
   mode: "allow_list"
   allow:

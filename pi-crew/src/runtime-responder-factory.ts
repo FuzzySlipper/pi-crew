@@ -14,7 +14,7 @@ import {
   type ConversationalTurnHistory,
   type RuntimeConfig,
 } from "@pi-crew/service";
-import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
+import type { McpSurfaceManager } from "./mcp-surface-manager.js";
 
 import type { CrewConfig } from "./config.js";
 import { resolveCrewInstallLayout } from "./config.js";
@@ -31,8 +31,7 @@ export function buildRuntimeResponderFactory(
   runtime: RuntimeConfig | CrewConfig,
   eventBus: EventBus,
   logger?: Logger,
-  toolRegistry?: McpToolRegistry,
-  mcpClient?: MCPClient,
+  mcpSurfaceManager?: McpSurfaceManager,
   history?: ConversationalTurnHistory,
   delegation?: ConversationalDelegationRuntimeConfig,
   channelReadback?: DenChannelReadbackRuntimeConfig,
@@ -40,17 +39,16 @@ export function buildRuntimeResponderFactory(
   if (isCrewConfig(runtime)) {
     const agents = runtime.conversationalAgents.filter((candidate) => candidate.enabled);
     if (agents.length > 0) {
-      if (logger === undefined || toolRegistry === undefined || mcpClient === undefined) {
+      if (logger === undefined || mcpSurfaceManager === undefined) {
         throw new ConfigurationError(
-          "Conversational Agent runtime assembly requires logger, MCP client, and tool registry",
+          "Conversational Agent runtime assembly requires logger and MCP surface manager",
         );
       }
       const profilesRoot = resolveCrewInstallLayout(runtime).profilesRoot;
       return buildConversationalAgentResponderFactoryForAgents({
         agents,
         profilesRoot,
-        toolRegistry,
-        mcpClient,
+        mcpSurfaceManager,
         logger,
         eventBus,
         history,

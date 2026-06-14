@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"; import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { ToolRegistry, type AgentTool as McpAgentTool, type MCPClient } from "@pi-crew/mcp";
+import type { Profile } from "@pi-crew/profiles";
+import type { McpSurface, McpSurfaceManager } from "../mcp-surface-manager.js";
 
 import { CrewConfigSchema } from "../config.js";
 import {
-  buildConversationalAgentResponderFactory,
-  buildConversationalAgentResponderFactoryForAgents,
-  resolveConversationalAgentRuntime,
+  buildConversationalAgentResponderFactory, buildConversationalAgentResponderFactoryForAgents, resolveConversationalAgentRuntime,
 } from "../conversational-runtime-assembly.js";
 
 function writeProfile(
@@ -36,6 +35,14 @@ function makeClient(): MCPClient {
   return {
     callTool: () => Promise.resolve({ ok: true, content: [{ type: "text", text: "ok" }] }),
   } as unknown as MCPClient;
+}
+
+function surfaceManager(registry: ToolRegistry, client = makeClient()): McpSurfaceManager {
+  return {
+    surfaceForProfile: (profile: Profile): McpSurface => ({ endpoint: `http://mcp.test/${profile.mcpConfig?.toolProfile ?? "default"}`, toolProfile: profile.mcpConfig?.toolProfile, client, registry }),
+    connectAll: () => Promise.resolve(),
+    disconnectAll: () => Promise.resolve(),
+  };
 }
 
 type ConversationalAgentConfig = ReturnType<typeof CrewConfigSchema.parse>["conversationalAgents"][number];
@@ -106,7 +113,7 @@ describe("conversational agent config schema", () => {
     expect(parsed.conversationalAgents).toHaveLength(1);
     expect(parsed.workerPool.groups).toEqual([]);
   });
-  it("fails closed when enabled agent runtime omits explicit tool policy", () => {
+  it("allows conversation agent runtime config to be profile-owned", () => {
     const result = CrewConfigSchema.safeParse({
       den: { coreUrl: "http://localhost:3030", requiredAtStartup: false },
       conversationalAgents: [
@@ -140,7 +147,7 @@ describe("conversational agent config schema", () => {
       ],
     });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 });
 
@@ -220,8 +227,7 @@ describe("resolveConversationalAgentRuntime", () => {
         },
       },
       profilesRoot,
-      toolRegistry: registry,
-      mcpClient: makeClient(),
+      mcpSurfaceManager: surfaceManager(registry),
       logger: new FakeLogger(),
       env: {},
     });
@@ -292,8 +298,7 @@ describe("resolveConversationalAgentRuntime", () => {
         },
       },
       profilesRoot,
-      toolRegistry: registry,
-      mcpClient: makeClient(),
+      mcpSurfaceManager: surfaceManager(registry),
       logger: new FakeLogger(),
       env: {},
     });
@@ -328,8 +333,7 @@ describe("resolveConversationalAgentRuntime", () => {
           toolPolicy: { mode: "profile" },
         }),
         profilesRoot,
-        toolRegistry: registry,
-        mcpClient: makeClient(),
+        mcpSurfaceManager: surfaceManager(registry),
         logger: new FakeLogger(),
         env: {},
       }),
@@ -381,8 +385,7 @@ describe("resolveConversationalAgentRuntime", () => {
           },
         },
         profilesRoot,
-        toolRegistry: registry,
-        mcpClient: makeClient(),
+        mcpSurfaceManager: surfaceManager(registry),
         logger: new FakeLogger(),
         env: {},
       }),
@@ -418,8 +421,7 @@ describe("buildConversationalAgentResponderFactory", () => {
         }),
       ],
       profilesRoot,
-      toolRegistry: new ToolRegistry(new FakeLogger()),
-      mcpClient: makeClient(),
+      mcpSurfaceManager: surfaceManager(new ToolRegistry(new FakeLogger())),
       logger: new FakeLogger(),
       eventBus: new FakeEventBus(),
       env: {},
@@ -486,8 +488,7 @@ describe("buildConversationalAgentResponderFactory", () => {
         },
       },
       profilesRoot,
-      toolRegistry: registry,
-      mcpClient: makeClient(),
+      mcpSurfaceManager: surfaceManager(registry),
       logger: new FakeLogger(),
       eventBus: new FakeEventBus(),
       env: {},

@@ -11,23 +11,12 @@ modelConfig:
   temperature: 0.2
   maxTokens: 8192
   apiKeyEnv: PI_CREW_ROUTER_API_KEY
+mcpConfig:
+  toolProfile: worker-coder
 runtimeConfig:
   maxIterations: 48
   maxTokensPerTurn: 8192
   maxDurationMs: 900000
   maxTurnDurationMs: 180000
 toolPolicy:
-  mode: allow_list
-  allow:
-    - den
-    - filesystem
-    - terminal
-    - git
-    - mcp_den_send_message
-    - mcp_den_update_task
-    - "delegation"
-    - "spawn_subagent"
-    - "fan_out_subagents"
-    - "scout_codebase"
-    - "summarize_files"
-    - "find_relevant_paths"
+  mode: allow_all

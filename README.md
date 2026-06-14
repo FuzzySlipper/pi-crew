@@ -78,6 +78,15 @@ Direct diagnostic turns intercept recognized slash commands before building LLM 
 - `/reload-mcp` — currently returns a precise limitation; a narrow MCP hot-reload seam is not yet implemented.
 - `/new [reason]` — resets the configured conversational session boundary: releases the old instance, deletes persisted turn history for that session, reacquires a fresh instance with the same configured session/channel binding, and returns old/new instance ids plus archived message count/reset timestamp.
 
+Admin diagnostics exposes the effective model-callable tool inventory without treating slash commands as tools:
+
+```bash
+curl -s http://127.0.0.1:9237/admin/diagnostics/tools/sess-prime-coder
+curl -s http://127.0.0.1:9237/admin/diagnostics/tools/sess-pi-orchestrator
+```
+
+Tool names in pi-crew profile config are the names discovered from the pi-crew MCP registry, typically unprefixed Den MCP names such as `send_message` and `update_task`. Hermes-facing `mcp_den_*` names are facade names and should not be duplicated in pi-crew profile allow lists unless an explicit alias layer is added and tested. Simple YAML quotes around strings are not semantically significant. Profile `mcpConfig.toolProfile` selects the Den MCP `tool_profile` surface; base `config.yaml` should only bind conversational profiles to sessions/channels and keep service-level connection defaults.
+
 Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
 
 ## Runtime and deployment caveat

@@ -10,7 +10,7 @@ import {
   type ExecutionPolicy,
   type Logger,
 } from "@pi-crew/core";
-import { type MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
+import type { MCPClient } from "@pi-crew/mcp";
 import {
   assembleProfilePrompt,
   loadProfile,
@@ -39,6 +39,14 @@ import type { CrewConfig } from "./config.js";
 import { createConversationalMcpAgentTool } from "./conversational-mcp-tool.js";
 import { createDenChannelReadbackTool } from "./den-channel-readback-tool.js";
 import type { DenChannelReadbackToolConfig } from "./den-channel-readback-tool.js";
+import type { McpSurfaceManager } from "./mcp-surface-manager.js";
+import { buildEffectiveToolInventory, type EffectiveToolInventory } from "./tool-inventory.js";
+import {
+  requestedToolSets,
+  selectToolsBeforeSessionPolicy,
+  toolAllowedByProfilePolicy,
+  toolMatchesSelectedSet,
+} from "./tool-selection.js";
 export interface ConversationalRuntimeModelConfig {
   readonly provider: string;
   readonly modelName: string;
@@ -54,15 +62,16 @@ export interface ResolvedConversationalAgentRuntime {
   readonly systemPrompt: string;
   readonly tools: readonly AgentTool[];
   readonly executionPolicy: ExecutionPolicy;
+  readonly inventory: EffectiveToolInventory;
 }
 export interface ResolveConversationalAgentRuntimeInput {
   readonly agent: CrewConfig["conversationalAgents"][number];
   readonly profilesRoot?: string;
-  readonly toolRegistry: McpToolRegistry;
-  readonly mcpClient: MCPClient;
+  readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly sessionToolFilter?: SessionToolFilter;
+  readonly defaultDenProjectId?: string;
 }
 export interface ConversationalDelegationRuntimeConfig {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
@@ -84,8 +93,7 @@ export interface BuildConversationalAgentResponderFactoryInput extends ResolveCo
 export interface BuildConversationalAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["conversationalAgents"][number][];
   readonly profilesRoot?: string;
-  readonly toolRegistry: McpToolRegistry;
-  readonly mcpClient: MCPClient;
+  readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
   readonly eventBus: EventBus;
   readonly history?: ConversationalTurnHistory;
@@ -176,19 +184,21 @@ export function resolveConversationalAgentRuntime(
     );
   }
   const profile = loadProfile(input.agent.profileId, input.profilesRoot);
+  const surface = input.mcpSurfaceManager.surfaceForProfile(profile);
   const model = resolveModelConfig(input.agent, profile, input.env ?? process.env);
   const executionPolicy = buildConversationalExecutionPolicy(input.agent, profile);
   const tools = selectConversationalTools({
     allow: input.agent.runtime.tools.allow,
     profileToolPolicy: profile.toolPolicy,
-    registry: input.toolRegistry,
-    mcpClient: input.mcpClient,
+    mcpTools: surface.registry.listTools(),
+    mcpClient: surface.client,
     policy: executionPolicy,
     sessionToolFilter: input.sessionToolFilter,
     sessionId: input.agent.session.sessionId,
     defaultSender: input.agent.profileIdentity,
     defaultProjectId: input.defaultDenProjectId,
   });
+  const selectedNames = new Set(tools.map((tool) => tool.name));
   return {
     profile,
     model,
@@ -196,6 +206,13 @@ export function resolveConversationalAgentRuntime(
     systemPrompt: assembleProfilePrompt(profile),
     tools,
     executionPolicy,
+    inventory: buildEffectiveToolInventory({
+      agent: input.agent,
+      profile,
+      mcpEndpoint: surface.endpoint,
+      mcpTools: surface.registry.listTools(),
+      selectedToolNames: selectedNames,
+    }),
   };
 }
 function createResponder(
@@ -224,11 +241,8 @@ function addChannelReadbackTool(
   channelReadback: DenChannelReadbackRuntimeConfig | undefined,
 ): ResolvedConversationalAgentRuntime {
   if (channelReadback === undefined) return runtime;
-  if (
-    !agent.runtime.tools.allow.some((entry) =>
-      toolMatchesSelectedSet("den_channels_read_recent", entry),
-    )
-  )
+  const requestedSets = requestedToolSets(agent.runtime.tools.allow, runtime.profile.toolPolicy);
+  if (!requestedSets.some((entry) => toolMatchesSelectedSet("den_channels_read_recent", entry)))
     return runtime;
   if (!toolAllowedByProfilePolicy("den_channels_read_recent", runtime.profile.toolPolicy))
     return runtime;
@@ -292,9 +306,10 @@ function agentAllowsDelegation(
   agent: CrewConfig["conversationalAgents"][number],
   runtime: ResolvedConversationalAgentRuntime,
 ): boolean {
-  const requested = agent.runtime.tools.allow.some(
+  const requestedSets = requestedToolSets(agent.runtime.tools.allow, runtime.profile.toolPolicy);
+  const requested = requestedSets.some(
     (entry) =>
-      entry === "delegation" || entry === "spawn_subagent" || entry === "fan_out_subagents",
+      entry === "all" || entry === "delegation" || entry === "spawn_subagent" || entry === "fan_out_subagents",
   );
   if (!requested) return false;
   if (!toolAllowedByProfilePolicy("spawn_subagent", runtime.profile.toolPolicy)) return false;
@@ -428,7 +443,7 @@ function buildConversationalExecutionPolicy(
 function selectConversationalTools(input: {
   readonly allow: readonly string[];
   readonly profileToolPolicy: ToolPolicy | undefined;
-  readonly registry: McpToolRegistry;
+  readonly mcpTools: readonly AgentTool[];
   readonly mcpClient: MCPClient;
   readonly policy: ExecutionPolicy;
   readonly sessionToolFilter: SessionToolFilter | undefined;
@@ -436,10 +451,11 @@ function selectConversationalTools(input: {
   readonly defaultSender: string;
   readonly defaultProjectId?: string;
 }): AgentTool[] {
-  const beforePolicy = input.registry
-    .listTools()
-    .filter((tool) => input.allow.some((set) => toolMatchesSelectedSet(tool.name, set)))
-    .filter((tool) => toolAllowedByProfilePolicy(tool.name, input.profileToolPolicy));
+  const beforePolicy = selectToolsBeforeSessionPolicy({
+    tools: input.mcpTools,
+    requestedSets: requestedToolSets(input.allow, input.profileToolPolicy),
+    profileToolPolicy: input.profileToolPolicy,
+  });
   const afterPolicy =
     input.sessionToolFilter !== undefined
       ? input.sessionToolFilter.filter(
@@ -453,46 +469,9 @@ function selectConversationalTools(input: {
   return beforePolicy
     .filter((tool) => allowedSet.has(tool.name))
     .map((tool) =>
-      createConversationalMcpAgentTool(tool, input.mcpClient, {
+      createConversationalMcpAgentTool(tool as Parameters<typeof createConversationalMcpAgentTool>[0], input.mcpClient, {
         sender: input.defaultSender,
         projectId: input.defaultProjectId,
       }),
     );
-}
-function toolAllowedByProfilePolicy(toolName: string, policy: ToolPolicy | undefined): boolean {
-  if (policy === undefined) return false;
-  const mode = policy.mode ?? "allow_all";
-  if (mode === "allow_all") return true;
-  if (mode === "allow_list") {
-    return (policy.allow ?? []).some((entry) => toolMatchesSelectedSet(toolName, entry));
-  }
-  return !(policy.deny ?? []).some((entry) => toolMatchesSelectedSet(toolName, entry));
-}
-function toolMatchesSelectedSet(toolName: string, toolSet: string): boolean {
-  const normalized = toolName.toLowerCase();
-  const normalizedSet = toolSet.toLowerCase();
-  if (normalizedSet === "all") return false;
-  if (normalizedSet === "den") return SAFE_DEN_TOOL_NAMES.has(stripMcpPrefix(normalized));
-  return normalized === normalizedSet || normalized.startsWith(`${normalizedSet}_`);
-}
-
-const SAFE_DEN_TOOL_NAMES = new Set([
-  "get_task",
-  "get_thread",
-  "get_messages",
-  "get_latest_task_packet",
-  "get_task_workflow_summary",
-  "get_document",
-  "search_documents",
-  "query_librarian",
-  "list_review_findings",
-  "list_review_rounds",
-  "den_channels_read_recent",
-  "channels_read_recent",
-]);
-
-function stripMcpPrefix(toolName: string): string {
-  if (toolName.startsWith("mcp_den_")) return toolName.slice("mcp_den_".length);
-  if (toolName.startsWith("den_")) return toolName.slice("den_".length);
-  return toolName;
 }

@@ -4,6 +4,8 @@ description: "Reviews scoped Den implementation diffs and records structured fin
 modelConfig:
   temperature: 0.05
   maxTokens: 3072
+mcpConfig:
+  toolProfile: worker-reviewer
 toolPolicy:
   mode: "allow_list"
   allow:

@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { ConfigurationError } from "@pi-crew/core";
-import type { Profile, ModelConfig, ToolPolicy, RuntimeConfig } from "./profile.js";
+import type { Profile, ModelConfig, ToolPolicy, RuntimeConfig, McpConfig } from "./profile.js";
 import { resolveProfileSkills } from "./skill-loading.js";
 
 // ── ProfileSource interface ─────────────────────────────────────
@@ -354,6 +354,7 @@ function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: st
   });
   const modelConfig: ModelConfig | undefined = parseModelConfig(doc, definition.id);
   const runtimeConfig: RuntimeConfig | undefined = parseRuntimeConfig(doc, definition.id);
+  const mcpConfig: McpConfig | undefined = parseMcpConfig(doc, definition.id);
   const toolPolicy: ToolPolicy | undefined = parseToolPolicy(doc, definition.id);
 
   return {
@@ -364,6 +365,7 @@ function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: st
     skills,
     modelConfig,
     runtimeConfig,
+    mcpConfig,
     toolPolicy,
   };
 }
@@ -405,6 +407,17 @@ function parseRuntimeConfig(
   }
   if (!isPlainRecord(raw)) {
     throw new ConfigurationError(`Profile "${profileId}" field "runtimeConfig" must be an object`);
+  }
+  return raw;
+}
+
+function parseMcpConfig(doc: Record<string, unknown>, profileId: string): McpConfig | undefined {
+  const raw = doc["mcpConfig"];
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  if (!isPlainRecord(raw)) {
+    throw new ConfigurationError(`Profile "${profileId}" field "mcpConfig" must be an object`);
   }
   return raw;
 }

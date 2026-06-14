@@ -97,16 +97,18 @@ const ConversationalAgentChannelConfigSchema = z.object({
   wakePolicy: z.enum(["subscription", "direct_polling"]).default("subscription"),
 });
 
-const ConversationalAgentRuntimeConfigSchema = z.object({
-  mode: z.literal("agent"),
-  provider: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-  baseUrl: z.string().url().optional(),
-  apiKeyEnv: z.string().min(1).optional(),
-  systemPromptSource: z.literal("profile").default("profile"),
-  tools: z.object({ allow: z.array(z.string().min(1)).default([]) }).default({}),
-  toolPolicy: z.object({ mode: z.literal("profile") }),
-});
+const ConversationalAgentRuntimeConfigSchema = z
+  .object({
+    mode: z.literal("agent").default("agent"),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    baseUrl: z.string().url().optional(),
+    apiKeyEnv: z.string().min(1).optional(),
+    systemPromptSource: z.literal("profile").default("profile"),
+    tools: z.object({ allow: z.array(z.string().min(1)).default([]) }).default({}),
+    toolPolicy: z.object({ mode: z.literal("profile") }).default({ mode: "profile" }),
+  })
+  .default({});
 
 const ConversationalAgentLifecycleConfigSchema = z.object({
   singleFlight: z.boolean().default(true),

@@ -83,6 +83,17 @@ export interface RuntimeConfig {
   idleTimeoutMs?: number;
 }
 
+// ── McpConfig ───────────────────────────────────────────────────
+
+/** Per-profile MCP discovery surface. */
+export interface McpConfig {
+  /** Optional full MCP endpoint override. */
+  endpoint?: string;
+
+  /** Optional Den MCP `tool_profile` query parameter. */
+  toolProfile?: string;
+}
+
 // ── ToolPolicy ──────────────────────────────────────────────────
 
 /**
@@ -149,6 +160,9 @@ export interface Profile {
 
   /** Optional execution budgets. */
   runtimeConfig?: RuntimeConfig;
+
+  /** Optional MCP discovery surface for this profile. */
+  mcpConfig?: McpConfig;
 
   /** Optional tool access policy. */
   toolPolicy?: ToolPolicy;

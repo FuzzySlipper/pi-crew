@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FakeEventBus, FakeLogger, ok, type ChannelMessage } from "@pi-crew/core";
 import { ToolRegistry, type MCPClient } from "@pi-crew/mcp";
+import type { Profile } from "@pi-crew/profiles";
+import type { McpSurface, McpSurfaceManager } from "../mcp-surface-manager.js";
 import type {
   ConversationalAgentAdapter,
   ConversationalAgentFactory,
@@ -84,6 +86,15 @@ class CapturingLifecycle implements DelegatedSpawnLifecyclePort {
   }
 }
 
+function surfaceManager(registry: ToolRegistry): McpSurfaceManager {
+  const client = { callTool: () => Promise.resolve({ ok: true, content: [] }) } as unknown as MCPClient;
+  return {
+    surfaceForProfile: (profile: Profile): McpSurface => ({ endpoint: "http://mcp.test", toolProfile: profile.mcpConfig?.toolProfile, client, registry }),
+    connectAll: () => Promise.resolve(),
+    disconnectAll: () => Promise.resolve(),
+  };
+}
+
 describe("conversational delegation wiring", () => {
   it("adds spawn_subagent to configured conversational agents and reaches the lifecycle", async () => {
     const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-delegation-"));
@@ -123,10 +134,7 @@ describe("conversational delegation wiring", () => {
     const factory = buildConversationalAgentResponderFactoryForAgents({
       agents: agent,
       profilesRoot,
-      toolRegistry: new ToolRegistry(new FakeLogger()),
-      mcpClient: {
-        callTool: () => Promise.resolve({ ok: true, content: [] }),
-      } as unknown as MCPClient,
+      mcpSurfaceManager: surfaceManager(new ToolRegistry(new FakeLogger())),
       logger: new FakeLogger(),
       eventBus: new FakeEventBus(),
       agentFactory,
@@ -220,10 +228,7 @@ describe("conversational delegation wiring", () => {
     const factory = buildConversationalAgentResponderFactoryForAgents({
       agents: agent,
       profilesRoot,
-      toolRegistry: new ToolRegistry(new FakeLogger()),
-      mcpClient: {
-        callTool: () => Promise.resolve({ ok: true, content: [] }),
-      } as unknown as MCPClient,
+      mcpSurfaceManager: surfaceManager(new ToolRegistry(new FakeLogger())),
       logger: new FakeLogger(),
       eventBus: new FakeEventBus(),
       agentFactory,

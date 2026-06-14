@@ -40,12 +40,17 @@ export interface DirectDebugServicePort {
   runTurn(input: DirectDebugTurnInput): Promise<DirectDebugTurnResult>;
 }
 
+export interface ToolInventoryProjector {
+  projectTools(sessionId?: string): Promise<unknown>;
+}
+
 export interface AdminServerDeps {
   readonly config: AdminConfig;
   readonly diagnostics: DiagnosticsProjector;
   readonly metrics?: MetricsProjector;
   readonly controls?: RemediationControlService;
   readonly directDebug?: DirectDebugServicePort;
+  readonly toolInventory?: ToolInventoryProjector;
 }
 
 interface RouteContext {
@@ -61,6 +66,7 @@ export class AdminServer {
   readonly #metrics: MetricsProjector | null;
   readonly #controls: RemediationControlService | null;
   readonly #directDebug: DirectDebugServicePort | null;
+  readonly #toolInventory: ToolInventoryProjector | null;
   #server: Server | null = null;
 
   constructor(deps: AdminServerDeps) {
@@ -69,6 +75,7 @@ export class AdminServer {
     this.#metrics = deps.metrics ?? null;
     this.#controls = deps.controls ?? null;
     this.#directDebug = deps.directDebug ?? null;
+    this.#toolInventory = deps.toolInventory ?? null;
   }
 
   get host(): string {
@@ -159,6 +166,23 @@ export class AdminServer {
     }
     if (pathname === "/admin/diagnostics/sessions") {
       writeJson(context.res, 200, { sessions: overview.sessions });
+      return;
+    }
+    if (pathname === "/admin/diagnostics/tools") {
+      if (this.#toolInventory === null) {
+        writeJson(context.res, 404, { error: "not_found" });
+        return;
+      }
+      writeJson(context.res, 200, await this.#toolInventory.projectTools());
+      return;
+    }
+    if (pathname.startsWith("/admin/diagnostics/tools/")) {
+      if (this.#toolInventory === null) {
+        writeJson(context.res, 404, { error: "not_found" });
+        return;
+      }
+      const sessionId = decodeURIComponent(pathname.slice("/admin/diagnostics/tools/".length));
+      writeJson(context.res, 200, await this.#toolInventory.projectTools(sessionId));
       return;
     }
     if (pathname.startsWith("/admin/diagnostics/sessions/")) {

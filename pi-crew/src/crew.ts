@@ -50,7 +50,7 @@ import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
 import { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
 import { ToolPolicyEnforcer } from "@pi-crew/tools";
-import { loadProfile } from "@pi-crew/profiles";
+import { loadProfile, loadProfiles } from "@pi-crew/profiles";
 import { buildDenConnection, createSqliteCursorStore } from "./den-connection-factory.js";
 import { buildRuntimeResponderFactory } from "./runtime-responder-factory.js";
 import { SessionKindAwareResponderFactory } from "./session-kind-responder-factory.js";
@@ -60,7 +60,9 @@ import { createDenPoolAssignmentConsumer } from "./den-pool-source.js";
 import type { DenAssignmentRunner } from "./den-assignment-runner.js";
 import type { DenPoolMemberConfig } from "./den-pool-source.js";
 import { createCrewDiagnostics } from "./crew-diagnostics.js";
+import { resolveConversationalAgentRuntime } from "./conversational-runtime-assembly.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
+import { DefaultMcpSurfaceManager, type McpSurfaceManager } from "./mcp-surface-manager.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
 import {
@@ -92,6 +94,7 @@ export class Crew {
   readonly #channelProvider: ChannelProvider;
   readonly #mcpClient: MCPClient;
   readonly #mcpToolRegistry: McpToolRegistry;
+  readonly #mcpSurfaceManager: McpSurfaceManager;
   readonly #sessionManager: SessionManagerImpl;
   readonly #breadcrumbManager: BreadcrumbManager;
   readonly #auditLogger: AuditLogger;
@@ -156,6 +159,7 @@ export class Crew {
 
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
+    this.#mcpSurfaceManager = new DefaultMcpSurfaceManager({ config: config.mcp, logger: this.#logger, eventBus: this.#eventBus });
 
     this.#denCompletionPoster = createDenCompletionPoster({
       mcpClient: this.#mcpClient,
@@ -174,8 +178,7 @@ export class Crew {
       config,
       this.#eventBus,
       this.#logger,
-      this.#mcpToolRegistry,
-      this.#mcpClient,
+      this.#mcpSurfaceManager,
       new MessageRepositoryTurnHistory(messageRepository),
       { lifecycle: conversationalDelegationLifecycle.port },
       {
@@ -242,6 +245,7 @@ export class Crew {
             }),
             validateConfig: validateGatewayConfig,
           }),
+          toolInventory: { projectTools: (sessionId) => this.#projectTools(sessionId) },
         })
       : null;
 
@@ -352,6 +356,7 @@ export class Crew {
       };
       const tools = await this.#mcpClient.connect(mcpConfig);
       this.#mcpToolRegistry.setMcpTools(tools);
+      await this.#mcpSurfaceManager.connectAll(loadProfiles(resolveCrewInstallLayout(this.#config).profilesRoot));
     } catch (error: unknown) {
       this.#logger.warn("MCP client connection failed (gateway continues)", {
         error: (error as Error).message,
@@ -383,6 +388,7 @@ export class Crew {
     this.#breadcrumbManager.dispose();
     this.#auditLogger.dispose();
     await this.#mcpClient.disconnect();
+    await this.#mcpSurfaceManager.disconnectAll();
     await this.#channelProvider.disconnect();
     await this.#adminServer?.stop();
     await this.#gateway.stop(reason);
@@ -395,6 +401,15 @@ export class Crew {
   get isRunning(): boolean {
     return this.#started;
   }
+
+  async #projectTools(sessionId: string | undefined): Promise<unknown> {
+    const profilesRoot = resolveCrewInstallLayout(this.#config).profilesRoot;
+    const agents = this.#config.conversationalAgents.filter((agent) =>
+      sessionId === undefined ? agent.enabled : agent.session.sessionId === sessionId,
+    );
+    return { inventories: agents.map((agent) => resolveConversationalAgentRuntime({ agent, profilesRoot, mcpSurfaceManager: this.#mcpSurfaceManager, logger: this.#logger, defaultDenProjectId: this.#config.den.channelsProjectId }).inventory) };
+  }
+
   get config(): CrewConfig {
     return this.#config;
   }
@@ -440,14 +455,8 @@ export class Crew {
   get agentRegistry(): AgentRuntimeRegistry {
     return this.#agentRegistry;
   }
-  get workerRuntimeHooks(): Pick<
-    WorkerRuntimeConfig,
-    "hookRegistry" | "toolPolicySessionRegistry"
-  > {
-    return {
-      hookRegistry: this.#registry.hookRegistry,
-      toolPolicySessionRegistry: this.#registry.toolPolicySessionRegistry,
-    };
+  get workerRuntimeHooks(): Pick<WorkerRuntimeConfig, "hookRegistry" | "toolPolicySessionRegistry"> {
+    return { hookRegistry: this.#registry.hookRegistry, toolPolicySessionRegistry: this.#registry.toolPolicySessionRegistry };
   }
 
   get workerRoleMapping(): WorkerRoleMappingConfig {
@@ -465,17 +474,9 @@ export class Crew {
   }
 
   createDenAssignmentRunner(member: DenPoolMemberConfig | undefined): DenAssignmentRunner {
-    if (member === undefined) {
-      throw new ConfigurationError(
-        "Crew requires a configured workerPool member to create a Den assignment runner",
-      );
-    }
+    if (member === undefined) throw new ConfigurationError("Crew requires a configured workerPool member to create a Den assignment runner");
     const workerRuntime = new WorkerRuntime(
-      {
-        workerIdentity: member.workerIdentity,
-        ...this.workerRuntimeHooks,
-        agentRuntimeRegistry: this.#agentRegistry,
-      },
+      { workerIdentity: member.workerIdentity, ...this.workerRuntimeHooks, agentRuntimeRegistry: this.#agentRegistry },
       this.#workerRoleMapping,
       this.#sessionManager,
       this.#instancePool,
@@ -495,6 +496,5 @@ export class Crew {
 }
 
 export function bootstrap(yamlPath: string): Crew {
-  const config = loadCrewConfig(yamlPath);
-  return new Crew(config);
+  return new Crew(loadCrewConfig(yamlPath));
 }

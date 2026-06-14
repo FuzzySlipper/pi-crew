@@ -10,6 +10,7 @@ export {
   type Skill,
   type ModelConfig,
   type RuntimeConfig,
+  type McpConfig,
   type ToolPolicy,
 } from "./profile.js";
 

@@ -1,7 +1,6 @@
 import { ConfigurationError } from "@pi-crew/core";
 import {
   LlmDelegatedChildRunner,
-  SessionMaterializedDelegatedChildRunner,
   type DelegatedChildRunner,
   type DelegatedSpawnLifecycle,
   type DelegatedSpawnLifecyclePort,
@@ -39,7 +38,6 @@ export function createDelegatedChildRunner(
   config: CrewConfig["delegation"],
   deps?: DelegatedChildToolProviderDeps & { readonly profilesRoot?: string },
 ): DelegatedChildRunner {
-  if (config.llmBaseUrl === undefined) return new SessionMaterializedDelegatedChildRunner();
   const toolProvider = deps === undefined ? undefined : createDelegatedChildToolProvider(deps);
   return new LlmDelegatedChildRunner({
     baseUrl: config.llmBaseUrl,

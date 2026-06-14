@@ -8,6 +8,8 @@ import { join } from "node:path";
 
 import { ConfigurationError, FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { ToolRegistry, type MCPClient } from "@pi-crew/mcp";
+import type { Profile } from "@pi-crew/profiles";
+import type { McpSurface, McpSurfaceManager } from "../mcp-surface-manager.js";
 import { describe, expect, it } from "vitest";
 
 import { loadCrewConfig, resolveCrewConfigPath, resolveCrewInstallLayout } from "../config.js";
@@ -52,6 +54,15 @@ function makeClient(): MCPClient {
   return {
     callTool: () => Promise.resolve({ ok: true, content: [{ type: "text", text: "ok" }] }),
   } as unknown as MCPClient;
+}
+
+function surfaceManager(registry: ToolRegistry): McpSurfaceManager {
+  const client = makeClient();
+  return {
+    surfaceForProfile: (profile: Profile): McpSurface => ({ endpoint: "http://mcp.test", toolProfile: profile.mcpConfig?.toolProfile, client, registry }),
+    connectAll: () => Promise.resolve(),
+    disconnectAll: () => Promise.resolve(),
+  };
 }
 
 describe("installed config layout", () => {
@@ -184,8 +195,7 @@ describe("installed config layout", () => {
       config,
       new FakeEventBus(),
       new FakeLogger(),
-      new ToolRegistry(new FakeLogger()),
-      makeClient(),
+      surfaceManager(new ToolRegistry(new FakeLogger())),
     );
 
     expect(() => factory.createResponder({ profileId: "installed-profile" })).not.toThrow();
