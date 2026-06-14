@@ -78,4 +78,10 @@ const BUILT_IN_TOOLS: readonly Omit<BuiltInToolInventoryEntry, "selected" | "rea
   { name: "scout_codebase", category: "helper", modelCallable: true },
   { name: "summarize_files", category: "helper", modelCallable: true },
   { name: "find_relevant_paths", category: "helper", modelCallable: true },
+  { name: "read_file", category: "local", modelCallable: false },
+  { name: "write_file", category: "local", modelCallable: false },
+  { name: "search_files", category: "local", modelCallable: false },
+  { name: "terminal", category: "local", modelCallable: false },
+  { name: "git_status", category: "local", modelCallable: false },
+  { name: "git_diff", category: "local", modelCallable: false },
 ];

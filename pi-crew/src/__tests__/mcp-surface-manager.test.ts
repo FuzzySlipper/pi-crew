@@ -3,6 +3,7 @@ import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { ToolRegistry } from "@pi-crew/mcp";
 import type { Profile } from "@pi-crew/profiles";
 import { DefaultMcpSurfaceManager, endpointForProfile } from "../mcp-surface-manager.js";
+import { buildEffectiveToolInventory } from "../tool-inventory.js";
 import { selectToolsBeforeSessionPolicy } from "../tool-selection.js";
 
 function profile(id: string, toolProfile?: string): Profile {
@@ -32,6 +33,28 @@ describe("MCP profile surfaces", () => {
     });
     expect(manager.surfaceForProfile(profile("a", "runner"))).toBe(manager.surfaceForProfile(profile("b", "runner")));
     expect(manager.surfaceForProfile(profile("a", "runner"))).not.toBe(manager.surfaceForProfile(profile("c", "worker-coder")));
+  });
+  it("lists delegated-child local code tools separately from Den MCP tools", () => {
+    const inv = buildEffectiveToolInventory({
+      agent: {
+        agentId: "prime",
+        enabled: true,
+        profileId: "prime",
+        profileIdentity: "prime",
+        memberIdentity: "prime",
+        session: { ownerId: "owner", sessionId: "sess-prime", maxHistoryMessages: 20 },
+        channels: [],
+        runtime: { mode: "agent", tools: { allow: ["all"] }, toolPolicy: { mode: "profile" } },
+        lifecycle: { turnTimeoutMs: 1 },
+      },
+      profile: profile("prime", "worker-coder"),
+      mcpEndpoint: "http://den/mcp?tool_profile=worker-coder",
+      mcpTools: [],
+      selectedToolNames: new Set(["spawn_subagent"]),
+    });
+    const local = inv.builtInTools.filter((tool) => tool.category === "local");
+    expect(local.map((tool) => tool.name)).toEqual(["read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"]);
+    expect(local.every((tool) => !tool.modelCallable && tool.reason === "not_model_callable")).toBe(true);
   });
 });
 

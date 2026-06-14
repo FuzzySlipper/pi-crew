@@ -87,6 +87,14 @@ curl -s http://127.0.0.1:9237/admin/diagnostics/tools/sess-pi-orchestrator
 
 Tool names in pi-crew profile config are the names discovered from the pi-crew MCP registry, typically unprefixed Den MCP names such as `send_message` and `update_task`. Hermes-facing `mcp_den_*` names are facade names and should not be duplicated in pi-crew profile allow lists unless an explicit alias layer is added and tested. Simple YAML quotes around strings are not semantically significant. Profile `mcpConfig.toolProfile` selects the Den MCP `tool_profile` surface; base `config.yaml` should only bind conversational profiles to sessions/channels and keep service-level connection defaults.
 
+Non-Den runtime-local tools are deliberately separate from Den MCP discovery:
+
+| Surface | Tools | Notes |
+| ------- | ----- | ----- |
+| Conversational delegation/helper built-ins | `spawn_subagent`, `fan_out_subagents`, `scout_codebase`, `summarize_files`, `find_relevant_paths` | Model-callable by conversational agents only when runtime/profile policy selects and permits them. |
+| Delegated-child local code tools | `read_file`, `write_file`, `search_files`, `terminal`, `git_status`, `git_diff` | Model-callable inside delegated child runs through the local `ToolProvider`, bounded to `PI_CREW_LOCAL_TOOL_ROOT` or `/home/dev/pi-crew`; they are listed in diagnostics as local built-ins but are not directly exposed as conversational parent tools. |
+| Slash/control commands | `/help`, `/status`, `/session`, `/new`, `/reload-mcp`, `/tools` | Control-plane inputs, not model-callable tools. |
+
 Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
 
 ## Runtime and deployment caveat
