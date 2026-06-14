@@ -106,9 +106,61 @@ function reviewSchema(): Record<string, unknown> {
         type: "string",
         enum: ["accepted", "changes_requested", "blocked", "insufficient_evidence"],
       },
-      evidenceHandles: { type: "array", items: { type: "object", additionalProperties: true } },
-      taskDecisions: { type: "array", items: { type: "object", additionalProperties: true } },
-      findings: { type: "array", items: { type: "object", additionalProperties: true } },
+      evidenceHandles: { type: "array", items: reviewEvidenceHandleSchema() },
+      taskDecisions: { type: "array", items: reviewTaskDecisionSchema() },
+      findings: { type: "array", items: reviewFindingSchema() },
+    },
+  };
+}
+
+function reviewTaskDecisionSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: true,
+    required: ["taskId", "decision", "summary", "evidenceHandles"],
+    properties: {
+      taskId: { oneOf: [{ type: "string" }, { type: "number" }] },
+      decision: {
+        type: "string",
+        enum: ["accepted", "changes_requested", "blocked", "insufficient_evidence"],
+      },
+      summary: { type: "string" },
+      evidenceHandles: { type: "array", items: reviewEvidenceHandleSchema() },
+      findings: { type: "array", items: reviewFindingSchema() },
+    },
+  };
+}
+
+function reviewFindingSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: true,
+    required: ["severity", "category", "summary"],
+    properties: {
+      taskId: { oneOf: [{ type: "string" }, { type: "number" }] },
+      severity: { type: "string", enum: ["blocker", "major", "minor", "info"] },
+      category: { type: "string" },
+      summary: { type: "string" },
+      location: { type: "string" },
+    },
+  };
+}
+
+function reviewEvidenceHandleSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: true,
+    required: ["type", "description"],
+    properties: {
+      type: {
+        type: "string",
+        enum: ["den_message", "den_document", "code_change", "file", "inventory_note"],
+      },
+      description: { type: "string" },
+      messageId: { oneOf: [{ type: "number" }, { type: "string" }] },
+      slug: { type: "string" },
+      filePath: { type: "string" },
+      commitSha: { type: "string" },
     },
   };
 }

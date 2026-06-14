@@ -14,7 +14,7 @@ export function appendReviewResultInstructions(
     taskIds.length > 0
       ? `Required task decisions: ${taskIds.join(", ")}`
       : "Return decisions for every reviewed task.";
-  return `${task}\n\nYou are running in delegated review mode. ${taskLine}\nPrefer calling the post_delegated_review_result tool once with your final structured result. If you cannot call that tool, return your final answer as a single JSON object inside <delegated_review_result>...</delegated_review_result> tags. Do not put prose inside the tags. Shape:\n{\n  "status": "accepted" | "changes_requested" | "blocked" | "insufficient_evidence",\n  "evidenceHandles": [{ "type": "den_message" | "den_document" | "code_change" | "file" | "inventory_note", "description": "...", "messageId": 123, "slug": "...", "filePath": "...", "commitSha": "..." }],\n  "taskDecisions": [{ "taskId": "2344", "decision": "accepted" | "changes_requested" | "blocked" | "insufficient_evidence", "summary": "...", "evidenceHandles": [...] }],\n  "findings": [{ "taskId": "2344", "severity": "blocker" | "major" | "minor" | "info", "category": "correctness", "summary": "...", "location": "optional" }]\n}\nSet status to accepted only if all task decisions are accepted and evidence handles are present.`;
+  return `${task}\n\nYou are running in delegated review mode. ${taskLine}\nFinalization is mandatory. If the post_delegated_review_result tool is available, you MUST call it exactly once with your final structured result after evidence gathering. If the tool is unavailable, return your final answer as a single JSON object inside <delegated_review_result>...</delegated_review_result> tags. Do not put prose inside the tags. Shape:\n{\n  "status": "accepted" | "changes_requested" | "blocked" | "insufficient_evidence",\n  "evidenceHandles": [{ "type": "den_message" | "den_document" | "code_change" | "file" | "inventory_note", "description": "...", "messageId": 123, "slug": "...", "filePath": "...", "commitSha": "..." }],\n  "taskDecisions": [{ "taskId": "2344", "decision": "accepted" | "changes_requested" | "blocked" | "insufficient_evidence", "summary": "...", "evidenceHandles": [...] }],\n  "findings": [{ "taskId": "2344", "severity": "blocker" | "major" | "minor" | "info", "category": "correctness", "summary": "...", "location": "optional" }]\n}\nSet status to accepted only if all task decisions are accepted and evidence handles are present.`;
 }
 
 export function attachExtractedReviewResult(
@@ -45,7 +45,8 @@ export function attachExtractedReviewResult(
 export function extractReviewResult(text: string): DelegatedReviewResult | null {
   const tagged = extractTaggedJson(text);
   const parsed = parseJsonObject(tagged ?? text.trim());
-  return isReviewResult(parsed) ? parsed : null;
+  const normalized = normalizeReviewResult(parsed);
+  return isReviewResult(normalized) ? normalized : null;
 }
 
 function requiresReviewResult(spawnRequest: DelegationSpawnRequest): boolean {
@@ -95,6 +96,58 @@ function stripCodeFence(text: string): string {
   const trimmed = text.trim();
   const match = /^```(?:json)?\s*([\s\S]*?)\s*```$/u.exec(trimmed);
   return match?.[1] ?? trimmed;
+}
+
+function normalizeReviewResult(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const normalized: Record<string, unknown> = { ...value };
+  normalized["evidenceHandles"] = normalizeArtifactArray(value["evidenceHandles"]);
+  normalized["taskDecisions"] = Array.isArray(value["taskDecisions"])
+    ? value["taskDecisions"].map(normalizeTaskDecision)
+    : value["taskDecisions"];
+  normalized["findings"] = Array.isArray(value["findings"])
+    ? value["findings"].map(normalizeFinding)
+    : value["findings"];
+  return normalized;
+}
+
+function normalizeTaskDecision(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const normalized: Record<string, unknown> = { ...value };
+  normalized["taskId"] = normalizeStringId(value["taskId"]);
+  normalized["evidenceHandles"] = normalizeArtifactArray(value["evidenceHandles"]);
+  normalized["findings"] = Array.isArray(value["findings"])
+    ? value["findings"].map(normalizeFinding)
+    : value["findings"];
+  return normalized;
+}
+
+function normalizeFinding(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const normalized: Record<string, unknown> = { ...value };
+  normalized["taskId"] = normalizeStringId(value["taskId"]);
+  return normalized;
+}
+
+function normalizeArtifactArray(value: unknown): unknown {
+  return Array.isArray(value) ? value.map(normalizeArtifact) : value;
+}
+
+function normalizeArtifact(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const normalized: Record<string, unknown> = { ...value };
+  normalized["messageId"] = normalizeNumberId(value["messageId"]);
+  return normalized;
+}
+
+function normalizeStringId(value: unknown): unknown {
+  return typeof value === "number" && Number.isInteger(value) ? String(value) : value;
+}
+
+function normalizeNumberId(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : value;
 }
 
 function isReviewResult(value: unknown): value is DelegatedReviewResult {
