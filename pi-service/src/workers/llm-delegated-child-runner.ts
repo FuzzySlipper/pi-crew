@@ -485,7 +485,7 @@ function buildChildSystemPrompt(
     spawnRequest.requiredEvidence !== undefined
   ) {
     parts.push(
-      "\nReview-mode output is mandatory: final answer must contain exactly one <delegated_review_result> JSON object with status, evidenceHandles, taskDecisions, and optional findings. Do not rely on prose summaries for review results.",
+      "\nReview-mode finalization is mandatory: if post_delegated_review_result is available, call it exactly once with status, evidenceHandles, taskDecisions, and optional findings. If that tool is unavailable, final answer must contain exactly one <delegated_review_result> JSON object with the same fields. Do not rely on prose summaries for review results.",
     );
   }
 

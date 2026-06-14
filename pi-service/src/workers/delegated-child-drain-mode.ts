@@ -6,13 +6,13 @@ import type { DelegationSpawnRequest } from "@pi-crew/core";
 export function buildDrainModePrompt(spawnRequest: DelegationSpawnRequest): string {
   const contract =
     spawnRequest.expectedResultSchema === "implementation"
-      ? "Call post_delegated_implementation_result once, or return exactly one <delegated_implementation_result>...</delegated_implementation_result> JSON object, using the evidence you already gathered."
+      ? "Call post_delegated_implementation_result exactly once with the final structured result using evidence you already gathered."
       : spawnRequest.expectedResultSchema === "review"
-        ? "Call post_delegated_review_result once, or return exactly one <delegated_review_result>...</delegated_review_result> JSON object, using the evidence you already gathered."
+        ? "Call post_delegated_review_result exactly once with the final structured review result using evidence you already gathered."
         : "Return your final answer using the evidence you already gathered.";
   return [
     "You are at the delegated child iteration budget.",
-    "Do not call more tools; the tool surface has been removed for drain mode.",
+    "Do not call investigative/workflow tools. In drain mode only the structured-result finalizer tool remains available when a schema requires it.",
     contract,
     "If evidence is incomplete, return a structured blocked or insufficient_evidence result with the handles/checks you do have rather than continuing to investigate.",
   ].join("\n");

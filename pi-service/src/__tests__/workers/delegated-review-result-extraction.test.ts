@@ -17,6 +17,8 @@ describe("delegated review result extraction", () => {
   it("adds explicit tagged JSON instructions for review-mode tasks", () => {
     const prompt = appendReviewResultInstructions("review tasks", reviewSpawn);
 
+    expect(prompt).toContain("Finalization is mandatory");
+    expect(prompt).toContain("MUST call it exactly once");
     expect(prompt).toContain("<delegated_review_result>");
     expect(prompt).toContain("Required task decisions: 2344, 2345");
     expect(prompt).toContain("taskDecisions");
@@ -39,6 +41,24 @@ describe("delegated review result extraction", () => {
 
     expect(review?.status).toBe("accepted");
     expect(review?.taskDecisions.map((decision) => decision.taskId)).toEqual(["2344", "2345"]);
+  });
+
+  it("normalizes harmless numeric ids in review JSON", () => {
+    const review = extractReviewResult(JSON.stringify({
+      status: "accepted",
+      evidenceHandles: [{ type: "den_message", messageId: "14424", description: "packet" }],
+      taskDecisions: [{
+        taskId: 2443,
+        decision: "accepted",
+        summary: "reviewed",
+        evidenceHandles: [{ type: "den_message", messageId: "14424", description: "packet" }],
+        findings: [{ taskId: 2443, severity: "info", category: "coverage", summary: "ok" }],
+      }],
+    }));
+
+    expect(review?.taskDecisions[0]?.taskId).toBe("2443");
+    expect(review?.evidenceHandles[0]?.messageId).toBe(14424);
+    expect(review?.taskDecisions[0]?.findings?.[0]?.taskId).toBe("2443");
   });
 
   it("attaches valid extracted review to the delegated result", () => {
