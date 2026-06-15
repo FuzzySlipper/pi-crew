@@ -193,10 +193,7 @@ export class Crew {
       this.#mcpSurfaceManager,
       new MessageRepositoryTurnHistory(messageRepository, { eventBus: this.#eventBus }),
       { lifecycle: fullAgentDelegationLifecycle.port },
-      {
-        baseUrl: config.den.channelsUrl,
-        token: config.den.channelsToken,
-      },
+      { baseUrl: config.den.channelsUrl, token: config.den.channelsToken }, messageRepository,
     );
     const responderFactory = new SessionKindAwareResponderFactory(fullAgentFactory);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);

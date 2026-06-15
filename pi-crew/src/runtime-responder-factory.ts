@@ -12,6 +12,7 @@ import {
   EchoAgentResponderFactory,
   type AgentResponderFactory,
   type FullAgentTurnHistory,
+  type SessionSearchRepository,
   type RuntimeConfig,
 } from "@pi-crew/service";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
@@ -35,6 +36,7 @@ export function buildRuntimeResponderFactory(
   history?: FullAgentTurnHistory,
   delegation?: FullAgentDelegationRuntimeConfig,
   channelReadback?: DenChannelReadbackRuntimeConfig,
+  sessionSearchRepository?: SessionSearchRepository,
 ): AgentResponderFactory {
   if (isCrewConfig(runtime)) {
     const agents = runtime.fullAgents.filter((candidate) => candidate.enabled);
@@ -54,6 +56,7 @@ export function buildRuntimeResponderFactory(
         history,
         delegation,
         channelReadback,
+        sessionSearchRepository,
         defaultDenProjectId: runtime.den.channelsProjectId,
         crewContext: runtime.context,
       });

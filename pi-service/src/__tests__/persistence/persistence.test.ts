@@ -107,7 +107,7 @@ describe("runtime persistence", () => {
   it("opens SQLite in WAL mode and creates only runtime tables", () => {
     const health = db.health();
     expect(health.walEnabled).toBe(true);
-    expect(health.schemaVersion).toBe(7);
+    expect(health.schemaVersion).toBe(8);
     const rows = db.handle
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all() as Array<{ name: string }>;
@@ -118,6 +118,41 @@ describe("runtime persistence", () => {
     expect(names).toContain("runtime_kv");
     expect(names).not.toContain("blackboard");
     expect(names).not.toContain("memory");
+  });
+
+  it("keeps FTS session search bounded by profile", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    const messages = new SqliteMessageRepository(db.handle);
+    await sessions.save(session({ id: "profile-a-session", profileId: "profile-a" }));
+    await sessions.save(session({ id: "profile-b-session", profileId: "profile-b" }));
+    await messages.append({
+      sessionId: "profile-a-session",
+      role: "user",
+      content: JSON.stringify("alpha decision from profile a"),
+    });
+    const anchorId = await messages.append({
+      sessionId: "profile-a-session",
+      role: "assistant",
+      content: JSON.stringify("alpha response from profile a"),
+    });
+    await messages.append({
+      sessionId: "profile-b-session",
+      role: "user",
+      content: JSON.stringify("alpha secret from profile b"),
+    });
+
+    const hitsA = await messages.searchProfile("profile-a", "alpha", 10);
+    const hitsB = await messages.searchProfile("profile-b", "alpha", 10);
+    const windowA = await messages.getWindowForProfile("profile-a", "profile-a-session", anchorId, 1);
+    const browseA = await messages.browseProfile("profile-a", 10);
+
+    expect(hitsA.map((hit) => hit.message.session_id)).toEqual([
+      "profile-a-session",
+      "profile-a-session",
+    ]);
+    expect(hitsB.map((hit) => hit.message.session_id)).toEqual(["profile-b-session"]);
+    expect(windowA.map((message) => message.id)).toEqual([anchorId - 1, anchorId]);
+    expect(browseA.map((row) => row.sessionId)).toEqual(["profile-a-session"]);
   });
 
   it("persists full-agent and worker sessions across reopen", async () => {
@@ -138,7 +173,7 @@ describe("runtime persistence", () => {
     expect(present(await reopened.get("worker")).workerBinding?.runId).toBe("run-1");
   });
 
-  it("fails loudly for persisted legacy conversational session kind", async () => {
+  it("fails loudly for persisted legacy conversational session kind", () => {
     db.handle
       .prepare(
         `INSERT INTO sessions (id, kind, profile_id, instance_id, channel_bindings_json,

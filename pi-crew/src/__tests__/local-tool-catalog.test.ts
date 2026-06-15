@@ -6,6 +6,10 @@ import {
   createDelegatedFanOutTool,
   createDelegatedSpawnTool,
   createDelegationHelperTools,
+  type MessageRow,
+  type SessionSearchBrowseRow,
+  type SessionSearchHit,
+  type SessionSearchRepository,
   type DelegatedSpawnError,
   type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
@@ -45,6 +49,21 @@ const parentPolicy: ExecutionPolicy = {
   credentialScope: "none",
 };
 
+const fakeSessionSearchRepository: SessionSearchRepository = {
+  searchProfile(): Promise<SessionSearchHit[]> {
+    return Promise.resolve([]);
+  },
+  getSessionMessagesForProfile(): Promise<MessageRow[]> {
+    return Promise.resolve([]);
+  },
+  getWindowForProfile(): Promise<MessageRow[]> {
+    return Promise.resolve([]);
+  },
+  browseProfile(): Promise<SessionSearchBrowseRow[]> {
+    return Promise.resolve([]);
+  },
+};
+
 function commonDelegationOptions() {
   return {
     lifecycle: new FakeLifecycle(),
@@ -58,10 +77,15 @@ function commonDelegationOptions() {
 describe("local tool catalog", () => {
   it("is the source for runtime-local tool factories", () => {
     expect(runtimeLocalToolNames).toEqual(localModelCallableToolNames());
-    expect(new Set(createRuntimeLocalTools({ sessionId: "sess", profileId: "prime" }).map((tool) => tool.name))).toEqual(
+    expect(new Set(createRuntimeLocalTools({
+      sessionId: "sess",
+      profileId: "prime",
+      sessionSearchRepository: fakeSessionSearchRepository,
+    }).map((tool) => tool.name))).toEqual(
       new Set([
         ...localModelCallableToolNames("local"),
         ...localModelCallableToolNames("planning"),
+        ...localModelCallableToolNames("session"),
         ...localModelCallableToolNames("web"),
         ...localModelCallableToolNames("browser"),
       ]),

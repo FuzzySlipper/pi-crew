@@ -130,6 +130,36 @@ export interface MessageRepository {
   deleteBySession(sessionId: string): Promise<void>;
 }
 
+export interface SessionSearchHit {
+  readonly message: MessageRow;
+  readonly profileId: string;
+  readonly snippet: string;
+}
+
+export interface SessionSearchBrowseRow {
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly lastActivity: string;
+  readonly preview: MessageRow | null;
+}
+
+/** Profile-bounded read contract for model-callable session search. */
+export interface SessionSearchRepository {
+  searchProfile(profileId: string, query: string, limit?: number): Promise<SessionSearchHit[]>;
+  getSessionMessagesForProfile(
+    profileId: string,
+    sessionId: string,
+    limit?: number,
+  ): Promise<MessageRow[]>;
+  getWindowForProfile(
+    profileId: string,
+    sessionId: string,
+    aroundMessageId: number,
+    window: number,
+  ): Promise<MessageRow[]>;
+  browseProfile(profileId: string, limit?: number): Promise<SessionSearchBrowseRow[]>;
+}
+
 /**
  * Persistence contract for audit events.
  */

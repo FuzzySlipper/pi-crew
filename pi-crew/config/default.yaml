@@ -184,7 +184,7 @@ fullAgents:
       apiKeyEnv: "PI_CREW_ROUTER_API_KEY"
       systemPromptSource: "profile"
       tools:
-        allow: ["den", "filesystem", "terminal", "git", "delegation", "planning", "web", "browser"]
+        allow: ["den", "filesystem", "terminal", "git", "delegation", "planning", "session", "web", "browser"]
       toolPolicy:
         mode: "profile"
     lifecycle:

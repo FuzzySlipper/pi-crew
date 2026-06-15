@@ -81,6 +81,7 @@ const TOOL_SET_MEMBERS: Readonly<Record<string, ReadonlySet<string>>> = {
   terminal: new Set(["terminal"]),
   git: new Set(["git_status", "git_diff"]),
   planning: new Set(["todo"]),
+  session: new Set(["session_search"]),
   web: new Set(["web_search", "web_extract"]),
   browser: new Set([
     "browser_navigate",

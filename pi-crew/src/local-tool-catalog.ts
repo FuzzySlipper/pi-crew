@@ -170,6 +170,16 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
     inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
   },
   {
+    name: "session_search",
+    category: "session",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/session-search-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request session or session_search",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
     name: "web_search",
     category: "web",
     modelCallable: true,

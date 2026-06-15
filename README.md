@@ -145,6 +145,7 @@ Current runtime-local model-callable catalog:
 | `git_status` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
 | `git_diff` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
 | `todo` | planning | full-agent | runtime.tools.allow/profile toolPolicy must request planning or todo | `pi-crew/src/todo-tool.ts` |
+| `session_search` | session | full-agent | runtime.tools.allow/profile toolPolicy must request session or session_search | `pi-crew/src/session-search-tool.ts` |
 | `web_search` | web | full-agent | runtime.tools.allow/profile toolPolicy must request web or web_search | `pi-crew/src/web-tools.ts` |
 | `web_extract` | web | full-agent | runtime.tools.allow/profile toolPolicy must request web or web_extract | `pi-crew/src/web-tools.ts` |
 | `browser_navigate` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |

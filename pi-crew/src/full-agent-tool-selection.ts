@@ -1,5 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ExecutionPolicy } from "@pi-crew/core";
+import type { SessionSearchRepository } from "@pi-crew/service";
 import type { MCPClient } from "@pi-crew/mcp";
 import type { ToolPolicy } from "@pi-crew/profiles";
 import { SessionToolFilter } from "@pi-crew/tools";
@@ -15,7 +16,9 @@ export interface SelectFullAgentToolsInput {
   readonly policy: ExecutionPolicy;
   readonly sessionToolFilter: SessionToolFilter | undefined;
   readonly sessionId: string;
+  readonly profileId: string;
   readonly defaultSender: string;
+  readonly sessionSearchRepository?: SessionSearchRepository;
   readonly defaultProjectId?: string;
 }
 
@@ -23,7 +26,8 @@ export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentToo
   const requestedSets = requestedToolSets(input.allow, input.profileToolPolicy);
   const localTools = createRuntimeLocalTools({
     sessionId: input.sessionId,
-    profileId: input.defaultSender,
+    profileId: input.profileId,
+    sessionSearchRepository: input.sessionSearchRepository,
   });
   const localToolNameSet = new Set<string>(runtimeLocalToolNames);
   const beforePolicy = selectToolsBeforeSessionPolicy({

@@ -21,6 +21,7 @@ import {
   type FullAgentFactory,
   type FullAgentRuntimeBuilder,
   type FullAgentTurnHistory,
+  type SessionSearchRepository,
   type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import {
@@ -66,6 +67,7 @@ export interface ResolveFullAgentRuntimeInput {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly sessionToolFilter?: SessionToolFilter;
   readonly defaultDenProjectId?: string;
+  readonly sessionSearchRepository?: SessionSearchRepository;
 }
 export interface FullAgentDelegationRuntimeConfig {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
@@ -79,6 +81,7 @@ export interface DenChannelReadbackRuntimeConfig extends Omit<
 export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRuntimeInput {
   readonly eventBus?: EventBus;
   readonly history?: FullAgentTurnHistory;
+  readonly sessionSearchRepository?: SessionSearchRepository;
   readonly agentFactory?: FullAgentFactory;
   readonly delegation?: FullAgentDelegationRuntimeConfig;
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
@@ -92,6 +95,7 @@ export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly logger: Logger;
   readonly eventBus: EventBus;
   readonly history?: FullAgentTurnHistory;
+  readonly sessionSearchRepository?: SessionSearchRepository;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly agentFactory?: FullAgentFactory;
   readonly delegation?: FullAgentDelegationRuntimeConfig;
@@ -217,7 +221,9 @@ export function resolveFullAgentRuntime(
     policy: executionPolicy,
     sessionToolFilter: input.sessionToolFilter,
     sessionId: input.agent.session.sessionId,
+    profileId: input.agent.profileId,
     defaultSender: input.agent.profileIdentity,
+    sessionSearchRepository: input.sessionSearchRepository,
     defaultProjectId: input.defaultDenProjectId,
   });
   const selectedNames = new Set(tools.map((tool) => tool.name));
