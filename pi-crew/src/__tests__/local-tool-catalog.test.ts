@@ -92,6 +92,19 @@ describe("local tool catalog", () => {
     );
   });
 
+  it("creates memory tools only when Den Memories config is supplied", () => {
+    const tools = createRuntimeLocalTools({
+      sessionId: "sess",
+      profileId: "prime",
+      denMemory: {
+        baseUrl: "http://den-memory.local",
+        policyMode: "manual",
+        context: { agentIdentity: "prime", profileId: "prime", sessionId: "sess", sessionKind: "durable_agent" },
+      },
+    });
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(localModelCallableToolNames("memory")));
+  });
+
   it("keeps local code tool factories category-scoped", () => {
     expect(localCodeToolNames).toEqual(localModelCallableToolNames("local"));
     expect(createLocalCodeTools().map((tool) => tool.name)).toEqual(
@@ -142,6 +155,37 @@ describe("local tool catalog", () => {
         (tool) => tool.implementedIn.length > 0 && tool.policyGate.length > 0,
       ),
     ).toBe(true);
+  });
+
+  it("reports memory tool inventory as selected or profile-denied", () => {
+    const baseAgent = {
+      agentId: "prime",
+      enabled: true,
+      profileId: "prime",
+      profileIdentity: "prime",
+      memberIdentity: "prime",
+      session: { ownerId: "owner", sessionId: "sess-prime", maxHistoryMessages: 20 },
+      channels: [],
+      runtime: { mode: "agent", systemPromptSource: "profile", tools: { allow: ["memory"] }, toolPolicy: { mode: "profile" } },
+      lifecycle: { singleFlight: true, turnTimeoutMs: 1, onStartup: "rehydrate_or_create", onShutdownStatus: "offline" },
+    } as const;
+    const inventory = buildEffectiveToolInventory({
+      agent: baseAgent,
+      profile: { id: "prime", name: "prime", description: "prime", systemPrompt: "prime", skills: [], toolPolicy: { mode: "allow_all" } },
+      mcpEndpoint: "http://den/mcp",
+      mcpTools: [],
+      selectedToolNames: new Set(localModelCallableToolNames("memory")),
+    });
+    expect(inventory.builtInTools.filter((tool) => tool.category === "memory").every((tool) => tool.selected)).toBe(true);
+
+    const denied = buildEffectiveToolInventory({
+      agent: baseAgent,
+      profile: { id: "prime", name: "prime", description: "prime", systemPrompt: "prime", skills: [], toolPolicy: { mode: "allow_list", allow: ["filesystem"] } },
+      mcpEndpoint: "http://den/mcp",
+      mcpTools: [],
+      selectedToolNames: new Set(),
+    });
+    expect(denied.builtInTools.find((tool) => tool.name === "den_memory_recall")).toMatchObject({ selected: false, reason: "profile_denied" });
   });
 
   it("keeps control commands separate from model-callable tools", () => {

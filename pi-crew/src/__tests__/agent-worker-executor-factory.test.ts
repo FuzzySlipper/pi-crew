@@ -89,6 +89,30 @@ describe("createCrewAgentWorkerToolProvider", () => {
     const uppercaseAllToolNames = provider(makeInput(["ALL", "All"])).map((tool) => tool.name);
     expect(uppercaseAllToolNames).toEqual(["post_structured_completion", "context_status"]);
   });
+  it("adds worker Den Memories tools only when selected by tool set and config", () => {
+    const registry = new ToolRegistry(new FakeLogger());
+    const provider = createCrewAgentWorkerToolProvider({
+      mcpClient: makeClient(),
+      toolRegistry: registry,
+      logger: new FakeLogger(),
+      memory: {
+        enabled: true,
+        baseUrl: "http://den-memory.local",
+        requestTimeoutMs: 1000,
+        workerPolicy: "manual",
+      },
+    });
+
+    const offNames = provider(makeInput(["den"])).map((tool) => tool.name);
+    expect(offNames).not.toContain("den_memory_recall");
+    const memoryNames = provider(makeInput(["memory"])).map((tool) => tool.name);
+    expect(memoryNames).toEqual(expect.arrayContaining([
+      "post_structured_completion",
+      "context_status",
+      "den_memory_recall",
+      "den_memory_store_candidate",
+    ]));
+  });
 });
 
 describe("createCrewWorkerModelConfigSource", () => {

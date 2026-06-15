@@ -62,6 +62,7 @@ export interface ResolveFullAgentRuntimeInput {
   readonly sessionToolFilter?: SessionToolFilter;
   readonly defaultDenProjectId?: string;
   readonly sessionSearchRepository?: SessionSearchRepository;
+  readonly memory?: CrewConfig["memory"];
 }
 export interface FullAgentDelegationRuntimeConfig {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
@@ -220,6 +221,7 @@ export function resolveFullAgentRuntime(
     defaultSender: input.agent.profileIdentity,
     sessionSearchRepository: input.sessionSearchRepository,
     defaultProjectId: input.defaultDenProjectId,
+    memory: input.memory,
   });
   const selectedNames = new Set(tools.map((tool) => tool.name));
   return {

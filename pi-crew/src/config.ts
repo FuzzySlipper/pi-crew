@@ -92,6 +92,20 @@ const StreamRetryConfigSchema = z.object({
   }
 });
 
+const MemoryPolicyModeSchema = z.enum(["off", "manual", "suggested", "automatic_recall", "candidate_capture"]);
+
+const MemoryConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  baseUrl: z.string().url().optional(),
+  requestTimeoutMs: z.number().int().positive().default(10_000),
+  fullAgentPolicy: MemoryPolicyModeSchema.default("manual"),
+  workerPolicy: MemoryPolicyModeSchema.default("manual"),
+}).default({}).superRefine((value, ctx) => {
+  if (value.enabled && value.baseUrl === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "enabled Den Memories config requires baseUrl", path: ["baseUrl"] });
+  }
+});
+
 const ToolPolicyDefaultsSchema = z.object({
   allowedTools: z.array(z.string()).default([]),
   deniedTools: z.array(z.string()).default([]),
@@ -238,6 +252,7 @@ export const CrewConfigSchema = z.object({
   sessions: SessionsConfigSchema.default({}),
   context: ContextConfigSchema.default({}),
   streamRetry: StreamRetryConfigSchema,
+  memory: MemoryConfigSchema,
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
   fullAgents: z.array(FullAgentConfigSchema).default([]),
   workerPool: WorkerPoolConfigSchema,

@@ -4,6 +4,7 @@ import type { SessionSearchRepository } from "@pi-crew/service";
 import type { MCPClient } from "@pi-crew/mcp";
 import type { ToolPolicy } from "@pi-crew/profiles";
 import { SessionToolFilter } from "@pi-crew/tools";
+import type { CrewConfig } from "./config.js";
 import { createFullAgentMcpAgentTool } from "./full-agent-mcp-tool.js";
 import { createRuntimeLocalTools, runtimeLocalToolNames } from "./runtime-local-tools.js";
 import { requestedToolSets, selectToolsBeforeSessionPolicy } from "./tool-selection.js";
@@ -20,6 +21,7 @@ export interface SelectFullAgentToolsInput {
   readonly defaultSender: string;
   readonly sessionSearchRepository?: SessionSearchRepository;
   readonly defaultProjectId?: string;
+  readonly memory?: CrewConfig["memory"];
 }
 
 export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentTool[] {
@@ -28,6 +30,7 @@ export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentToo
     sessionId: input.sessionId,
     profileId: input.profileId,
     sessionSearchRepository: input.sessionSearchRepository,
+    denMemory: memoryConfig(input),
   });
   const localToolNameSet = new Set<string>(runtimeLocalToolNames);
   const beforePolicy = selectToolsBeforeSessionPolicy({
@@ -55,4 +58,22 @@ export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentToo
         },
       );
     });
+}
+
+function memoryConfig(input: SelectFullAgentToolsInput): Parameters<typeof createRuntimeLocalTools>[0]["denMemory"] {
+  if (input.memory?.enabled !== true || input.memory.baseUrl === undefined) return undefined;
+  return {
+    baseUrl: input.memory.baseUrl,
+    requestTimeoutMs: input.memory.requestTimeoutMs,
+    policyMode: input.memory.fullAgentPolicy,
+    context: {
+      agentIdentity: input.defaultSender,
+      profileId: input.profileId,
+      sessionId: input.sessionId,
+      sessionKind: "durable_agent",
+      projectId: input.defaultProjectId,
+      role: "runner",
+      mode: "implementation",
+    },
+  };
 }

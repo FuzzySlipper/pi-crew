@@ -1,6 +1,6 @@
 /** Central catalog for pi-crew runtime-local tool and control surfaces. */
 
-export type LocalToolCategory = "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session";
+export type LocalToolCategory = "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session" | "memory";
 export type LocalToolSurface = "full-agent" | "delegated-child" | "worker";
 
 export interface LocalModelCallableToolCatalogEntry {
@@ -197,6 +197,46 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
     assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
     intendedSurfaces: ["full-agent"],
     policyGate: "runtime.tools.allow/profile toolPolicy must request web or web_extract",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "den_memory_recall",
+    category: "memory",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/den-memory-tools.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts", "pi-crew/src/agent-worker-executor-factory.ts"],
+    intendedSurfaces: ["full-agent", "worker"],
+    policyGate: "memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_recall",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "den_memory_read",
+    category: "memory",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/den-memory-tools.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts", "pi-crew/src/agent-worker-executor-factory.ts"],
+    intendedSurfaces: ["full-agent", "worker"],
+    policyGate: "memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_read",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "den_memory_search",
+    category: "memory",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/den-memory-tools.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts", "pi-crew/src/agent-worker-executor-factory.ts"],
+    intendedSurfaces: ["full-agent", "worker"],
+    policyGate: "memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_search",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "den_memory_store_candidate",
+    category: "memory",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/den-memory-tools.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts", "pi-crew/src/agent-worker-executor-factory.ts"],
+    intendedSurfaces: ["full-agent", "worker"],
+    policyGate: "memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_store_candidate",
     inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
   },
   ...[

@@ -457,9 +457,7 @@ export class Crew {
     return { hookRegistry: this.#registry.hookRegistry, toolPolicySessionRegistry: this.#registry.toolPolicySessionRegistry };
   }
 
-  get workerRoleMapping(): WorkerRoleMappingConfig {
-    return this.#workerRoleMapping;
-  }
+  get workerRoleMapping(): WorkerRoleMappingConfig { return this.#workerRoleMapping; }
 
   createAgentWorkerExecutor(): AgentWorkerExecutor {
     return createCrewAgentWorkerExecutor({
@@ -470,6 +468,7 @@ export class Crew {
       delegatedSpawnLifecycle: this.#delegatedSpawnLifecycle,
       streamRetry: this.#config.streamRetry,
       eventBus: this.#eventBus,
+      memory: this.#config.memory,
     });
   }
 

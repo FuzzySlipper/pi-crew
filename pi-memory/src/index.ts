@@ -1,123 +1,157 @@
 // pi-memory — Den Memories adapter for pi-crew.
 //
-// This package is intentionally a thin runtime adapter. Den Memories owns the
-// ontology, scoring, capture/curation, recall packets, and audit surfaces.
-// pi-crew only maps worker/session context into shared service requests and
-// exposes shared logical tools.
+// DESIGN: Den Memories owns the ontology, graph traversal, recall packets,
+// curation lifecycle, and persistence. Rationale: pi-crew and Hermes must stay
+// thin runtime adapters over the same memory substrate, not fork long-term
+// memory semantics locally.
 
 export type DenMemoryRuntime = "hermes" | "pi_crew" | "den_core" | "manual" | "import";
-export type DenMemorySessionKind = "durable_agent" | "worker_assignment" | "assistant_delegate" | "cron" | "diagnostic" | "import";
+export type DenMemorySessionKind = "durable_agent" | "worker_assignment" | "assistant_delegate" | "diagnostic" | "import";
 export type DenMemoryRole = "planner" | "runner" | "reviewer" | "worker" | "assistant" | "human" | "auditor";
-export type DenMemoryCaptureMode = "off" | "metadata_only" | "permissive_candidates" | "curated_manual_only";
-
-export interface DenMemoryRuntimeContext {
-  runtime: DenMemoryRuntime;
-  agent_identity?: string;
-  profile_id?: string;
-  agent_instance_id?: string;
-  session_id?: string;
-  session_key?: string;
-  session_kind: DenMemorySessionKind;
-  project_id?: string;
-  task_id?: string | number;
-  assignment_id?: string | number | null;
-  run_id?: string | null;
-  role?: DenMemoryRole | string;
-  audience?: string[];
-  mode?: "planning" | "implementation" | "review" | "ops" | "general" | "audit" | string;
-  source_surface?: string;
-  user_id?: string;
-}
-
-export interface PiCrewMemoryContextInput {
-  agentIdentity?: string;
-  profileId?: string;
-  agentInstanceId?: string;
-  sessionId?: string;
-  sessionKey?: string;
-  sessionKind?: DenMemorySessionKind;
-  projectId?: string;
-  taskId?: string | number;
-  assignmentId?: string | number | null;
-  runId?: string | null;
-  role?: DenMemoryRole | string;
-  audience?: string[];
-  mode?: DenMemoryRuntimeContext["mode"];
-  sourceSurface?: string;
-  userId?: string;
-}
-
-export interface DenMemorySourceRef {
-  source_kind: string;
-  source_project_id?: string | null;
-  source_id: string;
-  source_locator?: Record<string, unknown>;
-  source_summary?: string;
-  observed_at?: string | null;
-  verified_at?: string | null;
-  verification_status?: "unverified" | "verified" | "broken" | "stale";
-}
-
-export interface DenMemoryToolDefinition {
-  name: DenMemoryToolName;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
-
-export interface DenMemoryToolCallResult {
-  ok: boolean;
-  data?: unknown;
-  error?: string;
-  toolName?: string;
-}
-
-export type DenMemoryToolName =
-  | "den_memory_recall"
-  | "den_memory_read"
-  | "den_memory_search"
-  | "den_memory_store_candidate"
-  | "den_memory_capture_event"
-  | "den_memory_doctor"
-  | "den_memory_audit_export";
+export type DenMemoryPolicyMode = "off" | "manual" | "suggested" | "automatic_recall" | "candidate_capture";
+export type DenMemoryRecallMode = "planning" | "implementation" | "review" | "ops" | "general";
+export type DenMemoryToolName = "den_memory_recall" | "den_memory_read" | "den_memory_search" | "den_memory_store_candidate";
 
 export const DEN_MEMORY_TOOL_NAMES: readonly DenMemoryToolName[] = [
   "den_memory_recall",
   "den_memory_read",
   "den_memory_search",
   "den_memory_store_candidate",
-  "den_memory_capture_event",
-  "den_memory_doctor",
-  "den_memory_audit_export",
 ];
 
+export interface DenMemoryRuntimeContext {
+  readonly runtime: "pi_crew";
+  readonly agent_identity?: string;
+  readonly profile_id?: string;
+  readonly agent_instance_id?: string;
+  readonly session_id?: string;
+  readonly session_key?: string;
+  readonly session_kind: DenMemorySessionKind;
+  readonly project_id?: string;
+  readonly task_id?: string | number;
+  readonly assignment_id?: string | number | null;
+  readonly run_id?: string | null;
+  readonly role?: string;
+  readonly audience?: readonly string[];
+  readonly mode?: DenMemoryRecallMode;
+  readonly source_surface?: string;
+  readonly user_id?: string;
+}
+
+export interface PiCrewMemoryContextInput {
+  readonly agentIdentity?: string;
+  readonly profileId?: string;
+  readonly agentInstanceId?: string;
+  readonly sessionId?: string;
+  readonly sessionKey?: string;
+  readonly sessionKind?: DenMemorySessionKind;
+  readonly projectId?: string;
+  readonly taskId?: string | number;
+  readonly assignmentId?: string | number | null;
+  readonly runId?: string | null;
+  readonly role?: string;
+  readonly audience?: readonly string[];
+  readonly mode?: DenMemoryRecallMode;
+  readonly sourceSurface?: string;
+  readonly userId?: string;
+}
+
+export interface DenMemorySourceRef {
+  readonly source_kind: string;
+  readonly source_project_id?: string | null;
+  readonly source_id: string;
+  readonly source_locator?: Record<string, unknown>;
+  readonly source_summary?: string;
+  readonly verification_status?: "unverified" | "verified" | "broken" | "stale";
+}
+
+export interface DenMemoryRecallRequest {
+  readonly query: string;
+  readonly runtime_context: DenMemoryRuntimeContext;
+  readonly audience?: readonly string[];
+  readonly mode?: DenMemoryRecallMode;
+  readonly budget_tokens?: number;
+  readonly prefer_relations?: readonly string[];
+}
+
+export interface DenMemoryRecallPacket {
+  readonly packet_id: string;
+  readonly packet_md: string;
+  readonly root_matches: readonly Record<string, unknown>[];
+  readonly included_nodes: readonly Record<string, unknown>[];
+  readonly included_edges?: readonly Record<string, unknown>[];
+  readonly skipped: readonly Record<string, unknown>[];
+  readonly warnings: readonly string[];
+  readonly provenance: readonly Record<string, unknown>[];
+}
+
+export interface DenMemoryToolDefinition {
+  readonly name: DenMemoryToolName;
+  readonly description: string;
+  readonly inputSchema: Record<string, unknown>;
+}
+
+export interface DenMemoryToolCallResult {
+  readonly ok: boolean;
+  readonly data?: unknown;
+  readonly error?: string;
+  readonly code?: string;
+  readonly status?: number;
+  readonly toolName?: string;
+}
+
 export interface DenMemoryClientOptions {
-  baseUrl: string;
-  fetchImpl?: typeof fetch;
-  requestTimeoutMs?: number;
+  readonly baseUrl: string;
+  readonly fetchImpl?: typeof fetch;
+  readonly requestTimeoutMs?: number;
+}
+
+export class DenMemoryClientError extends Error {
+  readonly code: string;
+  readonly status: number | undefined;
+
+  constructor(message: string, input: { readonly code: string; readonly status?: number; readonly cause?: unknown }) {
+    super(message, input.cause === undefined ? undefined : { cause: input.cause });
+    this.name = "DenMemoryClientError";
+    this.code = input.code;
+    this.status = input.status;
+  }
 }
 
 export class DenMemoryClient {
-  private readonly baseUrl: string;
-  private readonly fetchImpl: typeof fetch;
-  private readonly requestTimeoutMs: number;
+  readonly #baseUrl: string;
+  readonly #fetchImpl: typeof fetch;
+  readonly #requestTimeoutMs: number;
 
   constructor(options: DenMemoryClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/$/, "");
-    this.fetchImpl = options.fetchImpl ?? fetch;
-    this.requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
+    this.#baseUrl = options.baseUrl.replace(/\/$/, "");
+    this.#fetchImpl = options.fetchImpl ?? fetch;
+    this.#requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
   }
 
-  async requestJson(method: string, path: string, body?: unknown, query?: Record<string, unknown>): Promise<unknown> {
-    const url = new URL(`${this.baseUrl}${path}`);
-    for (const [key, value] of Object.entries(query ?? {})) {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value));
-      }
-    }
+  recall(request: DenMemoryRecallRequest): Promise<DenMemoryRecallPacket> {
+    return this.#requestJson<DenMemoryRecallPacket>("POST", "/api/recall", request);
+  }
+
+  read(slug: string): Promise<unknown> {
+    return this.#requestJson("GET", `/api/memory-entries/${encodeURIComponent(slug)}`);
+  }
+
+  search(request: Record<string, unknown>): Promise<unknown> {
+    return this.#requestJson("POST", "/api/memory-entries/search", request);
+  }
+
+  storeCandidate(request: Record<string, unknown>): Promise<unknown> {
+    return this.#requestJson("POST", "/api/candidates", request);
+  }
+
+  async #requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, this.#requestTimeoutMs);
     try {
-      const response = await this.fetchImpl(url, {
+      const response = await this.#fetchImpl(new URL(`${this.#baseUrl}${path}`), {
         method,
         headers: body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -125,9 +159,13 @@ export class DenMemoryClient {
       });
       const text = await response.text();
       if (!response.ok) {
-        throw new Error(`Den Memories HTTP ${response.status}: ${text}`);
+        throw new DenMemoryClientError(`Den Memories HTTP ${String(response.status)}: ${text}`, { code: "http_error", status: response.status });
       }
-      return text.length === 0 ? {} : JSON.parse(text);
+      return (text.length === 0 ? {} : JSON.parse(text)) as T;
+    } catch (error: unknown) {
+      if (error instanceof DenMemoryClientError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new DenMemoryClientError(`Den Memories request failed: ${message}`, { code: "request_failed", cause: error });
     } finally {
       clearTimeout(timeout);
     }
@@ -135,20 +173,20 @@ export class DenMemoryClient {
 }
 
 export interface DenMemoryAdapterOptions {
-  client: DenMemoryClient;
-  runtimeContext: DenMemoryRuntimeContext;
-  captureMode?: DenMemoryCaptureMode;
+  readonly client: DenMemoryClient;
+  readonly runtimeContext: DenMemoryRuntimeContext;
+  readonly policyMode?: DenMemoryPolicyMode;
 }
 
 export class PiCrewDenMemoryAdapter {
   readonly client: DenMemoryClient;
   readonly runtimeContext: DenMemoryRuntimeContext;
-  readonly captureMode: DenMemoryCaptureMode;
+  readonly policyMode: DenMemoryPolicyMode;
 
   constructor(options: DenMemoryAdapterOptions) {
     this.client = options.client;
     this.runtimeContext = options.runtimeContext;
-    this.captureMode = options.captureMode ?? defaultCaptureMode(options.runtimeContext);
+    this.policyMode = options.policyMode ?? defaultPolicyMode(options.runtimeContext);
   }
 
   static fromContext(client: DenMemoryClient, input: PiCrewMemoryContextInput): PiCrewDenMemoryAdapter {
@@ -156,47 +194,33 @@ export class PiCrewDenMemoryAdapter {
   }
 
   promptHeading(): string {
-    return "Den Memories: use explicit tools only; worker memory capture defaults to metadata/task-handoff candidates, not durable truth.";
+    return "Den Memories: explicit/manual tools only by default; recall returns bounded packets, and candidate writes do not promote curated memory.";
   }
 
-  toolDefinitions(): DenMemoryToolDefinition[] {
+  toolDefinitions(): readonly DenMemoryToolDefinition[] {
     return [
-      tool("den_memory_recall", "Read-only guided recall packet from Den Memories.", { query: { type: "string" }, topic_view_slug: { type: "string" }, limit: { type: "number" } }, ["query"]),
-      tool("den_memory_read", "Read a memory entry by slug.", { slug: { type: "string" } }, ["slug"]),
-      tool("den_memory_search", "Search memory entries and candidates.", { query: { type: "string" }, include_candidates: { type: "boolean" }, limit: { type: "number" } }, ["query"]),
-      tool("den_memory_store_candidate", "Create a pending memory candidate only; does not promote memory.", candidateProperties(), ["title", "body_md", "proposed_kind"]),
-      tool("den_memory_capture_event", "Send a pi-crew runtime capture attempt through Den Memories policy.", { raw_text: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, event_kind: { type: "string" }, source_refs: { type: "array", items: { type: "object" } } }, ["raw_text"]),
-      tool("den_memory_doctor", "Read-only Den Memories doctor report.", {}, []),
-      tool("den_memory_audit_export", "Read-only JSONL/Markdown audit export for memory-free inspection.", { format: { type: "string", enum: ["jsonl", "json", "markdown"] }, since: { type: "string" }, until: { type: "string" } }, []),
+      tool("den_memory_recall", "Read-only guided Den Memories recall packet with provenance and skipped-node reasons.", recallProperties(), ["query"]),
+      tool("den_memory_read", "Read one Den Memories entry by slug; use only when you already have a memory handle.", { slug: stringSchema("Memory entry slug.") }, ["slug"]),
+      tool("den_memory_search", "Search Den Memories entries/candidates; recall is preferred for guided context.", searchProperties(), ["query"]),
+      tool("den_memory_store_candidate", "Create a candidate memory with pi-crew source refs; never promotes canonical memory.", candidateProperties(), ["title", "body_md", "proposed_kind"]),
     ];
   }
 
   async callTool(name: DenMemoryToolName, args: Record<string, unknown> = {}): Promise<DenMemoryToolCallResult> {
+    if (this.policyMode === "off") return { ok: false, error: "Den Memories policy is off", code: "policy_off", toolName: name };
     try {
       switch (name) {
         case "den_memory_recall":
-          return ok(await this.client.requestJson("POST", "/api/recall", { ...args, runtime_context: this.runtimeContext, scope_kind: "project", scope_id: this.runtimeContext.project_id }));
+          return ok(await this.client.recall(recallPayload(this.runtimeContext, args)));
         case "den_memory_read":
-          return ok(await this.client.requestJson("GET", `/api/memory-entries/${encodeURIComponent(String(args.slug))}`));
-        case "den_memory_search": {
-          const entries = await this.client.requestJson("POST", "/api/memory-entries/search", { query: args.query, limit: args.limit ?? 10 });
-          if (args.include_candidates === true) {
-            const candidates = await this.client.requestJson("POST", "/api/candidates/search", { query: args.query, limit: args.limit ?? 10 });
-            return ok({ entries, candidates });
-          }
-          return ok(entries);
-        }
+          return ok(await this.client.read(String(args.slug)));
+        case "den_memory_search":
+          return ok(await this.client.search(searchPayload(this.runtimeContext, args)));
         case "den_memory_store_candidate":
-          return ok(await this.client.requestJson("POST", "/api/candidates", candidatePayload(this.runtimeContext, args)));
-        case "den_memory_capture_event":
-          return ok(await this.client.requestJson("POST", "/api/capture", capturePayload(this.runtimeContext, this.captureMode, args)));
-        case "den_memory_doctor":
-          return ok(await this.client.requestJson("GET", "/api/doctor/report"));
-        case "den_memory_audit_export":
-          return ok(await this.client.requestJson("GET", "/api/audit/export", undefined, { format: args.format ?? "json" }));
+          return ok(await this.client.storeCandidate(candidatePayload(this.runtimeContext, args)));
       }
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error), toolName: name };
+    } catch (error: unknown) {
+      return errorResult(name, error);
     }
   }
 }
@@ -217,75 +241,112 @@ export function createPiCrewRuntimeContext(input: PiCrewMemoryContextInput): Den
     assignment_id: input.assignmentId,
     run_id: input.runId,
     role,
-    audience: input.audience ?? [String(role)],
-    mode: input.mode ?? "implementation",
+    audience: input.audience ?? [role],
+    mode: input.mode ?? (role === "reviewer" ? "review" : "implementation"),
     source_surface: input.sourceSurface ?? "pi_crew",
     user_id: input.userId,
   };
 }
 
-export function defaultCaptureMode(context: DenMemoryRuntimeContext): DenMemoryCaptureMode {
-  if (context.role === "auditor" || context.session_kind === "diagnostic") return "off";
-  if (context.role === "worker" || context.session_kind === "worker_assignment") return "metadata_only";
-  return "permissive_candidates";
+export function defaultPolicyMode(context: DenMemoryRuntimeContext): DenMemoryPolicyMode {
+  if (context.session_kind === "worker_assignment" || context.session_kind === "assistant_delegate") return "manual";
+  return "manual";
 }
 
 export function registerDenMemoryTools(registry: { registerStatic(tool: DenMemoryToolDefinition): void }, adapter: PiCrewDenMemoryAdapter): void {
-  for (const definition of adapter.toolDefinitions()) {
-    registry.registerStatic(definition);
+  for (const definition of adapter.toolDefinitions()) registry.registerStatic(definition);
+}
+
+export function defaultSourceRefs(context: DenMemoryRuntimeContext): readonly DenMemorySourceRef[] {
+  if (context.assignment_id !== undefined && context.assignment_id !== null) {
+    return [{
+      source_kind: "pi_crew_assignment",
+      source_project_id: context.project_id,
+      source_id: String(context.assignment_id),
+      source_locator: { task_id: context.task_id, assignment_id: context.assignment_id, run_id: context.run_id, session_id: context.session_id },
+      verification_status: "unverified",
+    }];
   }
+  if (context.task_id !== undefined) {
+    return [{ source_kind: "den_task", source_project_id: context.project_id, source_id: String(context.task_id), source_locator: { session_id: context.session_id }, verification_status: "unverified" }];
+  }
+  return [{ source_kind: "pi_crew_session", source_project_id: context.project_id, source_id: context.session_id ?? "unknown", source_locator: {}, verification_status: "unverified" }];
+}
+
+function recallPayload(context: DenMemoryRuntimeContext, args: Record<string, unknown>): DenMemoryRecallRequest {
+  return {
+    query: String(args.query),
+    runtime_context: context,
+    audience: arrayArg(args.audience) ?? context.audience,
+    mode: modeArg(args.mode) ?? context.mode,
+    budget_tokens: numberArg(args.budget_tokens ?? args.budgetTokens),
+    prefer_relations: arrayArg(args.prefer_relations ?? args.preferRelations),
+  };
+}
+
+function searchPayload(context: DenMemoryRuntimeContext, args: Record<string, unknown>): Record<string, unknown> {
+  return { query: args.query, limit: args.limit ?? 10, runtime_context: context, audience: args.audience ?? context.audience };
 }
 
 function candidatePayload(context: DenMemoryRuntimeContext, args: Record<string, unknown>): Record<string, unknown> {
   return {
     ...args,
     created_by: context.agent_identity ?? "pi_crew",
-    scope_kind: args.scope_kind ?? (context.project_id ? "project" : "global"),
+    scope_kind: args.scope_kind ?? (context.project_id === undefined ? "global" : "project"),
     scope_id: args.scope_id ?? context.project_id,
-    authority_scope_kind: args.authority_scope_kind ?? (context.project_id ? "project" : "global"),
-    authority_scope_id: args.authority_scope_id ?? context.project_id,
-    discovery_scope: args.discovery_scope ?? "explicit_only",
-    claim_strength: args.claim_strength ?? "observation",
+    curation_state: "candidate",
     source_refs: args.source_refs ?? defaultSourceRefs(context),
     runtime_context: context,
   };
 }
 
-function capturePayload(context: DenMemoryRuntimeContext, captureMode: DenMemoryCaptureMode, args: Record<string, unknown>): Record<string, unknown> {
-  return {
-    ...args,
-    runtime: "pi_crew",
-    actor_identity: context.agent_identity ?? "pi_crew",
-    actor_role: context.role,
-    capture_mode: captureMode,
-    scope_kind: args.scope_kind ?? (context.project_id ? "project" : "global"),
-    scope_id: args.scope_id ?? context.project_id,
-    source_refs: args.source_refs ?? defaultSourceRefs(context),
-    runtime_context: context,
-  };
+function tool(name: DenMemoryToolName, description: string, properties: Record<string, unknown>, required: readonly string[]): DenMemoryToolDefinition {
+  return { name, description, inputSchema: { type: "object", additionalProperties: false, properties, required } };
 }
 
-function defaultSourceRefs(context: DenMemoryRuntimeContext): DenMemorySourceRef[] {
-  if (context.task_id !== undefined && context.task_id !== null) {
-    return [{
-      source_kind: "pi_crew_assignment",
-      source_project_id: context.project_id,
-      source_id: String(context.assignment_id ?? context.run_id ?? context.task_id),
-      source_locator: { task_id: context.task_id, assignment_id: context.assignment_id, run_id: context.run_id, session_id: context.session_id },
-      verification_status: "unverified",
-    }];
-  }
-  return [{ source_kind: "pi_crew_session", source_project_id: context.project_id, source_id: context.session_id ?? "unknown", source_locator: {}, verification_status: "unverified" }];
+function recallProperties(): Record<string, unknown> {
+  return { query: stringSchema("Recall query."), audience: arraySchema(), mode: stringSchema("Recall mode."), budget_tokens: numberSchema(), prefer_relations: arraySchema() };
 }
 
-function tool(name: DenMemoryToolName, description: string, properties: Record<string, unknown>, required: string[]): DenMemoryToolDefinition {
-  return { name, description, inputSchema: { type: "object", properties, required, additionalProperties: false } };
+function searchProperties(): Record<string, unknown> {
+  return { query: stringSchema("Search query."), audience: arraySchema(), limit: numberSchema() };
 }
 
 function candidateProperties(): Record<string, unknown> {
-  return { title: { type: "string" }, body_md: { type: "string" }, summary: { type: "string" }, proposed_kind: { type: "string" }, scope_kind: { type: "string" }, scope_id: { type: "string" }, source_refs: { type: "array", items: { type: "object" } } };
+  return { title: stringSchema("Candidate title."), body_md: stringSchema("Candidate body markdown."), summary: stringSchema("Short candidate summary."), proposed_kind: stringSchema("Memory kind proposed for curator review."), scope_kind: stringSchema("Optional scope kind."), scope_id: stringSchema("Optional scope id."), source_refs: { type: "array", items: { type: "object" } } };
+}
+
+function stringSchema(description: string): Record<string, unknown> {
+  return { type: "string", description };
+}
+
+function numberSchema(): Record<string, unknown> {
+  return { type: "number" };
+}
+
+function arraySchema(): Record<string, unknown> {
+  return { type: "array", items: { type: "string" } };
+}
+
+function arrayArg(value: unknown): readonly string[] | undefined {
+  return Array.isArray(value) ? value.map(String) : undefined;
+}
+
+function numberArg(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function modeArg(value: unknown): DenMemoryRecallMode | undefined {
+  if (typeof value !== "string") return undefined;
+  if (["planning", "implementation", "review", "ops", "general"].includes(value)) return value as DenMemoryRecallMode;
+  return undefined;
 }
 
 function ok(data: unknown): DenMemoryToolCallResult {
   return { ok: true, data };
+}
+
+function errorResult(toolName: DenMemoryToolName, error: unknown): DenMemoryToolCallResult {
+  if (error instanceof DenMemoryClientError) return { ok: false, error: error.message, code: error.code, status: error.status, toolName };
+  return { ok: false, error: error instanceof Error ? error.message : String(error), code: "unexpected_error", toolName };
 }

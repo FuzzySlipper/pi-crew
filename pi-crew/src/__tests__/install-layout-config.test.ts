@@ -258,6 +258,36 @@ describe("installed config layout", () => {
     });
   });
 
+  it("loads and validates Den Memories adapter config", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "memory:",
+        "  enabled: true",
+        '  baseUrl: "http://localhost:9339"',
+        "  requestTimeoutMs: 1234",
+        "  fullAgentPolicy: manual",
+        "  workerPolicy: manual",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const config = loadCrewConfig(configPath);
+    expect(config.memory).toMatchObject({
+      enabled: true,
+      baseUrl: "http://localhost:9339",
+      requestTimeoutMs: 1234,
+      fullAgentPolicy: "manual",
+      workerPolicy: "manual",
+    });
+  });
+
   it("loads config-defined UTC script cron jobs and rejects llm_driven jobs", () => {
     const root = tempRoot();
     const configPath = join(root, "config.yaml");

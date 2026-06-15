@@ -1,6 +1,7 @@
 /** Crew-level factory for production LLM-backed worker executors. */
 
 import type { EventBus, Logger } from "@pi-crew/core";
+import type { DenMemoryPolicyMode } from "@pi-crew/memory";
 import { loadProfile } from "@pi-crew/profiles";
 import type { ToolPolicy } from "@pi-crew/profiles";
 import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
@@ -14,6 +15,7 @@ import {
   type WorkerModelConfigSource,
   type StreamRetryConfig,
 } from "@pi-crew/service";
+import { createDenMemoryTools } from "./den-memory-tools.js";
 import type { AgentTool, AgentToolResult } from "@pi-crew/service";
 
 export interface CrewAgentWorkerExecutorDeps {
@@ -25,6 +27,12 @@ export interface CrewAgentWorkerExecutorDeps {
   readonly delegatedSpawnLifecycle?: DelegatedSpawnLifecycle;
   readonly streamRetry?: StreamRetryConfig;
   readonly eventBus?: EventBus;
+  readonly memory?: {
+    readonly enabled: boolean;
+    readonly baseUrl?: string;
+    readonly requestTimeoutMs: number;
+    readonly workerPolicy: DenMemoryPolicyMode;
+  };
 }
 
 export interface CrewWorkerModelConfigSourceDeps {
@@ -108,6 +116,7 @@ export function createCrewAgentWorkerToolProvider(
   return ({ roleInput, toolSets }) => [
     createCompletionMarkerTool(roleInput),
     createContextStatusTool(roleInput),
+    ...createWorkerMemoryTools(deps, roleInput, toolSets),
     ...deps.toolRegistry
       .listTools()
       .filter((tool) => toolMatchesSelectedSet(tool.name, toolSets))
@@ -134,6 +143,31 @@ export function createCrewAgentWorkerToolProvider(
           }) satisfies AgentTool,
       ),
   ];
+}
+
+function createWorkerMemoryTools(
+  deps: CrewAgentWorkerExecutorDeps,
+  roleInput: AgentWorkerToolProviderInput["roleInput"],
+  toolSets: readonly string[],
+): AgentTool[] {
+  if (deps.memory?.enabled !== true || deps.memory.baseUrl === undefined) return [];
+  return createDenMemoryTools({
+    baseUrl: deps.memory.baseUrl,
+    requestTimeoutMs: deps.memory.requestTimeoutMs,
+    policyMode: deps.memory.workerPolicy,
+    context: {
+      agentIdentity: roleInput.binding.role,
+      profileId: roleInput.profileId,
+      sessionId: roleInput.sessionId,
+      sessionKind: "worker_assignment",
+      projectId: roleInput.binding.projectId,
+      taskId: roleInput.binding.taskId,
+      assignmentId: roleInput.binding.assignmentId,
+      runId: roleInput.binding.runId,
+      role: roleInput.binding.role,
+      mode: roleInput.binding.role === "reviewer" ? "review" : "implementation",
+    },
+  }).filter((tool) => toolMatchesSelectedSet(tool.name, toolSets));
 }
 
 function createCompletionMarkerTool(
@@ -213,6 +247,8 @@ function matchesToolSet(toolName: string, toolSet: string): boolean {
     case "git":
     case "git_diff_log":
       return toolName.includes("git");
+    case "memory":
+      return toolName.startsWith("den_memory_");
     default:
       return toolName === normalizedToolSet || toolName.startsWith(`${normalizedToolSet}_`);
   }

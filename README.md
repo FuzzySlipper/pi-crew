@@ -31,7 +31,7 @@ This repository is organized as independently useful workspace packages:
 | `pi-tools`      | Pi-specific tool helpers such as worker policy, drain mode, completion, and context status.          |
 | `pi-governance` | Event-bus subscribers for breadcrumbs, audit logging, and output routing.                            |
 | `pi-crew`       | Composition root and executable service entrypoint.                                                  |
-| `pi-memory`     | Deferred/stub package; Den remains the durable source of truth for workflow state.                   |
+| `pi-memory`    | Den Memories client/tool adapter for pi-crew; Den Memories owns long-term memory ontology/curation. |
 
 Submodule rule of thumb: packages below `pi-service` must not import upward into `pi-service`; platform adapters depend on the `ChannelProvider` interface from `pi-core`, not on each other.
 
@@ -172,6 +172,10 @@ Current runtime-local model-callable catalog:
 | `session_search` | session | full-agent | runtime.tools.allow/profile toolPolicy must request session or session_search | `pi-crew/src/session-search-tool.ts` |
 | `web_search` | web | full-agent | runtime.tools.allow/profile toolPolicy must request web or web_search | `pi-crew/src/web-tools.ts` |
 | `web_extract` | web | full-agent | runtime.tools.allow/profile toolPolicy must request web or web_extract | `pi-crew/src/web-tools.ts` |
+| `den_memory_recall` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_recall | `pi-crew/src/den-memory-tools.ts` |
+| `den_memory_read` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_read | `pi-crew/src/den-memory-tools.ts` |
+| `den_memory_search` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_search | `pi-crew/src/den-memory-tools.ts` |
+| `den_memory_store_candidate` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_store_candidate | `pi-crew/src/den-memory-tools.ts` |
 | `browser_navigate` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_snapshot` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_click` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
@@ -183,6 +187,23 @@ Current runtime-local model-callable catalog:
 | `browser_press` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 
 Current slash/control commands: `/help`, `/status`, `/session`, `/new`, `/reload-mcp`. They are not model-callable tools. Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
+
+### Den Memories adapter boundary
+
+`pi-memory` is a thin Den Memories client/tool adapter, not a local canonical memory store. Den Core remains authoritative for projects, tasks, documents, messages, workflow records, review state, and worker evidence. Context compaction artifacts and local blackboard/headings remain prompt/session mechanisms; they can later become Den Memories candidates or source refs, but they are not promoted silently. Den Memories owns long-term memory semantics: entries, topic graph, typed edges, curation lifecycle, provenance, staleness, confidence, audience/scope, and guided recall packets.
+
+Runtime-local memory tools are available only when crew config enables the adapter and profile/runtime policy requests `memory` or a concrete `den_memory_*` tool:
+
+```yaml
+memory:
+  enabled: true
+  baseUrl: http://127.0.0.1:9339
+  requestTimeoutMs: 10000
+  fullAgentPolicy: manual
+  workerPolicy: manual
+```
+
+The pi-crew surface exposes `den_memory_recall`, `den_memory_read`, `den_memory_search`, and `den_memory_store_candidate`. Recall is manual by default and returns bounded Den Memories packets with provenance/skipped-node warnings. Candidate writes attach pi-crew source refs (`session_id`, `task_id`, `assignment_id`, `run_id` when available) and remain candidates; pi-crew does not implement automatic capture, raw memory-body prompt injection, or curated-memory promotion. Bounded workers do not inherit or own durable memory unless their task/profile explicitly selects these tools.
 
 ### Model stream retry policy
 

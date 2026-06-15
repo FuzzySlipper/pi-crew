@@ -44,7 +44,7 @@ export interface McpToolCollisionInventoryEntry {
 
 export interface BuiltInToolInventoryEntry {
   readonly name: string;
-  readonly category: "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session";
+  readonly category: "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session" | "memory";
   readonly modelCallable: boolean;
   readonly selected: boolean;
   readonly reason: "selected" | "not_requested" | "profile_denied" | "not_model_callable";
