@@ -12,6 +12,7 @@ import {
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger, ChannelContent } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
+import type { FullAgentContextPolicy } from "./full-agent-context-policy.js";
 import type {
   AgentResponseRequest,
   AgentResponder,
@@ -23,8 +24,13 @@ export interface FullAgentState {
   readonly messages: AgentMessage[];
 }
 
+export interface FullAgentHistoryLoadRequest {
+  readonly minimumRecentMessages: number;
+  readonly contextPolicy: FullAgentContextPolicy;
+}
+
 export interface FullAgentTurnHistory {
-  loadRecent(sessionId: string, limit: number): Promise<AgentMessage[]>;
+  loadRecent(sessionId: string, request: FullAgentHistoryLoadRequest): Promise<AgentMessage[]>;
   append(sessionId: string, message: AgentMessage): Promise<void>;
 }
 
@@ -64,7 +70,8 @@ export interface FullAgentResponderConfig {
   readonly tools?: readonly AgentTool[];
   readonly toolsProvider?: () => readonly AgentTool[];
   readonly history?: FullAgentTurnHistory;
-  readonly historyLimit?: number;
+  readonly contextPolicy?: FullAgentContextPolicy;
+  readonly contextPolicyProvider?: () => Promise<FullAgentContextPolicy>;
 }
 
 export interface FullAgentRuntimeBuilder {
@@ -111,7 +118,8 @@ export class FullAgentResponder implements AgentResponder {
   readonly #tools: readonly AgentTool[] | undefined;
   readonly #toolsProvider: (() => readonly AgentTool[]) | undefined;
   readonly #history: FullAgentTurnHistory | undefined;
-  readonly #historyLimit: number;
+  readonly #contextPolicy: FullAgentContextPolicy;
+  readonly #contextPolicyProvider: (() => Promise<FullAgentContextPolicy>) | undefined;
 
   constructor(config: FullAgentResponderConfig) {
     this.#agentFactory = config.agentFactory ?? new DefaultFullAgentFactory();
@@ -125,7 +133,13 @@ export class FullAgentResponder implements AgentResponder {
     this.#tools = config.tools;
     this.#toolsProvider = config.toolsProvider;
     this.#history = config.history;
-    this.#historyLimit = config.historyLimit ?? 24;
+    this.#contextPolicy = config.contextPolicy ?? {
+      contextLength: 131072,
+      contextLengthSource: "unknown-default",
+      thresholdPercent: 80,
+      minimumRecentMessages: 24,
+    };
+    this.#contextPolicyProvider = config.contextPolicyProvider;
   }
 
   async respond(request: AgentResponseRequest): Promise<ChannelContent> {
@@ -168,7 +182,14 @@ export class FullAgentResponder implements AgentResponder {
 
   async #loadHistory(sessionId: string): Promise<AgentMessage[]> {
     if (this.#history === undefined) return [];
-    return this.#history.loadRecent(sessionId, this.#historyLimit);
+    const contextPolicy =
+      this.#contextPolicyProvider === undefined
+        ? this.#contextPolicy
+        : await this.#contextPolicyProvider();
+    return this.#history.loadRecent(sessionId, {
+      minimumRecentMessages: contextPolicy.minimumRecentMessages,
+      contextPolicy,
+    });
   }
 
   async #appendTurn(

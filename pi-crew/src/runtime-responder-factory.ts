@@ -55,6 +55,7 @@ export function buildRuntimeResponderFactory(
         delegation,
         channelReadback,
         defaultDenProjectId: runtime.den.channelsProjectId,
+        crewContext: runtime.context,
       });
     }
     return buildRuntimeResponderFactory(runtime.runtime, eventBus);

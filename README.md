@@ -91,13 +91,28 @@ Tool names in pi-crew profile config are the names discovered from the pi-crew M
 
 Non-Den runtime-local tools are deliberately separate from Den MCP discovery:
 
-| Surface | Tools | Notes |
-| ------- | ----- | ----- |
-| Conversational delegation/helper built-ins | `spawn_subagent`, `fan_out_subagents`, `scout_codebase`, `summarize_files`, `find_relevant_paths` | Model-callable by full agents only when runtime/profile policy selects and permits them. |
-| Delegated-child and prime local code tools | `read_file`, `write_file`, `search_files`, `terminal`, `git_status`, `git_diff` | Model-callable when runtime/profile policy selects and permits them, bounded to `PI_CREW_LOCAL_TOOL_ROOT` or `/home/dev/pi-crew`; prime coding profiles can use them directly while orchestrator profiles should omit/deny them if they should only coordinate through children. |
-| Slash/control commands | `/help`, `/status`, `/session`, `/new`, `/reload-mcp`, `/tools` | Control-plane inputs, not model-callable tools. |
+| Surface                                    | Tools                                                                                             | Notes                                                                                                                                                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Conversational delegation/helper built-ins | `spawn_subagent`, `fan_out_subagents`, `scout_codebase`, `summarize_files`, `find_relevant_paths` | Model-callable by full agents only when runtime/profile policy selects and permits them.                                                                                                                                                                                         |
+| Delegated-child and prime local code tools | `read_file`, `write_file`, `search_files`, `terminal`, `git_status`, `git_diff`                   | Model-callable when runtime/profile policy selects and permits them, bounded to `PI_CREW_LOCAL_TOOL_ROOT` or `/home/dev/pi-crew`; prime coding profiles can use them directly while orchestrator profiles should omit/deny them if they should only coordinate through children. |
+| Slash/control commands                     | `/help`, `/status`, `/session`, `/new`, `/reload-mcp`, `/tools`                                   | Control-plane inputs, not model-callable tools.                                                                                                                                                                                                                                  |
 
 Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
+
+### Full-agent context compaction
+
+Full-agent compaction auto-fires during persisted history loading, immediately before prompt assembly for a full-agent turn. The runtime resolves an effective context policy once per responder/session resolution: den-router models query `GET /v1/models/{model}/metadata` for `context_length`; non-den-router models or missing metadata use `context.defaultContextLength`. The history adapter estimates current persisted conversation usage with the conservative `chars_div_3` estimator and emits `context.pressure` with usage, threshold, estimator, and context-length provenance. When estimated usage reaches `context.compactionThresholdPercent` of the effective context length, older persisted turns are compacted into a `full_agent_context_artifact`; the prompt receives that artifact as a user-role context message plus the newest `context.minimumRecentMessages` raw messages. The old hidden `historyLimit=24` default is not the primary compaction trigger.
+
+Configure in `pi-crew/config/default.yaml` or deployment overrides:
+
+```yaml
+context:
+  defaultContextLength: 131072
+  compactionThresholdPercent: 80
+  minimumRecentMessages: 24
+```
+
+Diagnostics expose the last pressure/compaction event, including effective context length, provenance (`den-router` or `config-default`), threshold percent/tokens, estimated current usage, and latest artifact id.
 
 ## Runtime and deployment caveat
 

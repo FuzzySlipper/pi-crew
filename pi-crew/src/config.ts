@@ -39,6 +39,12 @@ const SessionsConfigSchema = z.object({
   fallbackProfileId: z.string().min(1).default("system-architect"),
 });
 
+const ContextConfigSchema = z.object({
+  defaultContextLength: z.number().int().positive().default(131_072),
+  compactionThresholdPercent: z.number().int().min(1).max(100).default(80),
+  minimumRecentMessages: z.number().int().positive().default(24),
+});
+
 const ToolPolicyDefaultsSchema = z.object({
   allowedTools: z.array(z.string()).default([]),
   deniedTools: z.array(z.string()).default([]),
@@ -158,6 +164,7 @@ export const CrewConfigSchema = z.object({
   runtime: GatewayConfigSchema.shape.runtime,
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
+  context: ContextConfigSchema.default({}),
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
   fullAgents: z.array(FullAgentConfigSchema).default([]),
   workerPool: WorkerPoolConfigSchema,

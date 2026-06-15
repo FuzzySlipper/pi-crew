@@ -9,13 +9,7 @@ import {
   type ExecutionPolicy,
   type Logger,
 } from "@pi-crew/core";
-import type { MCPClient } from "@pi-crew/mcp";
-import {
-  assembleProfilePrompt,
-  loadProfile,
-  type Profile,
-  type ToolPolicy,
-} from "@pi-crew/profiles";
+import { assembleProfilePrompt, loadProfile, type Profile } from "@pi-crew/profiles";
 import {
   FullAgentResponder,
   FullAgentResponderFactory,
@@ -35,15 +29,14 @@ import {
   SessionToolFilter,
 } from "@pi-crew/tools";
 import type { CrewConfig } from "./config.js";
-import { createFullAgentMcpAgentTool } from "./full-agent-mcp-tool.js";
-import { createLocalCodeTools, localCodeToolNames } from "./local-code-tools.js";
+import { createFullAgentContextPolicyResolver } from "./den-router-metadata-client.js";
 import { createDenChannelReadbackTool } from "./den-channel-readback-tool.js";
+import { selectFullAgentTools } from "./full-agent-tool-selection.js";
 import type { DenChannelReadbackToolConfig } from "./den-channel-readback-tool.js";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
 import { buildEffectiveToolInventory, type EffectiveToolInventory } from "./tool-inventory.js";
 import {
   requestedToolSets,
-  selectToolsBeforeSessionPolicy,
   toolAllowedByProfilePolicy,
   toolMatchesSelectedSet,
 } from "./tool-selection.js";
@@ -78,7 +71,10 @@ export interface FullAgentDelegationRuntimeConfig {
   readonly parentDelegationConstraints?: DelegationConstraints;
   readonly allowedRuntimes?: readonly EffectiveDelegationRuntime[];
 }
-export interface DenChannelReadbackRuntimeConfig extends Omit<DenChannelReadbackToolConfig, "allowedChannelIds"> {}
+export interface DenChannelReadbackRuntimeConfig extends Omit<
+  DenChannelReadbackToolConfig,
+  "allowedChannelIds"
+> {}
 export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRuntimeInput {
   readonly eventBus?: EventBus;
   readonly history?: FullAgentTurnHistory;
@@ -86,6 +82,7 @@ export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRun
   readonly delegation?: FullAgentDelegationRuntimeConfig;
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
   readonly defaultDenProjectId?: string;
+  readonly crewContext: CrewConfig["context"];
 }
 export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["fullAgents"][number][];
@@ -99,6 +96,7 @@ export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly delegation?: FullAgentDelegationRuntimeConfig;
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
   readonly defaultDenProjectId?: string;
+  readonly crewContext: CrewConfig["context"];
 }
 class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
   constructor(
@@ -131,6 +129,7 @@ class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
       this.input.history,
       this.input.agentFactory,
       toolsProvider,
+      this.input.crewContext,
     );
   }
 }
@@ -152,7 +151,11 @@ class ProfileMappedFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
         agent,
         sessionToolFilter: filter,
       });
-      const freshWithReadback = addChannelReadbackTool(freshRuntime, agent, this.input.channelReadback);
+      const freshWithReadback = addChannelReadbackTool(
+        freshRuntime,
+        agent,
+        this.input.channelReadback,
+      );
       return addDelegationTool(freshWithReadback, agent, context, this.input.delegation);
     };
     return createResponder(
@@ -162,6 +165,7 @@ class ProfileMappedFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
       this.input.history,
       this.input.agentFactory,
       toolsProvider,
+      this.input.crewContext,
     );
   }
 }
@@ -239,6 +243,7 @@ function createResponder(
   history?: FullAgentTurnHistory,
   agentFactory?: FullAgentFactory,
   toolsProvider?: () => readonly AgentTool[],
+  crewContext?: CrewConfig["context"],
 ): FullAgentResponder {
   return new FullAgentResponder({
     ...(agentFactory !== undefined ? { agentFactory } : {}),
@@ -252,6 +257,17 @@ function createResponder(
     temperature: runtime.model.temperature,
     tools: runtime.tools,
     toolsProvider,
+    contextPolicyProvider: createFullAgentContextPolicyResolver({
+      crewContext: crewContext ?? {
+        defaultContextLength: 131072,
+        compactionThresholdPercent: 80,
+        minimumRecentMessages: 24,
+      },
+      provider: runtime.model.provider,
+      modelName: runtime.model.modelName,
+      modelBaseUrl: runtime.model.modelBaseUrl,
+      logger,
+    }),
   });
 }
 function addChannelReadbackTool(
@@ -328,7 +344,10 @@ function agentAllowsDelegation(
   const requestedSets = requestedToolSets(agent.runtime.tools.allow, runtime.profile.toolPolicy);
   const requested = requestedSets.some(
     (entry) =>
-      entry === "all" || entry === "delegation" || entry === "spawn_subagent" || entry === "fan_out_subagents",
+      entry === "all" ||
+      entry === "delegation" ||
+      entry === "spawn_subagent" ||
+      entry === "fan_out_subagents",
   );
   if (!requested) return false;
   if (!toolAllowedByProfilePolicy("spawn_subagent", runtime.profile.toolPolicy)) return false;
@@ -361,9 +380,7 @@ function selectAgentForContext(
       throw new ConfigurationError("No enabled full agent is available");
     }
     if (only.profileId !== profileId) {
-      throw new ConfigurationError(
-        `No configured full agent matches profile ${profileId}`,
-      );
+      throw new ConfigurationError(`No configured full agent matches profile ${profileId}`);
     }
     return only;
   }
@@ -443,9 +460,7 @@ function resolveApiKey(
   if (apiKeyEnv === undefined || apiKeyEnv.trim() === "") return undefined;
   const value = env[apiKeyEnv];
   if (value === undefined || value.trim() === "") {
-    throw new ConfigurationError(
-      `Required full agent API key env ${apiKeyEnv} is not set`,
-    );
+    throw new ConfigurationError(`Required full agent API key env ${apiKeyEnv} is not set`);
   }
   return value;
 }
@@ -458,43 +473,4 @@ function buildFullAgentExecutionPolicy(
     deniedTools: [...(profile.toolPolicy?.deny ?? [])],
   };
   return createFullAgentPolicy(input);
-}
-function selectFullAgentTools(input: {
-  readonly allow: readonly string[];
-  readonly profileToolPolicy: ToolPolicy | undefined;
-  readonly mcpTools: readonly AgentTool[];
-  readonly mcpClient: MCPClient;
-  readonly policy: ExecutionPolicy;
-  readonly sessionToolFilter: SessionToolFilter | undefined;
-  readonly sessionId: string;
-  readonly defaultSender: string;
-  readonly defaultProjectId?: string;
-}): AgentTool[] {
-  const requestedSets = requestedToolSets(input.allow, input.profileToolPolicy);
-  const localTools = createLocalCodeTools();
-  const localToolNameSet = new Set<string>(localCodeToolNames);
-  const beforePolicy = selectToolsBeforeSessionPolicy({
-    tools: [...input.mcpTools, ...localTools],
-    requestedSets,
-    profileToolPolicy: input.profileToolPolicy,
-  });
-  const afterPolicy =
-    input.sessionToolFilter !== undefined
-      ? input.sessionToolFilter.filter(
-          input.policy,
-          input.sessionId,
-          beforePolicy.map((tool) => tool.name),
-          null,
-        )
-      : beforePolicy.map((tool) => tool.name);
-  const allowedSet = new Set(afterPolicy);
-  return beforePolicy
-    .filter((tool) => allowedSet.has(tool.name))
-    .map((tool) => {
-      if (localToolNameSet.has(tool.name)) return tool;
-      return createFullAgentMcpAgentTool(tool as unknown as Parameters<typeof createFullAgentMcpAgentTool>[0], input.mcpClient, {
-        sender: input.defaultSender,
-        projectId: input.defaultProjectId,
-      });
-    });
 }

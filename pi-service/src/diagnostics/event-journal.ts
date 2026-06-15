@@ -91,7 +91,9 @@ export class InMemoryDiagnosticEventJournal {
 }
 
 export function redactDiagnosticValue(value: unknown, key: string | null): unknown {
-  if (key !== null && SECRET_KEY_PATTERN.test(key)) return REDACTED;
+  if (key !== null && SECRET_KEY_PATTERN.test(key)) {
+    return typeof value === "number" || typeof value === "boolean" ? value : REDACTED;
+  }
   if (typeof value === "string") return redactString(value);
   if (Array.isArray(value)) return value.map((item) => redactDiagnosticValue(item, null));
   if (isRecord(value)) return redactRecord(value);

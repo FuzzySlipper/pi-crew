@@ -124,6 +124,19 @@ sessions:
   # a visible fallback when no existing session matches the channel.
   fallbackProfileId: "system-architect"
 
+# ── Full-agent context compaction policy ─────────────────────────
+# Full agents auto-check context pressure before prompt assembly. When the
+# estimated prompt/history usage reaches compactionThresholdPercent of the
+# effective model context length, old turns are compacted into a durable artifact
+# while minimumRecentMessages raw messages are preserved. den-router providers
+# query /v1/models/{model}/metadata once per responder/session resolution; other
+# providers or unavailable metadata use defaultContextLength with provenance in
+# diagnostics.
+context:
+  defaultContextLength: 131072
+  compactionThresholdPercent: 80
+  minimumRecentMessages: 24
+
 # ── Native delegation child runner ───────────────────────────────
 # Routine service-authored delegation projections default to the local
 # append-only log, not Den Channels. Temporarily set channelEnabled true for

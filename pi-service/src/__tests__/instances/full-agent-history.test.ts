@@ -11,6 +11,7 @@ import {
   type FullAgentAdapter,
   type FullAgentFactory,
   type FullAgentFactoryInput,
+  type FullAgentHistoryLoadRequest,
   type FullAgentTurnHistory,
 } from "../../instances/full-agent-responder.js";
 
@@ -65,9 +66,17 @@ class InMemoryTurnHistory implements FullAgentTurnHistory {
 
   constructor(private readonly existing: readonly AgentMessage[]) {}
 
-  loadRecent(sessionId: string, limit: number): Promise<AgentMessage[]> {
+  loadRecent(sessionId: string, request: FullAgentHistoryLoadRequest): Promise<AgentMessage[]> {
     expect(sessionId).toBe("sess-conv-1");
-    expect(limit).toBe(12);
+    expect(request).toEqual({
+      minimumRecentMessages: 12,
+      contextPolicy: {
+        contextLength: 8192,
+        contextLengthSource: "config-default",
+        thresholdPercent: 70,
+        minimumRecentMessages: 12,
+      },
+    });
     return Promise.resolve([...this.existing]);
   }
 
@@ -121,7 +130,12 @@ describe("fullAgent Agent history", () => {
       agentFactory: factory,
       eventBus: new FakeEventBus(),
       history,
-      historyLimit: 12,
+      contextPolicy: {
+        contextLength: 8192,
+        contextLengthSource: "config-default",
+        thresholdPercent: 70,
+        minimumRecentMessages: 12,
+      },
       logger: new FakeLogger(),
       systemPrompt: "System prompt",
     });

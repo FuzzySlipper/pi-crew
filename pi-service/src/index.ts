@@ -68,7 +68,15 @@ export {
   type FullAgentRuntimeBuilder,
   type FullAgentState,
   type FullAgentTurnHistory,
+  type FullAgentHistoryLoadRequest,
 } from "./instances/full-agent-responder.js";
+export {
+  estimateContextUsage,
+  shouldCompactContext,
+  type FullAgentContextPolicy,
+  type FullAgentContextUsageEstimate,
+  type ContextLengthSource,
+} from "./instances/full-agent-context-policy.js";
 export {
   type DeterministicArithmeticRequest,
   type DeterministicArithmeticResult,

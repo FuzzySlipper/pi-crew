@@ -59,7 +59,12 @@ function makeClient(): MCPClient {
 function surfaceManager(registry: ToolRegistry): McpSurfaceManager {
   const client = makeClient();
   return {
-    surfaceForProfile: (profile: Profile): McpSurface => ({ endpoint: "http://mcp.test", toolProfile: profile.mcpConfig?.toolProfile, client, registry }),
+    surfaceForProfile: (profile: Profile): McpSurface => ({
+      endpoint: "http://mcp.test",
+      toolProfile: profile.mcpConfig?.toolProfile,
+      client,
+      registry,
+    }),
     connectAll: () => Promise.resolve(),
     disconnectAll: () => Promise.resolve(),
   };
@@ -106,6 +111,47 @@ describe("installed config layout", () => {
     expect(config.delegation.projection.channelEnabled).toBe(false);
     expect(config.delegation.projection.localLogEnabled).toBe(true);
     expect(config.delegation.projection.projectToolCalledEvents).toBe(false);
+  });
+
+  it("defaults context compaction policy explicitly", () => {
+    const root = tempRoot();
+    const config = loadCrewConfig(writeInstalledConfig(root));
+
+    expect(config.context).toEqual({
+      defaultContextLength: 131072,
+      compactionThresholdPercent: 80,
+      minimumRecentMessages: 24,
+    });
+  });
+
+  it("loads explicit context compaction policy", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    mkdirSync(join(root, "profiles"), { recursive: true });
+    writeFileSync(
+      configPath,
+      [
+        "install:",
+        `  root: "${root}"`,
+        "profiles:",
+        `  root: "${join(root, "profiles")}"`,
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "context:",
+        "  defaultContextLength: 262144",
+        "  compactionThresholdPercent: 70",
+        "  minimumRecentMessages: 40",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    expect(loadCrewConfig(configPath).context).toEqual({
+      defaultContextLength: 262144,
+      compactionThresholdPercent: 70,
+      minimumRecentMessages: 40,
+    });
   });
 
   it("loads explicit delegation projection sink settings", () => {

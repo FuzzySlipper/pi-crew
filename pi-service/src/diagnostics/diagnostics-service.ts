@@ -254,7 +254,17 @@ function findContextPressure(
   const payload = asRecord(pressure.payload);
   if (payload?.sessionId !== sessionId) return null;
   if (typeof payload.usedTokens !== "number" || typeof payload.maxTokens !== "number") return null;
-  return { usedTokens: payload.usedTokens, maxTokens: payload.maxTokens };
+  return {
+    usedTokens: payload.usedTokens,
+    maxTokens: payload.maxTokens,
+    thresholdPercent:
+      typeof payload.thresholdPercent === "number" ? payload.thresholdPercent : null,
+    thresholdTokens: typeof payload.thresholdTokens === "number" ? payload.thresholdTokens : null,
+    estimationMethod:
+      typeof payload.estimationMethod === "string" ? payload.estimationMethod : null,
+    contextLengthSource:
+      typeof payload.contextLengthSource === "string" ? payload.contextLengthSource : null,
+  };
 }
 
 function findContextCompaction(
@@ -282,6 +292,15 @@ function findContextCompaction(
     preservedRawTurnCount:
       typeof payload.preservedRawTurnCount === "number" ? payload.preservedRawTurnCount : 0,
     headings: Array.isArray(payload.headings) ? payload.headings.filter(isString) : [],
+    usedTokens: typeof payload.usedTokens === "number" ? payload.usedTokens : null,
+    maxTokens: typeof payload.maxTokens === "number" ? payload.maxTokens : null,
+    thresholdPercent:
+      typeof payload.thresholdPercent === "number" ? payload.thresholdPercent : null,
+    thresholdTokens: typeof payload.thresholdTokens === "number" ? payload.thresholdTokens : null,
+    estimationMethod:
+      typeof payload.estimationMethod === "string" ? payload.estimationMethod : null,
+    contextLengthSource:
+      typeof payload.contextLengthSource === "string" ? payload.contextLengthSource : null,
   };
 }
 

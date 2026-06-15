@@ -2,8 +2,16 @@
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { EventBus } from "@pi-crew/core";
+import {
+  estimateContextUsage,
+  shouldCompactContext,
+  type FullAgentContextUsageEstimate,
+} from "../instances/full-agent-context-policy.js";
 import type { MessageRepository, MessageRow } from "./types.js";
-import type { FullAgentTurnHistory } from "../instances/full-agent-responder.js";
+import type {
+  FullAgentHistoryLoadRequest,
+  FullAgentTurnHistory,
+} from "../instances/full-agent-responder.js";
 
 type PersistableAgentRole = "user" | "assistant" | "tool" | "system";
 
@@ -18,6 +26,7 @@ interface ContextArtifactBody {
   };
   readonly preservedRawTurnCount: number;
   readonly headings: readonly string[];
+  readonly usage: FullAgentContextUsageEstimate;
   readonly createdAt: string;
 }
 
@@ -45,11 +54,14 @@ export class MessageRepositoryTurnHistory implements FullAgentTurnHistory {
     this.#clock = options.clock ?? (() => new Date().toISOString());
   }
 
-  async loadRecent(sessionId: string, limit: number): Promise<AgentMessage[]> {
+  async loadRecent(
+    sessionId: string,
+    request: FullAgentHistoryLoadRequest,
+  ): Promise<AgentMessage[]> {
     const total = await this.messages.count(sessionId);
     const rows = await this.messages.getRecentBySession(sessionId, total);
-    const context = await this.#preserveCompactedContext(sessionId, rows, limit);
-    const recentRows = rows.filter(isConversationRow).slice(-limit);
+    const context = await this.#preserveCompactedContext(sessionId, rows, request);
+    const recentRows = rows.filter(isConversationRow).slice(-request.minimumRecentMessages);
     const recent = recentRows.map(rowToAgentMessage);
     if (context === null) return recent;
     return [artifactToSystemMessage(context), ...recent];
@@ -68,17 +80,27 @@ export class MessageRepositoryTurnHistory implements FullAgentTurnHistory {
   async #preserveCompactedContext(
     sessionId: string,
     rows: readonly MessageRow[],
-    limit: number,
+    request: FullAgentHistoryLoadRequest,
   ): Promise<ContextArtifactBody | null> {
     const conversationRows = rows.filter(isConversationRow);
-    if (conversationRows.length <= limit * 2) return null;
-    const oldRows = conversationRows.slice(0, -limit);
+    const messages = conversationRows.map(rowToAgentMessage);
+    const usage = estimateContextUsage(messages, request.contextPolicy);
+    this.#emitPressure(sessionId, usage);
+    if (!shouldCompactContext(usage)) return latestArtifact(rows, sessionId);
+    if (conversationRows.length <= request.minimumRecentMessages) return null;
+    const oldRows = conversationRows.slice(0, -request.minimumRecentMessages);
     const latest = latestArtifact(rows, sessionId);
     const start = oldRows[0];
     const end = oldRows.at(-1);
     if (start === undefined || end === undefined) return null;
     if (latest?.compactedTurnRange.endMessageId === end.id) return latest;
-    const artifact = buildArtifact(sessionId, oldRows, limit, this.#clock());
+    const artifact = buildArtifact(
+      sessionId,
+      oldRows,
+      request.minimumRecentMessages,
+      this.#clock(),
+      usage,
+    );
     this.#emit("context.compaction.started", artifact);
     try {
       await this.messages.append({
@@ -95,6 +117,21 @@ export class MessageRepositoryTurnHistory implements FullAgentTurnHistory {
     }
   }
 
+  #emitPressure(sessionId: string, usage: FullAgentContextUsageEstimate): void {
+    this.options.eventBus?.emit({
+      event: "context.pressure",
+      payload: {
+        sessionId,
+        usedTokens: usage.usedTokens,
+        maxTokens: usage.maxTokens,
+        thresholdPercent: usage.thresholdPercent,
+        thresholdTokens: usage.thresholdTokens,
+        estimationMethod: usage.estimationMethod,
+        contextLengthSource: usage.contextLengthSource,
+      },
+    });
+  }
+
   #emit(event: ContextCompactionEvent, artifact: ContextArtifactBody, error?: unknown): void {
     if (this.options.eventBus === undefined) return;
     const payload = {
@@ -103,6 +140,12 @@ export class MessageRepositoryTurnHistory implements FullAgentTurnHistory {
       compactedTurnRange: artifact.compactedTurnRange,
       preservedRawTurnCount: artifact.preservedRawTurnCount,
       headings: artifact.headings,
+      usedTokens: artifact.usage.usedTokens,
+      maxTokens: artifact.usage.maxTokens,
+      thresholdPercent: artifact.usage.thresholdPercent,
+      thresholdTokens: artifact.usage.thresholdTokens,
+      estimationMethod: artifact.usage.estimationMethod,
+      contextLengthSource: artifact.usage.contextLengthSource,
       ...(error === undefined ? {} : { error: errorMessage(error) }),
     };
     if (event === "blackboard.written") {
@@ -121,6 +164,7 @@ function buildArtifact(
   rows: readonly MessageRow[],
   preservedRawTurnCount: number,
   createdAt: string,
+  usage: FullAgentContextUsageEstimate,
 ): ContextArtifactBody {
   const start = rows[0];
   const end = rows.at(-1);
@@ -138,6 +182,7 @@ function buildArtifact(
     },
     preservedRawTurnCount,
     headings: rows.slice(0, 6).map((row) => rowHeading(row)),
+    usage,
     createdAt,
   };
 }

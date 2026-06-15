@@ -59,6 +59,18 @@ function assistantMessage(content: string, timestamp: number): AssistantMessage 
   };
 }
 
+function loadRequest(minimumRecentMessages: number, contextLength = 1000000) {
+  return {
+    minimumRecentMessages,
+    contextPolicy: {
+      contextLength,
+      contextLengthSource: "config-default" as const,
+      thresholdPercent: 80,
+      minimumRecentMessages,
+    },
+  };
+}
+
 describe("MessageRepositoryTurnHistory", () => {
   let path: string;
   let db: RuntimeDb;
@@ -88,7 +100,7 @@ describe("MessageRepositoryTurnHistory", () => {
       new SqliteMessageRepository(db.handle),
     );
 
-    expect(await reopenedHistory.loadRecent("sess-conv", 2)).toEqual([
+    expect(await reopenedHistory.loadRecent("sess-conv", loadRequest(2))).toEqual([
       assistantMessage("second", 2),
       userMessage("third", 3),
     ]);
@@ -103,7 +115,7 @@ describe("MessageRepositoryTurnHistory", () => {
       await history.append("sess-long", userMessage(`message-${String(index)}`, index));
     }
 
-    expect(await history.loadRecent("sess-long", 3)).toEqual([
+    expect(await history.loadRecent("sess-long", loadRequest(3, 1))).toEqual([
       expect.objectContaining({ role: "user" }),
       userMessage("message-502", 502),
       userMessage("message-503", 503),
@@ -125,7 +137,7 @@ describe("MessageRepositoryTurnHistory", () => {
     await history.append("sess-compact", assistantMessage("acknowledged", 2));
     await history.append("sess-compact", userMessage("recent question", 3));
 
-    const prompt = await history.loadRecent("sess-compact", 1);
+    const prompt = await history.loadRecent("sess-compact", loadRequest(1, 1));
     const artifactRows = await repository.getBySession("sess-compact");
     const artifactRow = artifactRows.find((row) => row.role === "system");
 
@@ -140,9 +152,29 @@ describe("MessageRepositoryTurnHistory", () => {
     expect(prompt.at(-1)).toEqual(userMessage("recent question", 3));
     expect(artifactRow?.content).toContain("full_agent_context_artifact");
     expect(eventBus.emitted.map((event) => event.event)).toEqual([
+      "context.pressure",
       "context.compaction.started",
       "blackboard.written",
       "context.compaction.completed",
     ]);
+  });
+
+  it("does not compact below configured context threshold even when message count exceeds history default", async () => {
+    const sessions = new SqliteSessionRepository(db.handle, logger);
+    await sessions.save(session("sess-policy"));
+    const eventBus = new FakeEventBus();
+    const repository = new SqliteMessageRepository(db.handle);
+    const history = new MessageRepositoryTurnHistory(repository, { eventBus });
+
+    for (let index = 0; index < 60; index += 1) {
+      await history.append("sess-policy", userMessage(`short-${String(index)}`, index));
+    }
+
+    const prompt = await history.loadRecent("sess-policy", loadRequest(24, 1000000));
+    const artifactRows = await repository.getBySession("sess-policy");
+
+    expect(prompt).toHaveLength(24);
+    expect(artifactRows.some((row) => row.role === "system")).toBe(false);
+    expect(eventBus.emitted.map((event) => event.event)).toEqual(["context.pressure"]);
   });
 });

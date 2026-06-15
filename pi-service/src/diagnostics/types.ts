@@ -104,6 +104,10 @@ export interface DiagnosticSessionProjection {
 export interface DiagnosticContextPressure {
   readonly usedTokens: number;
   readonly maxTokens: number;
+  readonly thresholdPercent: number | null;
+  readonly thresholdTokens: number | null;
+  readonly estimationMethod: string | null;
+  readonly contextLengthSource: string | null;
 }
 
 export interface DiagnosticContextCompaction {
@@ -112,6 +116,12 @@ export interface DiagnosticContextCompaction {
   readonly compactedMessageCount: number;
   readonly preservedRawTurnCount: number;
   readonly headings: readonly string[];
+  readonly usedTokens: number | null;
+  readonly maxTokens: number | null;
+  readonly thresholdPercent: number | null;
+  readonly thresholdTokens: number | null;
+  readonly estimationMethod: string | null;
+  readonly contextLengthSource: string | null;
 }
 
 export interface DiagnosticsOverview {

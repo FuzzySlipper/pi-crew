@@ -211,6 +211,12 @@ describe("DiagnosticsService", () => {
         compactedTurnRange: { startMessageId: 1, endMessageId: 8, messageCount: 8 },
         preservedRawTurnCount: 4,
         headings: ["1 user", "2 assistant"],
+        usedTokens: 64000,
+        maxTokens: 131072,
+        thresholdPercent: 80,
+        thresholdTokens: 104857,
+        estimationMethod: "chars_div_3",
+        contextLengthSource: "den-router",
       },
     });
 
@@ -222,6 +228,12 @@ describe("DiagnosticsService", () => {
       compactedMessageCount: 8,
       preservedRawTurnCount: 4,
       headings: ["1 user", "2 assistant"],
+      usedTokens: 64000,
+      maxTokens: 131072,
+      thresholdPercent: 80,
+      thresholdTokens: 104857,
+      estimationMethod: "chars_div_3",
+      contextLengthSource: "den-router",
     });
   });
 

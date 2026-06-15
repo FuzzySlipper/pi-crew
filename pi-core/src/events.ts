@@ -1,4 +1,3 @@
-
 import type { ChannelMembershipStatus, ChannelSubscriptionStatus } from "./channel-presence.js";
 import type {
   DelegatedResult,
@@ -158,6 +157,10 @@ export interface ContextPressurePayload {
   readonly sessionId: string;
   readonly usedTokens: number;
   readonly maxTokens: number;
+  readonly thresholdPercent?: number;
+  readonly thresholdTokens?: number;
+  readonly estimationMethod?: string;
+  readonly contextLengthSource?: string;
 }
 
 export interface ContextCompactionPayload {
@@ -170,6 +173,12 @@ export interface ContextCompactionPayload {
   };
   readonly preservedRawTurnCount: number;
   readonly headings: readonly string[];
+  readonly usedTokens?: number;
+  readonly maxTokens?: number;
+  readonly thresholdPercent?: number;
+  readonly thresholdTokens?: number;
+  readonly estimationMethod?: string;
+  readonly contextLengthSource?: string;
   readonly error?: string;
 }
 
