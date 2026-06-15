@@ -70,6 +70,7 @@ export interface FullAgentResponderConfig {
   readonly tools?: readonly AgentTool[];
   readonly toolsProvider?: () => readonly AgentTool[];
   readonly history?: FullAgentTurnHistory;
+  readonly extraContextProvider?: (sessionId: string) => readonly AgentMessage[];
   readonly contextPolicy?: FullAgentContextPolicy;
   readonly contextPolicyProvider?: () => Promise<FullAgentContextPolicy>;
 }
@@ -118,6 +119,7 @@ export class FullAgentResponder implements AgentResponder {
   readonly #tools: readonly AgentTool[] | undefined;
   readonly #toolsProvider: (() => readonly AgentTool[]) | undefined;
   readonly #history: FullAgentTurnHistory | undefined;
+  readonly #extraContextProvider: ((sessionId: string) => readonly AgentMessage[]) | undefined;
   readonly #contextPolicy: FullAgentContextPolicy;
   readonly #contextPolicyProvider: (() => Promise<FullAgentContextPolicy>) | undefined;
 
@@ -133,6 +135,7 @@ export class FullAgentResponder implements AgentResponder {
     this.#tools = config.tools;
     this.#toolsProvider = config.toolsProvider;
     this.#history = config.history;
+    this.#extraContextProvider = config.extraContextProvider;
     this.#contextPolicy = config.contextPolicy ?? {
       contextLength: 131072,
       contextLengthSource: "unknown-default",
@@ -181,15 +184,17 @@ export class FullAgentResponder implements AgentResponder {
   }
 
   async #loadHistory(sessionId: string): Promise<AgentMessage[]> {
-    if (this.#history === undefined) return [];
+    const extra = this.#extraContextProvider?.(sessionId) ?? [];
+    if (this.#history === undefined) return [...extra];
     const contextPolicy =
       this.#contextPolicyProvider === undefined
         ? this.#contextPolicy
         : await this.#contextPolicyProvider();
-    return this.#history.loadRecent(sessionId, {
+    const history = await this.#history.loadRecent(sessionId, {
       minimumRecentMessages: contextPolicy.minimumRecentMessages,
       contextPolicy,
     });
+    return [...extra, ...history];
   }
 
   async #appendTurn(

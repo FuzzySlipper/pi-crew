@@ -4,7 +4,7 @@ import type { MCPClient } from "@pi-crew/mcp";
 import type { ToolPolicy } from "@pi-crew/profiles";
 import { SessionToolFilter } from "@pi-crew/tools";
 import { createFullAgentMcpAgentTool } from "./full-agent-mcp-tool.js";
-import { createLocalCodeTools, localCodeToolNames } from "./local-code-tools.js";
+import { createRuntimeLocalTools, runtimeLocalToolNames } from "./runtime-local-tools.js";
 import { requestedToolSets, selectToolsBeforeSessionPolicy } from "./tool-selection.js";
 
 export interface SelectFullAgentToolsInput {
@@ -21,8 +21,11 @@ export interface SelectFullAgentToolsInput {
 
 export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentTool[] {
   const requestedSets = requestedToolSets(input.allow, input.profileToolPolicy);
-  const localTools = createLocalCodeTools();
-  const localToolNameSet = new Set<string>(localCodeToolNames);
+  const localTools = createRuntimeLocalTools({
+    sessionId: input.sessionId,
+    profileId: input.defaultSender,
+  });
+  const localToolNameSet = new Set<string>(runtimeLocalToolNames);
   const beforePolicy = selectToolsBeforeSessionPolicy({
     tools: [...input.mcpTools, ...localTools],
     requestedSets,

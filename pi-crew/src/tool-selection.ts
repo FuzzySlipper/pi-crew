@@ -71,8 +71,30 @@ export function toolMatchesSelectedSet(toolName: string, toolSet: string): boole
   const normalizedSet = toolSet.toLowerCase();
   if (normalizedSet === "all") return true;
   if (normalizedSet === "den") return SAFE_DEN_TOOL_NAMES.has(stripMcpPrefix(normalized));
+  if (TOOL_SET_MEMBERS[normalizedSet]?.has(normalized) === true) return true;
   return normalized === normalizedSet || normalized.startsWith(`${normalizedSet}_`);
 }
+
+const TOOL_SET_MEMBERS: Readonly<Record<string, ReadonlySet<string>>> = {
+  filesystem: new Set(["read_file", "write_file", "search_files"]),
+  local: new Set(["read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"]),
+  terminal: new Set(["terminal"]),
+  git: new Set(["git_status", "git_diff"]),
+  planning: new Set(["todo"]),
+  web: new Set(["web_search", "web_extract"]),
+  browser: new Set([
+    "browser_navigate",
+    "browser_snapshot",
+    "browser_click",
+    "browser_type",
+    "browser_vision",
+    "browser_console",
+    "browser_scroll",
+    "browser_back",
+    "browser_press",
+  ]),
+  delegation: new Set(["spawn_subagent", "fan_out_subagents", "scout_codebase", "summarize_files", "find_relevant_paths"]),
+};
 
 export const SAFE_DEN_TOOL_NAMES = new Set([
   "get_task",

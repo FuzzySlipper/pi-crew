@@ -32,6 +32,7 @@ import type { CrewConfig } from "./config.js";
 import { createFullAgentContextPolicyResolver } from "./den-router-metadata-client.js";
 import { createDenChannelReadbackTool } from "./den-channel-readback-tool.js";
 import { selectFullAgentTools } from "./full-agent-tool-selection.js";
+import { todoContextMessage } from "./todo-tool.js";
 import type { DenChannelReadbackToolConfig } from "./den-channel-readback-tool.js";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
 import { buildEffectiveToolInventory, type EffectiveToolInventory } from "./tool-inventory.js";
@@ -249,6 +250,9 @@ function createResponder(
     ...(agentFactory !== undefined ? { agentFactory } : {}),
     eventBus,
     history,
+    extraContextProvider: (sessionId) => [todoContextMessage(sessionId)].filter(
+      (message): message is NonNullable<ReturnType<typeof todoContextMessage>> => message !== null,
+    ),
     logger,
     model: runtime.agentModel,
     apiKey: runtime.model.apiKey,

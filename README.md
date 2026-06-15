@@ -133,17 +133,29 @@ Current runtime-local model-callable catalog:
 
 | Tool                  | Category   | Surfaces                    | Policy gate                                                                                  | Implemented in                                     |
 | --------------------- | ---------- | --------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `spawn_subagent`      | delegation | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or spawn_subagent             | `pi-service/src/workers/delegated-spawn-tool.ts`   |
-| `fan_out_subagents`   | delegation | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or fan_out_subagents          | `pi-service/src/workers/delegated-fan-out-tool.ts` |
-| `scout_codebase`      | helper     | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or scout_codebase             | `pi-service/src/workers/delegated-helper-tools.ts` |
-| `summarize_files`     | helper     | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or summarize_files            | `pi-service/src/workers/delegated-helper-tools.ts` |
-| `find_relevant_paths` | helper     | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or find_relevant_paths        | `pi-service/src/workers/delegated-helper-tools.ts` |
-| `read_file`           | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts`                  |
-| `write_file`          | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts`                  |
-| `search_files`        | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts`                  |
-| `terminal`            | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, terminal, or concrete tool name   | `pi-crew/src/local-code-tools.ts`                  |
-| `git_status`          | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name        | `pi-crew/src/local-code-tools.ts`                  |
-| `git_diff`            | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name        | `pi-crew/src/local-code-tools.ts`                  |
+| `spawn_subagent` | delegation | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or spawn_subagent | `pi-service/src/workers/delegated-spawn-tool.ts` |
+| `fan_out_subagents` | delegation | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or fan_out_subagents | `pi-service/src/workers/delegated-fan-out-tool.ts` |
+| `scout_codebase` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or scout_codebase | `pi-service/src/workers/delegated-helper-tools.ts` |
+| `summarize_files` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or summarize_files | `pi-service/src/workers/delegated-helper-tools.ts` |
+| `find_relevant_paths` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or find_relevant_paths | `pi-service/src/workers/delegated-helper-tools.ts` |
+| `read_file` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
+| `write_file` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
+| `search_files` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
+| `terminal` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, terminal, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
+| `git_status` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
+| `git_diff` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name | `pi-crew/src/local-code-tools.ts` |
+| `todo` | planning | full-agent | runtime.tools.allow/profile toolPolicy must request planning or todo | `pi-crew/src/todo-tool.ts` |
+| `web_search` | web | full-agent | runtime.tools.allow/profile toolPolicy must request web or web_search | `pi-crew/src/web-tools.ts` |
+| `web_extract` | web | full-agent | runtime.tools.allow/profile toolPolicy must request web or web_extract | `pi-crew/src/web-tools.ts` |
+| `browser_navigate` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_snapshot` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_click` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_type` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_vision` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_console` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_scroll` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_back` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
+| `browser_press` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 
 Current slash/control commands: `/help`, `/status`, `/session`, `/new`, `/reload-mcp`. They are not model-callable tools. Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
 

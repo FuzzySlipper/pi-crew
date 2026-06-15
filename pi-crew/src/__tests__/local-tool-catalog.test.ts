@@ -7,7 +7,6 @@ import {
   createDelegatedSpawnTool,
   createDelegationHelperTools,
   type DelegatedSpawnError,
-  type DelegatedSpawnInput,
   type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import {
@@ -17,10 +16,11 @@ import {
   renderLocalToolCatalogMarkdownTable,
 } from "../local-tool-catalog.js";
 import { createLocalCodeTools, localCodeToolNames } from "../local-code-tools.js";
+import { createRuntimeLocalTools, runtimeLocalToolNames } from "../runtime-local-tools.js";
 import { buildEffectiveToolInventory } from "../tool-inventory.js";
 
 class FakeLifecycle implements DelegatedSpawnLifecyclePort {
-  spawn(_input: DelegatedSpawnInput): Promise<Result<DelegatedResult, DelegatedSpawnError>> {
+  spawn(): Promise<Result<DelegatedResult, DelegatedSpawnError>> {
     return Promise.resolve({
       ok: true,
       value: {
@@ -56,7 +56,19 @@ function commonDelegationOptions() {
 }
 
 describe("local tool catalog", () => {
-  it("is the source for local code tool factories", () => {
+  it("is the source for runtime-local tool factories", () => {
+    expect(runtimeLocalToolNames).toEqual(localModelCallableToolNames());
+    expect(new Set(createRuntimeLocalTools({ sessionId: "sess", profileId: "prime" }).map((tool) => tool.name))).toEqual(
+      new Set([
+        ...localModelCallableToolNames("local"),
+        ...localModelCallableToolNames("planning"),
+        ...localModelCallableToolNames("web"),
+        ...localModelCallableToolNames("browser"),
+      ]),
+    );
+  });
+
+  it("keeps local code tool factories category-scoped", () => {
     expect(localCodeToolNames).toEqual(localModelCallableToolNames("local"));
     expect(createLocalCodeTools().map((tool) => tool.name)).toEqual(
       localModelCallableToolNames("local"),

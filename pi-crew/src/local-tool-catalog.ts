@@ -1,6 +1,6 @@
 /** Central catalog for pi-crew runtime-local tool and control surfaces. */
 
-export type LocalToolCategory = "delegation" | "helper" | "local";
+export type LocalToolCategory = "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session";
 export type LocalToolSurface = "full-agent" | "delegated-child" | "worker";
 
 export interface LocalModelCallableToolCatalogEntry {
@@ -159,6 +159,56 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
       "runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name",
     inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
   },
+  {
+    name: "todo",
+    category: "planning",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/todo-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request planning or todo",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "web_search",
+    category: "web",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/web-tools.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request web or web_search",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "web_extract",
+    category: "web",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/web-tools.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request web or web_extract",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  ...[
+    "browser_navigate",
+    "browser_snapshot",
+    "browser_click",
+    "browser_type",
+    "browser_vision",
+    "browser_console",
+    "browser_scroll",
+    "browser_back",
+    "browser_press",
+  ].map((name): LocalModelCallableToolCatalogEntry => ({
+    name,
+    category: "browser",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/browser-tools.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  })),
 ];
 
 export const CONTROL_COMMAND_CATALOG: readonly ControlCommandCatalogEntry[] = [

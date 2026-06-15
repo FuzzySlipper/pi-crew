@@ -27,7 +27,7 @@ export interface EffectiveToolInventory {
 
 export interface BuiltInToolInventoryEntry {
   readonly name: string;
-  readonly category: "delegation" | "helper" | "local";
+  readonly category: "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session";
   readonly modelCallable: boolean;
   readonly selected: boolean;
   readonly reason: "selected" | "not_requested" | "profile_denied" | "not_model_callable";
@@ -77,7 +77,7 @@ function buildBuiltInInventory(
       (set) => set === "all" || set === tool.name || set === tool.category,
     );
     const permitted = toolAllowedByProfilePolicy(tool.name, profile.toolPolicy);
-    const selected = selectedNames.has(tool.name) || (tool.modelCallable && requested && permitted);
+    const selected = selectedNames.has(tool.name) || (requested && permitted);
     return {
       ...tool,
       selected,
