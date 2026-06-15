@@ -3,19 +3,20 @@ import { promises as fs } from "node:fs";
 import { resolve, relative } from "node:path";
 import { promisify } from "node:util";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { localModelCallableToolNames } from "./local-tool-catalog.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_CHARS = 8_000;
 
-export const localCodeToolNames = [
+export const localCodeToolNames = localModelCallableToolNames("local") as readonly [
   "read_file",
   "write_file",
   "search_files",
   "terminal",
   "git_status",
   "git_diff",
-] as const;
+];
 
 type LocalCodeToolName = (typeof localCodeToolNames)[number];
 

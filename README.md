@@ -83,21 +83,46 @@ Direct diagnostic turns intercept recognized slash commands before building LLM 
 Admin diagnostics exposes the effective model-callable tool inventory without treating slash commands as tools:
 
 ```bash
+curl -s http://127.0.0.1:9237/admin/diagnostics/tools
 curl -s http://127.0.0.1:9237/admin/diagnostics/tools/sess-prime-coder
 curl -s http://127.0.0.1:9237/admin/diagnostics/tools/sess-pi-orchestrator
 ```
 
 Tool names in pi-crew profile config are the names discovered from the pi-crew MCP registry, typically unprefixed Den MCP names such as `send_message` and `update_task`. Hermes-facing `mcp_den_*` names are facade names and should not be duplicated in pi-crew profile allow lists unless an explicit alias layer is added and tested. Simple YAML quotes around strings are not semantically significant. Profile `mcpConfig.toolProfile` selects the Den MCP `tool_profile` surface; base `config.yaml` should only bind conversational profiles to sessions/channels and keep service-level connection defaults.
 
-Non-Den runtime-local tools are deliberately separate from Den MCP discovery:
+### Adding tools to pi-crew
 
-| Surface                                    | Tools                                                                                             | Notes                                                                                                                                                                                                                                                                            |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Conversational delegation/helper built-ins | `spawn_subagent`, `fan_out_subagents`, `scout_codebase`, `summarize_files`, `find_relevant_paths` | Model-callable by full agents only when runtime/profile policy selects and permits them.                                                                                                                                                                                         |
-| Delegated-child and prime local code tools | `read_file`, `write_file`, `search_files`, `terminal`, `git_status`, `git_diff`                   | Model-callable when runtime/profile policy selects and permits them, bounded to `PI_CREW_LOCAL_TOOL_ROOT` or `/home/dev/pi-crew`; prime coding profiles can use them directly while orchestrator profiles should omit/deny them if they should only coordinate through children. |
-| Slash/control commands                     | `/help`, `/status`, `/session`, `/new`, `/reload-mcp`, `/tools`                                   | Control-plane inputs, not model-callable tools.                                                                                                                                                                                                                                  |
+Use the right registration path for the surface you are changing:
 
-Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
+1. **Den/MCP-discovered tools** are added or configured in Den MCP/tool profiles. Pi-crew discovers them dynamically through the selected profile's MCP endpoint and `mcpConfig.toolProfile`; do not manually add every Den tool to pi-crew source. Update Den-side docs/profile config when the MCP surface changes, and inspect the live inventory with `/admin/diagnostics/tools/<sessionId>`.
+2. **Pi-crew runtime-local model-callable tools** must be registered in the central catalog `pi-crew/src/local-tool-catalog.ts`, assembled in the runtime/tool provider, covered by policy/inventory tests, and listed in this README table. These are local wrappers or built-ins such as delegation/helper/local code tools, not ordinary Den MCP tools.
+3. **Slash/control commands** are control-plane inputs handled before LLM prompting. Document them separately in `CONTROL_COMMAND_CATALOG` and the slash-command router; never expose them as model-callable `AgentTool`s.
+
+Checklist for adding a runtime-local model-callable tool:
+
+- Add the implementation/factory and wire it through constructor-injected assembly or a provider; do not hide `new` dependencies inside methods.
+- Add a `LOCAL_MODEL_CALLABLE_TOOL_CATALOG` entry with category, implementation path, assembled path, intended surfaces, policy gate, and guardrail test path.
+- Add/update selection policy tests proving the tool is selected only when requested and permitted.
+- Add/update diagnostics inventory tests so `/admin/diagnostics/tools/<sessionId>` reports the catalog metadata.
+- Update this generated table and run `npm test -- pi-crew/src/__tests__/local-tool-catalog.test.ts`.
+
+Current runtime-local model-callable catalog:
+
+| Tool                  | Category   | Surfaces                    | Policy gate                                                                                  | Implemented in                                     |
+| --------------------- | ---------- | --------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `spawn_subagent`      | delegation | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or spawn_subagent             | `pi-service/src/workers/delegated-spawn-tool.ts`   |
+| `fan_out_subagents`   | delegation | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or fan_out_subagents          | `pi-service/src/workers/delegated-fan-out-tool.ts` |
+| `scout_codebase`      | helper     | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or scout_codebase             | `pi-service/src/workers/delegated-helper-tools.ts` |
+| `summarize_files`     | helper     | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or summarize_files            | `pi-service/src/workers/delegated-helper-tools.ts` |
+| `find_relevant_paths` | helper     | full-agent                  | runtime.tools.allow/profile toolPolicy must request delegation or find_relevant_paths        | `pi-service/src/workers/delegated-helper-tools.ts` |
+| `read_file`           | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts`                  |
+| `write_file`          | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts`                  |
+| `search_files`        | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, filesystem, or concrete tool name | `pi-crew/src/local-code-tools.ts`                  |
+| `terminal`            | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, terminal, or concrete tool name   | `pi-crew/src/local-code-tools.ts`                  |
+| `git_status`          | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name        | `pi-crew/src/local-code-tools.ts`                  |
+| `git_diff`            | local      | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request local, git, or concrete tool name        | `pi-crew/src/local-code-tools.ts`                  |
+
+Current slash/control commands: `/help`, `/status`, `/session`, `/new`, `/reload-mcp`. They are not model-callable tools. Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
 
 ### Full-agent context compaction
 

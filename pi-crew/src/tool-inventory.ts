@@ -3,6 +3,10 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Profile } from "@pi-crew/profiles";
 import type { CrewConfig } from "./config.js";
 import {
+  CONTROL_COMMAND_CATALOG,
+  LOCAL_MODEL_CALLABLE_TOOL_CATALOG,
+} from "./local-tool-catalog.js";
+import {
   buildToolSelectionInventory,
   requestedToolSets,
   toolAllowedByProfilePolicy,
@@ -27,6 +31,11 @@ export interface BuiltInToolInventoryEntry {
   readonly modelCallable: boolean;
   readonly selected: boolean;
   readonly reason: "selected" | "not_requested" | "profile_denied" | "not_model_callable";
+  readonly implementedIn: string;
+  readonly assembledIn: readonly string[];
+  readonly intendedSurfaces: readonly string[];
+  readonly policyGate: string;
+  readonly inventoryTest: string;
 }
 
 export function buildEffectiveToolInventory(input: {
@@ -36,7 +45,10 @@ export function buildEffectiveToolInventory(input: {
   readonly mcpTools: readonly AgentTool[];
   readonly selectedToolNames: ReadonlySet<string>;
 }): EffectiveToolInventory {
-  const requestedSets = requestedToolSets(input.agent.runtime.tools.allow, input.profile.toolPolicy);
+  const requestedSets = requestedToolSets(
+    input.agent.runtime.tools.allow,
+    input.profile.toolPolicy,
+  );
   return {
     agentId: input.agent.agentId,
     profileId: input.profile.id,
@@ -51,7 +63,7 @@ export function buildEffectiveToolInventory(input: {
       selectedNames: input.selectedToolNames,
     }),
     builtInTools: buildBuiltInInventory(requestedSets, input.profile, input.selectedToolNames),
-    controlCommands: ["/help", "/status", "/session", "/new", "/reload-mcp", "/tools"],
+    controlCommands: CONTROL_COMMAND_CATALOG.map((command) => command.name),
   };
 }
 
@@ -61,27 +73,23 @@ function buildBuiltInInventory(
   selectedNames: ReadonlySet<string>,
 ): readonly BuiltInToolInventoryEntry[] {
   return BUILT_IN_TOOLS.map((tool) => {
-    const requested = requestedSets.some((set) => set === "all" || set === tool.name || set === tool.category);
+    const requested = requestedSets.some(
+      (set) => set === "all" || set === tool.name || set === tool.category,
+    );
     const permitted = toolAllowedByProfilePolicy(tool.name, profile.toolPolicy);
     const selected = selectedNames.has(tool.name) || (tool.modelCallable && requested && permitted);
     return {
       ...tool,
       selected,
-      reason: selected ? "selected" : !requested ? "not_requested" : !permitted ? "profile_denied" : "not_model_callable",
+      reason: selected
+        ? "selected"
+        : !requested
+          ? "not_requested"
+          : !permitted
+            ? "profile_denied"
+            : "not_model_callable",
     };
   });
 }
 
-const BUILT_IN_TOOLS: readonly Omit<BuiltInToolInventoryEntry, "selected" | "reason">[] = [
-  { name: "spawn_subagent", category: "delegation", modelCallable: true },
-  { name: "fan_out_subagents", category: "delegation", modelCallable: true },
-  { name: "scout_codebase", category: "helper", modelCallable: true },
-  { name: "summarize_files", category: "helper", modelCallable: true },
-  { name: "find_relevant_paths", category: "helper", modelCallable: true },
-  { name: "read_file", category: "local", modelCallable: true },
-  { name: "write_file", category: "local", modelCallable: true },
-  { name: "search_files", category: "local", modelCallable: true },
-  { name: "terminal", category: "local", modelCallable: true },
-  { name: "git_status", category: "local", modelCallable: true },
-  { name: "git_diff", category: "local", modelCallable: true },
-];
+const BUILT_IN_TOOLS = LOCAL_MODEL_CALLABLE_TOOL_CATALOG;
