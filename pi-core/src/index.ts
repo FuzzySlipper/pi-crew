@@ -114,6 +114,7 @@ export {
   type TurnExhaustedPayload,
   type CheckpointWaitingPayload,
   type ContextPressurePayload,
+  type McpReloadPayload,
   type WorkerStuckPayload,
   type GatewayShutdownPayload,
   type ToolDeniedPayload,

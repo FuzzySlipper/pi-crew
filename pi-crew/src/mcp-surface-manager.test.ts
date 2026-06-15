@@ -1,6 +1,6 @@
 /** Tests for session-preserving MCP surface reloads. */
 import { describe, expect, it } from "vitest";
-import { FakeEventBus, FakeLogger } from "@pi-crew/core";
+import { ConfigurationError, FakeEventBus, FakeLogger } from "@pi-crew/core";
 import type { MCPClient, AgentTool, ServerConfig } from "@pi-crew/mcp";
 import type { Profile } from "@pi-crew/profiles";
 import { DefaultMcpSurfaceManager } from "./mcp-surface-manager.js";
@@ -52,6 +52,7 @@ describe("DefaultMcpSurfaceManager", () => {
       requestedBy: "pi-crew-runner",
       reason: "test reload",
       addedToolNames: ["send_message"],
+      serverCount: 1,
     });
   });
 
@@ -74,20 +75,125 @@ describe("DefaultMcpSurfaceManager", () => {
     expect(Object.keys(outcome)).not.toContain("newSessionId");
     expect(Object.keys(outcome)).not.toContain("archivedMessageCount");
   });
+
+  it("merges selected profile MCP servers and preserves Den tool_profile endpoint", async () => {
+    const clients = [
+      new ScriptedMcpClient([[tool("get_task")]]),
+      new ScriptedMcpClient([[tool("run_tests")]]),
+    ];
+    let index = 0;
+    const manager = new DefaultMcpSurfaceManager({
+      config: multiConfig(),
+      logger: new FakeLogger(),
+      eventBus: new FakeEventBus(),
+      clientFactory: () => clients[index++] as unknown as MCPClient,
+    });
+    const multiProfile = profileWithServers([
+      { name: "den", toolProfile: "worker-coder" },
+      { name: "test-runner" },
+    ]);
+
+    const surface = manager.surfaceForProfile(multiProfile);
+    await manager.connectAll([multiProfile]);
+
+    expect(surface.selectedServerNames).toEqual(["den", "test-runner"]);
+    expect(surface.registry.listNames()).toEqual(["get_task", "run_tests"]);
+    expect(surface.servers.map((server) => server.discoveredToolNames)).toEqual([
+      ["get_task"],
+      ["run_tests"],
+    ]);
+    expect(clients[0]?.configs[0]?.endpoint).toBe("http://den/mcp?tool_profile=worker-coder");
+    expect(clients[1]?.configs[0]?.endpoint).toBe("http://runner/mcp");
+  });
+
+  it("fails closed when selected MCP servers expose colliding tool names", async () => {
+    const clients = [
+      new ScriptedMcpClient([[tool("same")]]),
+      new ScriptedMcpClient([[tool("same")]]),
+    ];
+    let index = 0;
+    const manager = new DefaultMcpSurfaceManager({
+      config: multiConfig(),
+      logger: new FakeLogger(),
+      eventBus: new FakeEventBus(),
+      clientFactory: () => clients[index++] as unknown as MCPClient,
+    });
+
+    await expect(
+      manager.connectAll([profileWithServers([{ name: "den" }, { name: "test-runner" }])]),
+    ).resolves.toBeUndefined();
+    const surface = manager.surfaceForProfile(profileWithServers([{ name: "den" }, { name: "test-runner" }]));
+    expect(surface.registry.listNames()).toEqual([]);
+    expect(surface.collisions).toEqual([{ toolName: "same", serverNames: ["den", "test-runner"] }]);
+  });
+
+  it("keeps optional MCP server failures explicit without dropping required server tools", async () => {
+    const clients = [
+      new ScriptedMcpClient([[tool("get_task")]]),
+      new FailingMcpClient("lab offline"),
+    ];
+    let index = 0;
+    const manager = new DefaultMcpSurfaceManager({
+      config: multiConfig(),
+      logger: new FakeLogger(),
+      eventBus: new FakeEventBus(),
+      clientFactory: () => clients[index++] as unknown as MCPClient,
+    });
+    const optionalProfile = profileWithServers([
+      { name: "den" },
+      { name: "test-runner", optional: true },
+    ]);
+
+    const surface = manager.surfaceForProfile(optionalProfile);
+    await manager.connectAll([optionalProfile]);
+
+    expect(surface.registry.listNames()).toEqual(["get_task"]);
+    expect(surface.servers[1]).toMatchObject({
+      name: "test-runner",
+      optional: true,
+      error: "lab offline",
+      discoveredToolNames: [],
+    });
+  });
+
+  it("throws when a profile selects an unknown MCP server", () => {
+    const manager = new DefaultMcpSurfaceManager({
+      config: multiConfig(),
+      logger: new FakeLogger(),
+      eventBus: new FakeEventBus(),
+    });
+
+    expect(() => manager.surfaceForProfile(profileWithServers([{ name: "missing" }]))).toThrow(ConfigurationError);
+  });
 });
 
 class ScriptedMcpClient {
   readonly #scripts: readonly (readonly AgentTool[])[];
+  readonly configs: ServerConfig[] = [];
   #connectCount = 0;
 
   constructor(scripts: readonly (readonly AgentTool[])[]) {
     this.#scripts = scripts;
   }
 
-  connect(_config: ServerConfig): Promise<AgentTool[]> {
+  connect(config: ServerConfig): Promise<AgentTool[]> {
+    this.configs.push(config);
     const index = Math.min(this.#connectCount, this.#scripts.length - 1);
     this.#connectCount += 1;
     return Promise.resolve([...(this.#scripts[index] ?? [])]);
+  }
+
+  disconnect(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
+class FailingMcpClient {
+  constructor(private readonly message: string) {}
+
+  connect(config: ServerConfig): Promise<AgentTool[]> {
+    void config;
+    return Promise.reject(new Error(this.message));
   }
 
   disconnect(): Promise<void> {
@@ -102,6 +208,33 @@ function config() {
     requestTimeout: 30_000,
     maxReconnectAttempts: 3,
     reconnectBaseDelay: 1_000,
+    defaultServer: "den",
+    servers: {},
+  };
+}
+
+function multiConfig() {
+  return {
+    ...config(),
+    defaultServer: "den",
+    servers: {
+      den: { ...config(), optional: false },
+      "test-runner": {
+        transport: "streamable-http" as const,
+        endpoint: "http://runner/mcp",
+        requestTimeout: 120_000,
+        maxReconnectAttempts: 1,
+        reconnectBaseDelay: 1,
+        optional: false,
+      },
+    },
+  };
+}
+
+function profileWithServers(servers: NonNullable<Profile["mcpConfig"]>["servers"]): Profile {
+  return {
+    ...profile,
+    mcpConfig: { servers },
   };
 }
 

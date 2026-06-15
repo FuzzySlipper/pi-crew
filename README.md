@@ -111,13 +111,37 @@ curl -s http://127.0.0.1:9237/admin/diagnostics/tools/sess-prime-coder
 curl -s http://127.0.0.1:9237/admin/diagnostics/tools/sess-pi-orchestrator
 ```
 
-Tool names in pi-crew profile config are the names discovered from the pi-crew MCP registry, typically unprefixed Den MCP names such as `send_message` and `update_task`. Hermes-facing `mcp_den_*` names are facade names and should not be duplicated in pi-crew profile allow lists unless an explicit alias layer is added and tested. Simple YAML quotes around strings are not semantically significant. Profile `mcpConfig.toolProfile` selects the Den MCP `tool_profile` surface; base `config.yaml` should only bind conversational profiles to sessions/channels and keep service-level connection defaults.
+Tool names in pi-crew profile config are the names discovered from the pi-crew MCP registry, typically unprefixed Den MCP names such as `send_message` and `update_task`. Hermes-facing `mcp_den_*` names are facade names and should not be duplicated in pi-crew profile allow lists unless an explicit alias layer is added and tested. Simple YAML quotes around strings are not semantically significant.
+
+Crew config can define named MCP servers and profiles can select more than one:
+
+```yaml
+mcp:
+  defaultServer: den
+  servers:
+    den:
+      transport: streamable-http
+      endpoint: http://192.168.1.10:5199/mcp
+    test-runner:
+      transport: streamable-http
+      endpoint: http://127.0.0.1:9527/mcp
+      optional: true
+
+# profile.yaml
+mcpConfig:
+  servers:
+    - name: den
+      toolProfile: worker-coder
+    - name: test-runner
+```
+
+A legacy `mcpConfig.toolProfile` still selects the Den MCP `tool_profile` for the default server. `/reload-mcp` reloads every selected server for the profile and diagnostics report server names, effective endpoints, per-server discovered tools, merged tools, and collisions. Collision policy is fail-closed: two selected servers may not expose the same raw tool name unless a future explicit namespace/alias feature is added and tested. Only `streamable-http` is supported today; `stdio` is deliberately rejected at config validation until a stdio transport path exists.
 
 ### Adding tools to pi-crew
 
 Use the right registration path for the surface you are changing:
 
-1. **Den/MCP-discovered tools** are added or configured in Den MCP/tool profiles. Pi-crew discovers them dynamically through the selected profile's MCP endpoint and `mcpConfig.toolProfile`; do not manually add every Den tool to pi-crew source. Update Den-side docs/profile config when the MCP surface changes, and inspect the live inventory with `/admin/diagnostics/tools/<sessionId>`.
+1. **Den/MCP-discovered tools** are added or configured in Den MCP/tool profiles or specialized MCP servers. Pi-crew discovers them dynamically through the selected profile MCP servers and per-server `toolProfile`; do not manually add every Den/specialized MCP tool to pi-crew source. Update server-side docs/profile config when an MCP surface changes, and inspect the live inventory with `/admin/diagnostics/tools/<sessionId>`.
 2. **Pi-crew runtime-local model-callable tools** must be registered in the central catalog `pi-crew/src/local-tool-catalog.ts`, assembled in the runtime/tool provider, covered by policy/inventory tests, and listed in this README table. These are local wrappers or built-ins such as delegation/helper/local code tools, not ordinary Den MCP tools.
 3. **Slash/control commands** are control-plane inputs handled before LLM prompting. Document them separately in `CONTROL_COMMAND_CATALOG` and the slash-command router; never expose them as model-callable `AgentTool`s.
 

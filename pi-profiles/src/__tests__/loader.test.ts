@@ -182,6 +182,33 @@ describe("FilesystemProfileSource", () => {
     expect(reviewer.systemPrompt).toContain("Reviewer soul.");
   });
 
+  it("loads profile-level selected MCP server composition", () => {
+    const root = makeProfilesRoot();
+    writeDirectoryProfile(
+      root,
+      "coder",
+      [
+        'name: "Coder"',
+        'description: "Coder"',
+        "mcpConfig:",
+        "  servers:",
+        "    - name: den",
+        "      toolProfile: worker-coder",
+        "    - name: test-runner",
+        "      optional: true",
+        "",
+      ].join("\n"),
+      "Coder soul.",
+    );
+
+    expect(loadProfile("coder", root).mcpConfig).toEqual({
+      servers: [
+        { name: "den", toolProfile: "worker-coder" },
+        { name: "test-runner", optional: true },
+      ],
+    });
+  });
+
   it("fails closed when an inherited parent is missing", () => {
     const root = makeProfilesRoot();
     writeDirectoryProfile(

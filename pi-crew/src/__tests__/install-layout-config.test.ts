@@ -64,6 +64,9 @@ function surfaceManager(registry: ToolRegistry): McpSurfaceManager {
       toolProfile: profile.mcpConfig?.toolProfile,
       client,
       registry,
+      servers: [],
+      selectedServerNames: [],
+      collisions: [],
     }),
     connectAll: () => Promise.resolve(),
     disconnectAll: () => Promise.resolve(),
@@ -190,6 +193,38 @@ describe("installed config layout", () => {
   });
 
 
+
+  it("loads named MCP servers with a default Den server", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "mcp:",
+        "  defaultServer: den",
+        "  servers:",
+        "    den:",
+        "      transport: streamable-http",
+        "      endpoint: http://localhost:5199/mcp",
+        "    test-runner:",
+        "      transport: streamable-http",
+        "      endpoint: http://127.0.0.1:9527/mcp",
+        "      requestTimeout: 120000",
+        "      optional: true",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const config = loadCrewConfig(configPath);
+    expect(Object.keys(config.mcp.servers)).toEqual(["den", "test-runner"]);
+    expect(config.mcp.defaultServer).toBe("den");
+    expect(config.mcp.servers["test-runner"]?.optional).toBe(true);
+    expect(config.mcp.servers["test-runner"]?.requestTimeout).toBe(120000);
+  });
 
   it("loads config-defined UTC script cron jobs and rejects llm_driven jobs", () => {
     const root = tempRoot();

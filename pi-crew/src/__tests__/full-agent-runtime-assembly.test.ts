@@ -39,7 +39,15 @@ function makeClient(): MCPClient {
 
 function surfaceManager(registry: ToolRegistry, client = makeClient()): McpSurfaceManager {
   return {
-    surfaceForProfile: (profile: Profile): McpSurface => ({ endpoint: `http://mcp.test/${profile.mcpConfig?.toolProfile ?? "default"}`, toolProfile: profile.mcpConfig?.toolProfile, client, registry }),
+    surfaceForProfile: (profile: Profile): McpSurface => ({
+      endpoint: `http://mcp.test/${profile.mcpConfig?.toolProfile ?? "default"}`,
+      toolProfile: profile.mcpConfig?.toolProfile,
+      client,
+      registry,
+      servers: [],
+      selectedServerNames: [],
+      collisions: [],
+    }),
     connectAll: () => Promise.resolve(),
     disconnectAll: () => Promise.resolve(),
   };

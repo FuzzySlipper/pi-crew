@@ -1,14 +1,36 @@
 /** Per-profile MCP client/registry surfaces for pi-crew agents. */
-import { MCPClient, ToolRegistry as McpToolRegistry, type ServerConfig } from "@pi-crew/mcp";
-import type { EventBus, Logger, McpReloadPayload } from "@pi-crew/core";
+import { MCPClient, ToolRegistry as McpToolRegistry, type AgentTool, type ServerConfig, type ToolCallResult } from "@pi-crew/mcp";
+import { ConfigurationError, type EventBus, type GatewayEvent, type Logger } from "@pi-crew/core";
 import type { Profile } from "@pi-crew/profiles";
 import type { CrewConfig } from "./config.js";
 
-export interface McpSurface {
+export interface McpSurfaceServer {
+  readonly name: string;
   readonly endpoint: string;
+  readonly config: ServerConfig;
+  readonly toolProfile?: string;
+  readonly optional: boolean;
+  readonly client: MCPClient;
+  readonly registry: McpToolRegistry;
+  readonly discoveredToolNames: readonly string[];
+  readonly error?: string;
+}
+
+export interface McpSurface {
+  /** Backward-compatible primary endpoint for existing diagnostics. */
+  readonly endpoint: string;
+  /** Backward-compatible primary Den MCP tool profile for existing diagnostics. */
   readonly toolProfile?: string;
   readonly client: MCPClient;
   readonly registry: McpToolRegistry;
+  readonly servers: readonly McpSurfaceServer[];
+  readonly selectedServerNames: readonly string[];
+  readonly collisions: readonly McpToolCollision[];
+}
+
+export interface McpToolCollision {
+  readonly toolName: string;
+  readonly serverNames: readonly string[];
 }
 
 export interface McpReloadRequest {
@@ -33,6 +55,18 @@ export interface McpReloadOutcome {
   readonly durationMs: number;
   readonly serverCount: number;
   readonly reloadedAt: string;
+  readonly servers: readonly McpReloadServerOutcome[];
+  readonly collisions: readonly McpToolCollision[];
+  readonly error?: string;
+}
+
+export interface McpReloadServerOutcome {
+  readonly name: string;
+  readonly endpoint: string;
+  readonly optional: boolean;
+  readonly toolProfile?: string;
+  readonly ok: boolean;
+  readonly toolNames: readonly string[];
   readonly error?: string;
 }
 
@@ -44,6 +78,13 @@ export interface McpSurfaceManager {
 }
 
 type McpClientFactory = () => MCPClient;
+
+interface ResolvedServerSelection {
+  readonly name: string;
+  readonly config: ServerConfig;
+  readonly optional: boolean;
+  readonly toolProfile?: string;
+}
 
 export class DefaultMcpSurfaceManager implements McpSurfaceManager {
   readonly #config: CrewConfig["mcp"];
@@ -65,16 +106,26 @@ export class DefaultMcpSurfaceManager implements McpSurfaceManager {
   }
 
   surfaceForProfile(profile: Profile): McpSurface {
-    const endpoint = endpointForProfile(this.#config.endpoint, profile);
-    const cached = this.#surfaces.get(endpoint);
+    const selections = resolveServerSelections(this.#config, profile);
+    const cacheKey = selections.map((selection) => selection.config.endpoint ?? selection.config.name).join("|");
+    const cached = this.#surfaces.get(cacheKey);
     if (cached !== undefined) return cached;
-    const surface = {
-      endpoint,
-      toolProfile: profile.mcpConfig?.toolProfile,
+    const servers = selections.map((selection) => ({
+      name: selection.name,
+      endpoint: selection.config.endpoint ?? "stdio",
+      config: selection.config,
+      ...(selection.toolProfile === undefined ? {} : { toolProfile: selection.toolProfile }),
+      optional: selection.optional,
       client: this.#clientFactory(),
       registry: new McpToolRegistry(this.#logger),
-    } satisfies McpSurface;
-    this.#surfaces.set(endpoint, surface);
+      discoveredToolNames: [],
+    } satisfies McpSurfaceServer));
+    const primary = servers[0];
+    if (primary === undefined) {
+      throw new ConfigurationError(`Profile "${profile.id}" must select at least one MCP server`);
+    }
+    const surface = this.makeSurface(primary, servers, [], []);
+    this.#surfaces.set(cacheKey, surface);
     return surface;
   }
 
@@ -85,7 +136,8 @@ export class DefaultMcpSurfaceManager implements McpSurfaceManager {
         await this.connectSurface(surface);
       } catch (error: unknown) {
         this.#logger.warn("MCP surface connection failed", {
-          endpoint: surface.endpoint,
+          profileId: profile.id,
+          selectedServerNames: surface.selectedServerNames,
           error: errorMessage(error),
         });
       }
@@ -93,23 +145,26 @@ export class DefaultMcpSurfaceManager implements McpSurfaceManager {
   }
 
   async disconnectAll(): Promise<void> {
+    const clients = new Set<MCPClient>();
     for (const surface of this.#surfaces.values()) {
-      await surface.client.disconnect();
+      for (const server of surface.servers) clients.add(server.client);
     }
+    for (const client of clients) await client.disconnect();
   }
 
   async reloadForProfile(profile: Profile, request: McpReloadRequest): Promise<McpReloadOutcome> {
     const surface = this.surfaceForProfile(profile);
     const startedAt = Date.now();
     const oldToolNames = surface.registry.listNames();
-    const basePayload = this.payload(surface, request, oldToolNames, oldToolNames, startedAt);
-    this.#eventBus.emit({ event: "mcp.reload.started", payload: basePayload });
+    const startOutcome = this.outcome(surface, request, oldToolNames, oldToolNames, startedAt, undefined);
+    this.#eventBus.emit({ event: "mcp.reload.started", payload: this.payloadFromOutcome(startOutcome) });
     try {
-      await surface.client.disconnect();
-      await this.connectSurface(surface);
-      const newToolNames = surface.registry.listNames();
-      const outcome = this.outcome(surface, request, oldToolNames, newToolNames, startedAt, undefined);
-      this.#eventBus.emit({ event: "mcp.reload.completed", payload: this.payloadFromOutcome(outcome) });
+      for (const server of surface.servers) await server.client.disconnect();
+      const reconnected = await this.connectSurface(surface);
+      const newToolNames = reconnected.registry.listNames();
+      const error = reconnected.collisions.length > 0 ? collisionMessage(reconnected.collisions) : undefined;
+      const outcome = this.outcome(reconnected, request, oldToolNames, newToolNames, startedAt, error);
+      this.#eventBus.emit({ event: error === undefined ? "mcp.reload.completed" : "mcp.reload.failed", payload: this.payloadFromOutcome(outcome) });
       return outcome;
     } catch (error: unknown) {
       surface.registry.setMcpTools([]);
@@ -119,24 +174,25 @@ export class DefaultMcpSurfaceManager implements McpSurfaceManager {
     }
   }
 
-  async connectSurface(surface: McpSurface): Promise<void> {
-    const serverConfig = serverConfigForSurface(this.#config, surface);
-    const tools = await surface.client.connect(serverConfig);
-    surface.registry.setMcpTools(tools);
+  async connectSurface(surface: McpSurface): Promise<McpSurface> {
+    const connectedServers: McpSurfaceServer[] = [];
+    for (const server of surface.servers) {
+      const connected = await this.connectServer(server);
+      connectedServers.push(connected);
+    }
+    const merged = mergeServerTools(connectedServers);
+    const primary = connectedServers[0] ?? surface.servers[0];
+    const updated = this.makeSurface(primary, connectedServers, merged.tools, merged.collisions);
+    Object.assign(surface, updated);
+    this.#surfaces.set(updated.selectedServerNames.map((name) => updated.servers.find((server) => server.name === name)?.endpoint ?? name).join("|"), surface);
+    if (merged.collisions.length > 0) {
+      surface.registry.setMcpTools([]);
+      throw new ConfigurationError(collisionMessage(merged.collisions));
+    }
+    return surface;
   }
 
-  payload(
-    surface: McpSurface,
-    request: McpReloadRequest,
-    oldToolNames: readonly string[],
-    newToolNames: readonly string[],
-    startedAt: number,
-    error?: string,
-  ): McpReloadPayload {
-    return this.payloadFromOutcome(this.outcome(surface, request, oldToolNames, newToolNames, startedAt, error));
-  }
-
-  payloadFromOutcome(outcome: McpReloadOutcome): McpReloadPayload {
+  payloadFromOutcome(outcome: McpReloadOutcome): Extract<GatewayEvent, { event: "mcp.reload.started" }>["payload"] {
     return {
       sessionId: outcome.sessionId,
       profileId: outcome.profileId,
@@ -152,6 +208,8 @@ export class DefaultMcpSurfaceManager implements McpSurfaceManager {
       serverCount: outcome.serverCount,
       reloadedAt: outcome.reloadedAt,
       ...(outcome.error === undefined ? {} : { error: outcome.error }),
+      servers: outcome.servers,
+      collisions: outcome.collisions,
     };
   }
 
@@ -176,10 +234,72 @@ export class DefaultMcpSurfaceManager implements McpSurfaceManager {
       addedToolNames: difference(newToolNames, oldToolNames),
       removedToolNames: difference(oldToolNames, newToolNames),
       durationMs: Date.now() - startedAt,
-      serverCount: 1,
+      serverCount: surface.servers.length,
       reloadedAt: new Date().toISOString(),
+      servers: surface.servers.map((server) => ({
+        name: server.name,
+        endpoint: server.endpoint,
+        optional: server.optional,
+        ...(server.toolProfile === undefined ? {} : { toolProfile: server.toolProfile }),
+        ok: server.error === undefined,
+        toolNames: server.discoveredToolNames,
+        ...(server.error === undefined ? {} : { error: server.error }),
+      })),
+      collisions: surface.collisions,
       ...(error === undefined ? {} : { error }),
     };
+  }
+
+  async connectServer(server: McpSurfaceServer): Promise<McpSurfaceServer> {
+    try {
+      const tools = await server.client.connect(server.config);
+      server.registry.setMcpTools(tools);
+      return { ...server, discoveredToolNames: tools.map((tool) => tool.name), error: undefined };
+    } catch (error: unknown) {
+      const message = errorMessage(error);
+      server.registry.setMcpTools([]);
+      if (!server.optional) throw new ConfigurationError(`Required MCP server "${server.name}" failed: ${message}`);
+      this.#logger.warn("Optional MCP server connection failed", { serverName: server.name, error: message });
+      return { ...server, discoveredToolNames: [], error: message };
+    }
+  }
+
+  makeSurface(
+    primary: McpSurfaceServer,
+    servers: readonly McpSurfaceServer[],
+    mergedTools: readonly AgentTool[],
+    collisions: readonly McpToolCollision[],
+  ): McpSurface {
+    const registry = new McpToolRegistry(this.#logger);
+    registry.setMcpTools(mergedTools);
+    return {
+      endpoint: primary.endpoint,
+      ...(primary.toolProfile === undefined ? {} : { toolProfile: primary.toolProfile }),
+      client: new RoutingMcpClient(servers) as unknown as MCPClient,
+      registry,
+      servers,
+      selectedServerNames: servers.map((server) => server.name),
+      collisions,
+    };
+  }
+}
+
+class RoutingMcpClient {
+  readonly #servers: readonly McpSurfaceServer[];
+
+  constructor(servers: readonly McpSurfaceServer[]) {
+    this.#servers = servers;
+  }
+
+  async callTool(name: string, params: Record<string, unknown> = {}): Promise<ToolCallResult> {
+    for (const server of this.#servers) {
+      if (server.registry.get(name) !== undefined) return server.client.callTool(name, params);
+    }
+    return { ok: false, content: [], error: `Tool "${name}" is not available on selected MCP servers` };
+  }
+
+  async disconnect(): Promise<void> {
+    for (const server of this.#servers) await server.client.disconnect();
   }
 }
 
@@ -187,20 +307,93 @@ export function endpointForProfile(baseEndpoint: string, profile: Profile): stri
   if (profile.mcpConfig?.endpoint !== undefined) return profile.mcpConfig.endpoint;
   const toolProfile = profile.mcpConfig?.toolProfile;
   if (toolProfile === undefined || toolProfile.trim() === "") return baseEndpoint;
-  const url = new URL(baseEndpoint);
-  url.searchParams.set("tool_profile", toolProfile);
-  return url.toString();
+  return endpointWithToolProfile(baseEndpoint, toolProfile);
 }
 
-function serverConfigForSurface(config: CrewConfig["mcp"], surface: McpSurface): ServerConfig {
+export function resolveServerSelections(config: CrewConfig["mcp"], profile: Profile): readonly ResolvedServerSelection[] {
+  if (profile.mcpConfig?.endpoint !== undefined) {
+    return [{
+      name: "legacy-profile",
+      config: legacyServerConfig(config, endpointForProfile(config.endpoint, profile), "legacy-profile"),
+      optional: false,
+      ...(profile.mcpConfig.toolProfile === undefined ? {} : { toolProfile: profile.mcpConfig.toolProfile }),
+    }];
+  }
+  const catalog = serverCatalog(config);
+  const defaultServer = config.defaultServer;
+  const profileServers = profile.mcpConfig?.servers;
+  const selected = profileServers === undefined || profileServers.length === 0
+    ? [{ name: defaultServer, toolProfile: profile.mcpConfig?.toolProfile, optional: false }]
+    : profileServers;
+  return selected.map((selection) => {
+    const base = catalog.get(selection.name);
+    if (base === undefined) {
+      throw new ConfigurationError(`Profile "${profile.id}" selects unknown MCP server "${selection.name}"`);
+    }
+    const toolProfile = selection.toolProfile ?? (selection.name === defaultServer ? profile.mcpConfig?.toolProfile : undefined);
+    const endpoint = base.endpoint === undefined || toolProfile === undefined ? base.endpoint : endpointWithToolProfile(base.endpoint, toolProfile);
+    return {
+      name: selection.name,
+      config: { ...base, endpoint },
+      optional: selection.optional ?? false,
+      ...(toolProfile === undefined ? {} : { toolProfile }),
+    };
+  });
+}
+
+function legacyServerConfig(config: CrewConfig["mcp"], endpoint: string, name: string): ServerConfig {
   return {
-    name: `den-mcp:${surface.toolProfile ?? "default"}`,
+    name,
     transport: config.transport,
-    endpoint: surface.endpoint,
+    endpoint,
     requestTimeout: config.requestTimeout,
     maxReconnectAttempts: config.maxReconnectAttempts,
     reconnectBaseDelay: config.reconnectBaseDelay,
   };
+}
+
+function serverCatalog(config: CrewConfig["mcp"]): ReadonlyMap<string, ServerConfig> {
+  const servers = new Map<string, ServerConfig>();
+  for (const [name, server] of Object.entries(config.servers)) {
+    servers.set(name, { name, ...server });
+  }
+  const defaultServer = config.defaultServer;
+  if (!servers.has(defaultServer)) {
+    servers.set(defaultServer, legacyServerConfig(config, config.endpoint, defaultServer));
+  }
+  return servers;
+}
+
+function endpointWithToolProfile(endpoint: string, toolProfile: string): string {
+  const url = new URL(endpoint);
+  url.searchParams.set("tool_profile", toolProfile);
+  return url.toString();
+}
+
+function mergeServerTools(servers: readonly McpSurfaceServer[]): {
+  readonly tools: readonly AgentTool[];
+  readonly collisions: readonly McpToolCollision[];
+} {
+  const byName = new Map<string, { tool: AgentTool; serverNames: string[] }>();
+  for (const server of servers) {
+    for (const tool of server.registry.listTools()) {
+      const existing = byName.get(tool.name);
+      if (existing === undefined) {
+        byName.set(tool.name, { tool, serverNames: [server.name] });
+      } else {
+        existing.serverNames.push(server.name);
+      }
+    }
+  }
+  const collisions = [...byName.entries()]
+    .filter(([, value]) => value.serverNames.length > 1)
+    .map(([toolName, value]) => ({ toolName, serverNames: value.serverNames }));
+  if (collisions.length > 0) return { tools: [], collisions };
+  return { tools: [...byName.values()].map((value) => value.tool), collisions: [] };
+}
+
+function collisionMessage(collisions: readonly McpToolCollision[]): string {
+  return `MCP tool name collision(s): ${collisions.map((collision) => `${collision.toolName} from ${collision.serverNames.join(",")}`).join("; ")}`;
 }
 
 function difference(left: readonly string[], right: readonly string[]): readonly string[] {

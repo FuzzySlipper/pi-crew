@@ -88,13 +88,28 @@ export interface RuntimeConfig {
 
 // ── McpConfig ───────────────────────────────────────────────────
 
+/** One selected MCP server for a profile MCP discovery surface. */
+export interface McpServerSelection {
+  /** Name of a crew-level `mcp.servers` entry. */
+  name: string;
+
+  /** Optional per-server Den MCP `tool_profile` query parameter. */
+  toolProfile?: string;
+
+  /** If true, connection failures are reported in diagnostics without failing the whole surface. */
+  optional?: boolean;
+}
+
 /** Per-profile MCP discovery surface. */
 export interface McpConfig {
-  /** Optional full MCP endpoint override. */
+  /** Optional full MCP endpoint override. Legacy single-server escape hatch. */
   endpoint?: string;
 
-  /** Optional Den MCP `tool_profile` query parameter. */
+  /** Optional default Den MCP `tool_profile` query parameter. */
   toolProfile?: string;
+
+  /** Named crew-level MCP servers selected for this profile. */
+  servers?: McpServerSelection[];
 }
 
 // ── ToolPolicy ──────────────────────────────────────────────────

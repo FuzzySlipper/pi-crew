@@ -19,10 +19,27 @@ export interface EffectiveToolInventory {
   readonly sessionId: string;
   readonly mcpEndpoint: string;
   readonly mcpToolProfile?: string;
+  readonly mcpServers: readonly McpServerInventoryEntry[];
+  readonly mcpCollisions: readonly McpToolCollisionInventoryEntry[];
   readonly requestedSets: readonly string[];
   readonly mcpTools: readonly ToolSelectionEntry[];
   readonly builtInTools: readonly BuiltInToolInventoryEntry[];
   readonly controlCommands: readonly string[];
+}
+
+export interface McpServerInventoryEntry {
+  readonly name: string;
+  readonly endpoint: string;
+  readonly optional: boolean;
+  readonly toolProfile?: string;
+  readonly ok: boolean;
+  readonly discoveredToolNames: readonly string[];
+  readonly error?: string;
+}
+
+export interface McpToolCollisionInventoryEntry {
+  readonly toolName: string;
+  readonly serverNames: readonly string[];
 }
 
 export interface BuiltInToolInventoryEntry {
@@ -42,6 +59,8 @@ export function buildEffectiveToolInventory(input: {
   readonly agent: CrewConfig["fullAgents"][number];
   readonly profile: Profile;
   readonly mcpEndpoint: string;
+  readonly mcpServers?: readonly McpServerInventoryEntry[];
+  readonly mcpCollisions?: readonly McpToolCollisionInventoryEntry[];
   readonly mcpTools: readonly AgentTool[];
   readonly selectedToolNames: ReadonlySet<string>;
 }): EffectiveToolInventory {
@@ -55,6 +74,8 @@ export function buildEffectiveToolInventory(input: {
     sessionId: input.agent.session.sessionId,
     mcpEndpoint: input.mcpEndpoint,
     mcpToolProfile: input.profile.mcpConfig?.toolProfile,
+    mcpServers: input.mcpServers ?? [],
+    mcpCollisions: input.mcpCollisions ?? [],
     requestedSets,
     mcpTools: buildToolSelectionInventory({
       tools: input.mcpTools,

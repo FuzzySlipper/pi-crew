@@ -196,10 +196,13 @@ export interface McpReloadPayload {
   readonly durationMs: number;
   readonly serverCount: number;
   readonly reloadedAt: string;
+  readonly servers?: readonly McpReloadServerPayload[];
+  readonly collisions?: readonly McpReloadCollisionPayload[];
   readonly error?: string;
 }
 
-/** Fired when a worker signals it cannot make progress. */
+export interface McpReloadServerPayload { readonly name: string; readonly endpoint: string; readonly optional: boolean; readonly toolProfile?: string; readonly ok: boolean; readonly toolNames: readonly string[]; readonly error?: string; }
+export interface McpReloadCollisionPayload { readonly toolName: string; readonly serverNames: readonly string[]; }
 export interface WorkerStuckPayload {
   readonly workerIdentity: string;
   readonly assignmentId: number;

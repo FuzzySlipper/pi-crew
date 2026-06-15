@@ -89,7 +89,15 @@ class CapturingLifecycle implements DelegatedSpawnLifecyclePort {
 function surfaceManager(registry: ToolRegistry): McpSurfaceManager {
   const client = { callTool: () => Promise.resolve({ ok: true, content: [] }) } as unknown as MCPClient;
   return {
-    surfaceForProfile: (profile: Profile): McpSurface => ({ endpoint: "http://mcp.test", toolProfile: profile.mcpConfig?.toolProfile, client, registry }),
+    surfaceForProfile: (profile: Profile): McpSurface => ({
+      endpoint: "http://mcp.test",
+      toolProfile: profile.mcpConfig?.toolProfile,
+      client,
+      registry,
+      servers: [],
+      selectedServerNames: [],
+      collisions: [],
+    }),
     connectAll: () => Promise.resolve(),
     disconnectAll: () => Promise.resolve(),
   };

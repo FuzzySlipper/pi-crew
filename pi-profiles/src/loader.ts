@@ -425,7 +425,54 @@ function parseMcpConfig(doc: Record<string, unknown>, profileId: string): McpCon
   if (!isPlainRecord(raw)) {
     throw new ConfigurationError(`Profile "${profileId}" field "mcpConfig" must be an object`);
   }
-  return raw;
+  const endpoint = optionalString(raw, "endpoint", profileId, "mcpConfig.endpoint");
+  const toolProfile = optionalString(raw, "toolProfile", profileId, "mcpConfig.toolProfile");
+  const servers = parseMcpServerSelections(raw["servers"], profileId);
+  return {
+    ...(endpoint === undefined ? {} : { endpoint }),
+    ...(toolProfile === undefined ? {} : { toolProfile }),
+    ...(servers === undefined ? {} : { servers }),
+  };
+}
+
+function parseMcpServerSelections(raw: unknown, profileId: string): McpConfig["servers"] {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new ConfigurationError(`Profile "${profileId}" field "mcpConfig.servers" must be an array`);
+  }
+  return raw.map((entry, index) => {
+    if (!isPlainRecord(entry)) {
+      throw new ConfigurationError(`Profile "${profileId}" field "mcpConfig.servers[${String(index)}]" must be an object`);
+    }
+    const name = optionalString(entry, "name", profileId, `mcpConfig.servers[${String(index)}].name`);
+    if (name === undefined) {
+      throw new ConfigurationError(`Profile "${profileId}" field "mcpConfig.servers[${String(index)}].name" is required`);
+    }
+    const toolProfile = optionalString(entry, "toolProfile", profileId, `mcpConfig.servers[${String(index)}].toolProfile`);
+    const optional = entry["optional"];
+    if (optional !== undefined && typeof optional !== "boolean") {
+      throw new ConfigurationError(`Profile "${profileId}" field "mcpConfig.servers[${String(index)}].optional" must be a boolean`);
+    }
+    return {
+      name,
+      ...(toolProfile === undefined ? {} : { toolProfile }),
+      ...(optional === undefined ? {} : { optional }),
+    };
+  });
+}
+
+function optionalString(
+  doc: Record<string, unknown>,
+  key: string,
+  profileId: string,
+  path: string,
+): string | undefined {
+  const value = doc[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new ConfigurationError(`Profile "${profileId}" field "${path}" must be a non-empty string`);
+  }
+  return value;
 }
 
 function parseToolPolicy(doc: Record<string, unknown>, profileId: string): ToolPolicy | undefined {

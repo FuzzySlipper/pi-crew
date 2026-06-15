@@ -27,7 +27,7 @@ describe("MCP profile surfaces", () => {
 
   it("caches clients by effective endpoint", () => {
     const manager = new DefaultMcpSurfaceManager({
-      config: { transport: "streamable-http", endpoint: "http://den/mcp", requestTimeout: 1, maxReconnectAttempts: 1, reconnectBaseDelay: 1 },
+      config: { transport: "streamable-http", endpoint: "http://den/mcp", requestTimeout: 1, maxReconnectAttempts: 1, reconnectBaseDelay: 1, defaultServer: "den", servers: {} },
       logger: new FakeLogger(),
       eventBus: new FakeEventBus(),
     });

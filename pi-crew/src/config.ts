@@ -24,12 +24,45 @@ export const DEFAULT_INSTALL_CONFIG_PATH = join(DEFAULT_INSTALL_ROOT, "config.ya
 
 // ── Crew-level config schema ───────────────────────────────────
 
-const McpConfigSchema = z.object({
-  transport: z.enum(["stdio", "streamable-http"]).default("streamable-http"),
-  endpoint: z.string().default("http://192.168.1.10:5199/mcp"),
+const McpTransportSchema = z.enum(["stdio", "streamable-http"]);
+
+const McpServerConfigSchema = z.object({
+  transport: McpTransportSchema.default("streamable-http"),
+  endpoint: z.string().url().optional(),
   requestTimeout: z.number().int().positive().default(30_000),
   maxReconnectAttempts: z.number().int().positive().default(3),
   reconnectBaseDelay: z.number().int().positive().default(1_000),
+  optional: z.boolean().default(false),
+}).superRefine((value, ctx) => {
+  if (value.transport === "streamable-http" && value.endpoint === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "streamable-http MCP servers require endpoint", path: ["endpoint"] });
+  }
+  if (value.transport === "stdio") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "stdio MCP servers are not supported yet", path: ["transport"] });
+  }
+});
+
+const McpConfigSchema = z.object({
+  transport: McpTransportSchema.default("streamable-http"),
+  endpoint: z.string().url().default("http://192.168.1.10:5199/mcp"),
+  requestTimeout: z.number().int().positive().default(30_000),
+  maxReconnectAttempts: z.number().int().positive().default(3),
+  reconnectBaseDelay: z.number().int().positive().default(1_000),
+  defaultServer: z.string().min(1).default("den"),
+  servers: z.record(z.string().min(1), McpServerConfigSchema).default({}),
+}).transform((value) => {
+  const servers = {
+    [value.defaultServer]: {
+      transport: value.transport,
+      endpoint: value.endpoint,
+      requestTimeout: value.requestTimeout,
+      maxReconnectAttempts: value.maxReconnectAttempts,
+      reconnectBaseDelay: value.reconnectBaseDelay,
+      optional: false,
+    },
+    ...value.servers,
+  };
+  return { ...value, servers };
 });
 
 const SessionsConfigSchema = z.object({
