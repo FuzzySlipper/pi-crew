@@ -279,11 +279,18 @@ export {
   isLoopbackHost,
   type AdminServerDeps,
   type DiagnosticsProjector,
+  type DirectDebugContextProjector,
+  type DirectDebugMessageView,
   type DirectDebugServicePort,
+  type DirectDebugSessionContextView,
   type DirectDebugTurnInput,
   type DirectDebugTurnResult,
 } from "./admin/admin-server.js";
 export { DirectDebugSessionService } from "./admin/direct-debug-session-service.js";
+export {
+  DirectDebugContextService,
+  type DirectDebugContextServiceDeps,
+} from "./admin/direct-debug-context-service.js";
 export {
   FullSessionResetError,
   FullSessionResetService,

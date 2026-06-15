@@ -12,6 +12,20 @@ import type {
   RemediationControlService,
   RemediationRequest,
 } from "./remediation-control-service.js";
+import type {
+  DirectDebugContextProjector,
+  DirectDebugServicePort,
+  ToolInventoryProjector,
+} from "./direct-debug-types.js";
+export type {
+  DirectDebugContextProjector,
+  DirectDebugMessageView,
+  DirectDebugServicePort,
+  DirectDebugSessionContextView,
+  DirectDebugTurnInput,
+  DirectDebugTurnResult,
+  ToolInventoryProjector,
+} from "./direct-debug-types.js";
 
 export interface DiagnosticsProjector {
   projectOverview(): Promise<DiagnosticsOverview>;
@@ -21,39 +35,13 @@ export interface MetricsProjector {
   projectPrometheus(): Promise<string>;
 }
 
-export interface DirectDebugTurnInput {
-  readonly sessionId: string;
-  readonly message: string;
-  readonly emitDenVisibility?: boolean;
-  readonly contextDiagnostics?: boolean;
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}
-
-export interface DirectDebugTurnResult {
-  readonly sessionId: string;
-  readonly turnId: string;
-  readonly message: string;
-  readonly toolCalls: readonly unknown[];
-  readonly delegationHandles: readonly unknown[];
-  readonly events: readonly unknown[];
-  readonly diagnostics: unknown;
-  readonly diagnosticOnly: boolean;
-}
-
-export interface DirectDebugServicePort {
-  runTurn(input: DirectDebugTurnInput): Promise<DirectDebugTurnResult>;
-}
-
-export interface ToolInventoryProjector {
-  projectTools(sessionId?: string): Promise<unknown>;
-}
-
 export interface AdminServerDeps {
   readonly config: AdminConfig;
   readonly diagnostics: DiagnosticsProjector;
   readonly metrics?: MetricsProjector;
   readonly controls?: RemediationControlService;
   readonly directDebug?: DirectDebugServicePort;
+  readonly debugContext?: DirectDebugContextProjector;
   readonly toolInventory?: ToolInventoryProjector;
   readonly agentWorkBreadcrumbs?: AgentWorkBreadcrumbRepository;
 }
@@ -71,6 +59,7 @@ export class AdminServer {
   readonly #metrics: MetricsProjector | null;
   readonly #controls: RemediationControlService | null;
   readonly #directDebug: DirectDebugServicePort | null;
+  readonly #debugContext: DirectDebugContextProjector | null;
   readonly #toolInventory: ToolInventoryProjector | null;
   readonly #agentWorkBreadcrumbs: AgentWorkBreadcrumbRepository | null;
   #server: Server | null = null;
@@ -81,6 +70,7 @@ export class AdminServer {
     this.#metrics = deps.metrics ?? null;
     this.#controls = deps.controls ?? null;
     this.#directDebug = deps.directDebug ?? null;
+    this.#debugContext = deps.debugContext ?? null;
     this.#toolInventory = deps.toolInventory ?? null;
     this.#agentWorkBreadcrumbs = deps.agentWorkBreadcrumbs ?? null;
   }
@@ -293,6 +283,21 @@ export class AdminServer {
       url.pathname.endsWith("/events")
     ) {
       writeJson(res, 200, { events: limitedEvents(overview, url) });
+      return;
+    }
+    if (
+      method === "GET" &&
+      url.pathname.startsWith("/debug/sessions/") &&
+      url.pathname.endsWith("/context")
+    ) {
+      if (this.#debugContext === null) {
+        writeJson(res, 404, { error: "not_found", detail: "debug_context_unavailable" });
+        return;
+      }
+      const sessionId = decodeURIComponent(
+        url.pathname.slice("/debug/sessions/".length, -"/context".length),
+      );
+      writeJson(res, 200, await this.#debugContext.projectContext(sessionId, limitParam(url, 50, 200)));
       return;
     }
     if (method === "GET" && url.pathname.startsWith("/debug/sessions/")) {

@@ -14,14 +14,19 @@ describe("pi-crew-debug CLI", () => {
       session: "sess-prime-coder",
       limit: 5,
     });
+    expect(parseArgs(["tui", "--session", "sess-prime-coder"])).toEqual({
+      command: "tui",
+      session: "sess-prime-coder",
+    });
   });
 
   it("lists sessions and sends diagnostic turns through the debug API", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const output: string[] = [];
     const fetchImpl = ((url: string | URL | Request, init?: RequestInit) => {
-      calls.push({ url: String(url), init });
-      const body = String(url).endsWith("/debug/sessions")
+      const requestUrl = requestToString(url);
+      calls.push({ url: requestUrl, init });
+      const body = requestUrl.endsWith("/debug/sessions")
         ? { sessions: [{ sessionId: "sess-prime-coder" }] }
         : { sessionId: "sess-prime-coder", turnId: "turn-1", message: "assistant says hi" };
       return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
@@ -49,3 +54,9 @@ describe("pi-crew-debug CLI", () => {
     expect(output[1]).toBe("assistant says hi");
   });
 });
+
+function requestToString(url: string | URL | Request): string {
+  if (typeof url === "string") return url;
+  if (url instanceof URL) return url.toString();
+  return url.url;
+}

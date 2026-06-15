@@ -63,9 +63,18 @@ PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug sessions
 PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug ask --session sess-prime-coder "hello"
 PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug events --session sess-prime-coder --limit 20
 PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug chat --session sess-prime-coder
+PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug tui --session sess-prime-coder
 ```
 
-Implementation note: the pi.dev TUI source under `/home/research/pi-fleet/pi/packages/` was inspected. The package is a local terminal UI/agent stack, not a small remote-session client seam, so the first working #2410 path uses the minimal standalone CLI instead of force-fitting the TUI. Future work can wrap the same `/debug/*` API in a richer TUI.
+The `tui` command is a remote client for the service/debug API. It renders a terminal dashboard with session overview, chat/context, and events panels. Local TUI commands are `/sessions`, `/select <sessionId>`, `/context`, `/events`, `/tools`, `/help`, and `/quit`. Other slash input such as `/status`, `/new`, and `/reload-mcp` is sent through `POST /debug/sessions/{sessionId}/turn` so the existing service command router owns command semantics.
+
+The debug API also exposes bounded persisted context for this client:
+
+```bash
+curl -s 'http://127.0.0.1:9237/debug/sessions/sess-prime-coder/context?limit=30'
+```
+
+Implementation note: the pi.dev TUI source under `/home/research/pi-fleet/pi/packages/` was re-inspected for this TUI pass, especially `packages/tui/src/index.ts`, `packages/tui/src/components/select-list.ts`, `packages/tui/src/editor-component.ts`, and `packages/coding-agent/src/modes/interactive/interactive-mode.ts`. The reusable ideas were the split between terminal rendering, selectable sessions, editor/input, and chat/event components. The code was not imported directly because pi.dev's interactive mode is a local agent/runtime TUI with a large dependency surface and local-agent assumptions; pi-crew's client stays a small remote debug API client and does not read the runtime DB directly.
 
 Known limitation: `/debug/*` is intentionally unauthenticated for the initial high-trust LAN/local diagnostic pass. Do not expose it outside the trusted operator network until a later hardening task adds auth/roles/TLS/CSRF posture.
 

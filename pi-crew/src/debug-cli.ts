@@ -3,6 +3,7 @@
 
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { runPiCrewDebugTui } from "./debug-tui.js";
 
 export interface DebugCliOptions {
   readonly baseUrl: string;
@@ -12,7 +13,7 @@ export interface DebugCliOptions {
 }
 
 interface ParsedCommand {
-  readonly command: "sessions" | "events" | "ask" | "chat" | "help";
+  readonly command: "sessions" | "events" | "ask" | "chat" | "tui" | "help";
   readonly session?: string;
   readonly message?: string;
   readonly limit?: number;
@@ -27,6 +28,14 @@ export async function runPiCrewDebug(options: DebugCliOptions): Promise<number> 
   if (parsed.command === "help") {
     write(usage());
     return 0;
+  }
+  if (parsed.command === "tui") {
+    return runPiCrewDebugTui({
+      baseUrl: options.baseUrl,
+      fetchImpl: options.fetchImpl,
+      initialSessionId: parsed.session,
+      adminBearerToken: process.env["PI_CREW_ADMIN_TOKEN"],
+    });
   }
   if (parsed.command === "sessions") {
     write(JSON.stringify(await requestJson(fetcher, `${options.baseUrl}/debug/sessions`), null, 2));
@@ -75,6 +84,9 @@ export function parseArgs(args: readonly string[]): ParsedCommand {
     return { command, session, message: messageParts.join(" ").trim() };
   }
   if (command === "chat") {
+    return { command, session: readFlag(rest, "--session") ?? rest[0] };
+  }
+  if (command === "tui") {
     return { command, session: readFlag(rest, "--session") ?? rest[0] };
   }
   throw new DebugCliError(`Unknown command: ${command}`);
@@ -167,6 +179,7 @@ function usage(): string {
     "pi-crew-debug events --session <sessionId> [--limit 50]",
     "pi-crew-debug ask --session <sessionId> <message>",
     "pi-crew-debug chat --session <sessionId>",
+    "pi-crew-debug tui [--session <sessionId>]",
     "",
     "Known limitation: /debug/* is an unauthenticated high-trust LAN/local diagnostic surface.",
   ].join("\n");
@@ -179,7 +192,7 @@ export class DebugCliError extends Error {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] !== undefined && import.meta.url === `file://${process.argv[1]}`) {
   runPiCrewDebug({
     baseUrl: process.env["PI_CREW_DEBUG_URL"] ?? DEFAULT_BASE_URL,
     args: process.argv.slice(2),

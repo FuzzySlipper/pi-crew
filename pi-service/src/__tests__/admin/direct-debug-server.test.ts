@@ -1,6 +1,6 @@
 /** Tests for direct diagnostic session API routes. */
 import { describe, expect, it } from "vitest";
-import { AdminServer, type DirectDebugServicePort } from "../../admin/admin-server.js";
+import { AdminServer, type DirectDebugContextProjector, type DirectDebugServicePort } from "../../admin/admin-server.js";
 import type { DiagnosticsOverview } from "../../diagnostics/types.js";
 
 const baseOverview: DiagnosticsOverview = {
@@ -47,6 +47,7 @@ const baseOverview: DiagnosticsOverview = {
       lastActivityAt: "2026-06-13T00:00:00.000Z",
       lastGatewayEvent: null,
       contextPressure: null,
+      contextCompaction: null,
       drainState: "inactive",
       recentErrorCount: 0,
       presenceStatus: "active",
@@ -85,9 +86,36 @@ describe("AdminServer direct debug routes", () => {
     }
   });
 
+  it("serves bounded session context without runtime DB access from clients", async () => {
+    const service = new FakeDirectDebugService();
+    const context = new FakeDebugContextService();
+    const server = await startDebugServer(19511, service, context);
+    try {
+      const response = await fetch(
+        `http://${server.host}:${String(server.port)}/debug/sessions/sess-prime-coder/context?limit=7`,
+      );
+      const body = await json(response);
+
+      expect(response.status).toBe(200);
+      expect(context.requests).toEqual([{ sessionId: "sess-prime-coder", limit: 7 }]);
+      expect(body["messages"]).toEqual([
+        {
+          id: 1,
+          role: "assistant",
+          content: "hello from history",
+          toolName: null,
+          tokenCount: 3,
+          createdAt: "2026-06-13T00:00:00.000Z",
+        },
+      ]);
+    } finally {
+      await server.stop();
+    }
+  });
+
   it("posts a diagnostic turn through the direct debug service", async () => {
     const service = new FakeDirectDebugService();
-    const server = await startDebugServer(19511, service);
+    const server = await startDebugServer(19512, service);
     try {
       const response = await fetch(
         `http://${server.host}:${String(server.port)}/debug/sessions/sess-prime-coder/turn`,
@@ -118,6 +146,7 @@ describe("AdminServer direct debug routes", () => {
 async function startDebugServer(
   port: number,
   directDebug: DirectDebugServicePort,
+  debugContext?: DirectDebugContextProjector,
 ): Promise<AdminServer> {
   const server = new AdminServer({
     config: {
@@ -129,6 +158,7 @@ async function startDebugServer(
     },
     diagnostics: { projectOverview: () => Promise.resolve(baseOverview) },
     directDebug,
+    debugContext,
   });
   await server.start();
   return server;
@@ -138,7 +168,7 @@ class FakeDirectDebugService implements DirectDebugServicePort {
   readonly turnInputs: Array<{ sessionId: string; message: string; emitDenVisibility: boolean }> =
     [];
 
-  async runTurn(input: {
+  runTurn(input: {
     readonly sessionId: string;
     readonly message: string;
     readonly emitDenVisibility?: boolean;
@@ -148,7 +178,7 @@ class FakeDirectDebugService implements DirectDebugServicePort {
       message: input.message,
       emitDenVisibility: input.emitDenVisibility ?? false,
     });
-    return {
+    return Promise.resolve({
       sessionId: input.sessionId,
       turnId: "turn-1",
       message: "debug response",
@@ -157,7 +187,32 @@ class FakeDirectDebugService implements DirectDebugServicePort {
       events: [],
       diagnostics: null,
       diagnosticOnly: true,
-    };
+    });
+  }
+}
+
+class FakeDebugContextService implements DirectDebugContextProjector {
+  readonly requests: Array<{ sessionId: string; limit: number }> = [];
+
+  projectContext(sessionId: string, limit: number) {
+    this.requests.push({ sessionId, limit });
+    return Promise.resolve({
+      sessionId,
+      limit,
+      messageCount: 1,
+      contextPressure: null,
+      contextCompaction: null,
+      messages: [
+        {
+          id: 1,
+          role: "assistant",
+          content: "hello from history",
+          toolName: null,
+          tokenCount: 3,
+          createdAt: "2026-06-13T00:00:00.000Z",
+        },
+      ],
+    });
   }
 }
 

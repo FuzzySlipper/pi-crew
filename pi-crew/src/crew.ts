@@ -13,7 +13,7 @@ import {
   InstanceFactoryImpl,
   RuntimeDb,
   AdminServer,
-  DirectDebugSessionService,
+  DirectDebugSessionService, DirectDebugContextService,
   FullSessionResetService,
   RemediationControlService,
   ExtensionActivator,
@@ -247,7 +247,7 @@ export class Crew {
                 loadProfile(request.profileId, resolveCrewInstallLayout(this.#config).profilesRoot),
                 request,
               ),
-          }),
+          }), debugContext: new DirectDebugContextService({ diagnostics, messages: messageRepository }),
           controls: new RemediationControlService({
             diagnostics,
             auditRepository: this.#auditRepository,
@@ -432,12 +432,12 @@ export class Crew {
     return this.#started;
   }
 
-  async #projectTools(sessionId: string | undefined): Promise<unknown> {
+  #projectTools(sessionId: string | undefined): Promise<unknown> {
     const profilesRoot = resolveCrewInstallLayout(this.#config).profilesRoot;
     const agents = this.#config.fullAgents.filter((agent) =>
       sessionId === undefined ? agent.enabled : agent.session.sessionId === sessionId,
     );
-    return { inventories: agents.map((agent) => resolveFullAgentRuntime({ agent, profilesRoot, mcpSurfaceManager: this.#mcpSurfaceManager, logger: this.#logger, defaultDenProjectId: this.#config.den.channelsProjectId }).inventory) };
+    return Promise.resolve({ inventories: agents.map((agent) => resolveFullAgentRuntime({ agent, profilesRoot, mcpSurfaceManager: this.#mcpSurfaceManager, logger: this.#logger, defaultDenProjectId: this.#config.den.channelsProjectId }).inventory) });
   }
 
   get config(): CrewConfig { return this.#config; }
