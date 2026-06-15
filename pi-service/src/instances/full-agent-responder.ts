@@ -13,6 +13,8 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { EventBus, Logger, ChannelContent } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
 import type { FullAgentContextPolicy } from "./full-agent-context-policy.js";
+import { DEFAULT_STREAM_RETRY_CONFIG, withRetryingStream } from "../model-stream-retry.js";
+import type { StreamRetryConfig } from "../model-stream-retry.js";
 import type {
   AgentResponseRequest,
   AgentResponder,
@@ -52,6 +54,8 @@ export interface FullAgentFactoryInput {
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly tools?: readonly AgentTool[];
+  readonly streamRetry?: StreamRetryConfig;
+  readonly eventBus?: EventBus;
 }
 
 export interface FullAgentFactory {
@@ -73,6 +77,7 @@ export interface FullAgentResponderConfig {
   readonly extraContextProvider?: (sessionId: string) => readonly AgentMessage[];
   readonly contextPolicy?: FullAgentContextPolicy;
   readonly contextPolicyProvider?: () => Promise<FullAgentContextPolicy>;
+  readonly streamRetry?: StreamRetryConfig;
 }
 
 export interface FullAgentRuntimeBuilder {
@@ -89,15 +94,20 @@ export class FullAgentResponderFactory implements AgentResponderFactory {
 
 export class DefaultFullAgentFactory implements FullAgentFactory {
   create(input: FullAgentFactoryInput): FullAgentAdapter {
+    const streamFn = (model: Model<Api>, context: Parameters<typeof streamSimple>[1], options: Parameters<typeof streamSimple>[2]) =>
+      streamSimple(model, context, {
+        ...options,
+        maxTokens: input.maxTokens,
+        temperature: input.temperature,
+      });
     return new Agent({
       sessionId: input.sessionId,
       getApiKey: () => input.apiKey,
-      streamFn: (model, context, options) =>
-        streamSimple(model, context, {
-          ...options,
-          maxTokens: input.maxTokens,
-          temperature: input.temperature,
-        }),
+      streamFn: withRetryingStream(streamFn, {
+        config: input.streamRetry ?? DEFAULT_STREAM_RETRY_CONFIG,
+        eventBus: input.eventBus,
+        correlation: { sessionId: input.sessionId, profileId: input.profileId },
+      }),
       initialState: {
         model: input.model,
         systemPrompt: input.systemPrompt,
@@ -122,6 +132,7 @@ export class FullAgentResponder implements AgentResponder {
   readonly #extraContextProvider: ((sessionId: string) => readonly AgentMessage[]) | undefined;
   readonly #contextPolicy: FullAgentContextPolicy;
   readonly #contextPolicyProvider: (() => Promise<FullAgentContextPolicy>) | undefined;
+  readonly #streamRetry: StreamRetryConfig | undefined;
 
   constructor(config: FullAgentResponderConfig) {
     this.#agentFactory = config.agentFactory ?? new DefaultFullAgentFactory();
@@ -143,6 +154,7 @@ export class FullAgentResponder implements AgentResponder {
       minimumRecentMessages: 24,
     };
     this.#contextPolicyProvider = config.contextPolicyProvider;
+    this.#streamRetry = config.streamRetry;
   }
 
   async respond(request: AgentResponseRequest): Promise<ChannelContent> {
@@ -156,6 +168,8 @@ export class FullAgentResponder implements AgentResponder {
       temperature: this.#temperature,
       maxTokens: this.#maxTokens,
       tools: this.#toolsProvider?.() ?? this.#tools,
+      streamRetry: this.#streamRetry,
+      eventBus: this.#eventBus,
     });
     this.#logger.debug("Starting Agent-backed fullAgent response", {
       profileId: request.profileId,

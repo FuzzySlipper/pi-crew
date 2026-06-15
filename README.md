@@ -184,6 +184,22 @@ Current runtime-local model-callable catalog:
 
 Current slash/control commands: `/help`, `/status`, `/session`, `/new`, `/reload-mcp`. They are not model-callable tools. Unrecognized slash commands and non-command text continue through the normal conversational runtime. Command-only turns return diagnostic/control output without entering the LLM path.
 
+### Model stream retry policy
+
+Pi-crew wraps full-agent, worker-agent, and delegated-child `streamSimple` calls with a single-provider retry decorator. It retries only the same configured model/provider; den-router remains the routing/failover boundary. Defaults are conservative and validated at startup:
+
+```yaml
+streamRetry:
+  enabled: true
+  maxAttempts: 3
+  baseDelayMs: 500
+  maxDelayMs: 5000
+  jitterRatio: 0.2
+  retryableHttpStatuses: [408, 429, 502, 503, 504]
+```
+
+The wrapper honors `Retry-After` when present, otherwise uses jittered exponential backoff. It emits bounded `model.stream.retry_scheduled`, `model.stream.retry_exhausted`, and `model.stream.partial_failure` events with session/profile/run/task correlation where available, but never logs prompts, completions, or tool arguments. It retries only before visible stream output begins; a drop after text/tool/thinking deltas is reported as a partial failure instead of being replayed unsafely.
+
 ### Full-agent context compaction
 
 Full-agent compaction auto-fires during persisted history loading, immediately before prompt assembly for a full-agent turn. The runtime resolves an effective context policy once per responder/session resolution: den-router models query `GET /v1/models/{model}/metadata` for `context_length`; non-den-router models or missing metadata use `context.defaultContextLength`. The history adapter estimates current persisted conversation usage with the conservative `chars_div_3` estimator and emits `context.pressure` with usage, threshold, estimator, and context-length provenance. When estimated usage reaches `context.compactionThresholdPercent` of the effective context length, older persisted turns are compacted into a `full_agent_context_artifact`; the prompt receives that artifact as a user-role context message plus the newest `context.minimumRecentMessages` raw messages. The old hidden `historyLimit=24` default is not the primary compaction trigger.

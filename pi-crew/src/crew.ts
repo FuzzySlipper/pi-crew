@@ -286,6 +286,8 @@ export class Crew {
         mcpClient: this.#mcpClient,
         toolRegistry: this.#mcpToolRegistry,
         profilesRoot: resolveCrewInstallLayout(config).profilesRoot,
+        streamRetry: config.streamRetry,
+        eventBus: this.#eventBus,
       }),
       childRegistry,
     });
@@ -441,14 +443,10 @@ export class Crew {
   }
 
   get config(): CrewConfig { return this.#config; }
-  get logger(): Logger { return this.#logger; }
-  get eventBus(): EventBus { return this.#eventBus; }
-  get gateway(): Gateway { return this.#gateway; }
-  get runtimeDb(): RuntimeDb { return this.#runtimeDb; }
-  get channelProvider(): ChannelProvider { return this.#channelProvider; }
-  get mcpClient(): MCPClient { return this.#mcpClient; }
-  get mcpToolRegistry(): McpToolRegistry { return this.#mcpToolRegistry; }
-  get denCompletionPoster(): CompletionPoster { return this.#denCompletionPoster; }
+  get logger(): Logger { return this.#logger; } get eventBus(): EventBus { return this.#eventBus; }
+  get gateway(): Gateway { return this.#gateway; } get runtimeDb(): RuntimeDb { return this.#runtimeDb; }
+  get channelProvider(): ChannelProvider { return this.#channelProvider; } get mcpClient(): MCPClient { return this.#mcpClient; }
+  get mcpToolRegistry(): McpToolRegistry { return this.#mcpToolRegistry; } get denCompletionPoster(): CompletionPoster { return this.#denCompletionPoster; }
   get sessionManager(): SessionManagerImpl { return this.#sessionManager; }
   get instancePool(): InstancePoolImpl { return this.#instancePool; }
   get breadcrumbManager(): BreadcrumbManager { return this.#breadcrumbManager; }
@@ -470,6 +468,8 @@ export class Crew {
       logger: this.#logger,
       profilesRoot: resolveCrewInstallLayout(this.#config).profilesRoot,
       delegatedSpawnLifecycle: this.#delegatedSpawnLifecycle,
+      streamRetry: this.#config.streamRetry,
+      eventBus: this.#eventBus,
     });
   }
 

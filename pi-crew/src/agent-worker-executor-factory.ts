@@ -1,6 +1,6 @@
 /** Crew-level factory for production LLM-backed worker executors. */
 
-import type { Logger } from "@pi-crew/core";
+import type { EventBus, Logger } from "@pi-crew/core";
 import { loadProfile } from "@pi-crew/profiles";
 import type { ToolPolicy } from "@pi-crew/profiles";
 import type { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
@@ -12,6 +12,7 @@ import {
   type AgentWorkerToolProviderInput,
   type WorkerModelConfig,
   type WorkerModelConfigSource,
+  type StreamRetryConfig,
 } from "@pi-crew/service";
 import type { AgentTool, AgentToolResult } from "@pi-crew/service";
 
@@ -22,6 +23,8 @@ export interface CrewAgentWorkerExecutorDeps {
   readonly profilesRoot?: string;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly delegatedSpawnLifecycle?: DelegatedSpawnLifecycle;
+  readonly streamRetry?: StreamRetryConfig;
+  readonly eventBus?: EventBus;
 }
 
 export interface CrewWorkerModelConfigSourceDeps {
@@ -86,6 +89,8 @@ export function createCrewAgentWorkerExecutor(
     modelConfigSource: createCrewWorkerModelConfigSource(deps),
     toolProvider: createCrewAgentWorkerToolProvider(deps),
     delegatedSpawnLifecycle: deps.delegatedSpawnLifecycle,
+    streamRetry: deps.streamRetry,
+    eventBus: deps.eventBus,
   });
 }
 

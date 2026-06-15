@@ -22,6 +22,7 @@ import {
   type FullAgentRuntimeBuilder,
   type FullAgentTurnHistory,
   type SessionSearchRepository,
+  type StreamRetryConfig,
   type DelegatedSpawnLifecyclePort,
 } from "@pi-crew/service";
 import {
@@ -42,15 +43,7 @@ import {
   toolAllowedByProfilePolicy,
   toolMatchesSelectedSet,
 } from "./tool-selection.js";
-export interface FullAgentRuntimeModelConfig {
-  readonly provider: string;
-  readonly modelName: string;
-  readonly modelBaseUrl?: string;
-  readonly api?: "openai-completions" | "openai-responses";
-  readonly apiKey?: string;
-  readonly temperature?: number;
-  readonly maxTokens?: number;
-}
+export interface FullAgentRuntimeModelConfig { readonly provider: string; readonly modelName: string; readonly modelBaseUrl?: string; readonly api?: "openai-completions" | "openai-responses"; readonly apiKey?: string; readonly temperature?: number; readonly maxTokens?: number; }
 export interface ResolvedFullAgentRuntime {
   readonly profile: Profile;
   readonly model: FullAgentRuntimeModelConfig;
@@ -75,10 +68,7 @@ export interface FullAgentDelegationRuntimeConfig {
   readonly parentDelegationConstraints?: DelegationConstraints;
   readonly allowedRuntimes?: readonly EffectiveDelegationRuntime[];
 }
-export interface DenChannelReadbackRuntimeConfig extends Omit<
-  DenChannelReadbackToolConfig,
-  "allowedChannelIds"
-> {}
+export interface DenChannelReadbackRuntimeConfig extends Omit<DenChannelReadbackToolConfig, "allowedChannelIds"> {}
 export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRuntimeInput {
   readonly eventBus?: EventBus;
   readonly history?: FullAgentTurnHistory;
@@ -88,6 +78,7 @@ export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRun
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
   readonly defaultDenProjectId?: string;
   readonly crewContext: CrewConfig["context"];
+  readonly streamRetry?: StreamRetryConfig;
 }
 export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["fullAgents"][number][];
@@ -103,6 +94,7 @@ export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly channelReadback?: DenChannelReadbackRuntimeConfig;
   readonly defaultDenProjectId?: string;
   readonly crewContext: CrewConfig["context"];
+  readonly streamRetry?: StreamRetryConfig;
 }
 class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
   constructor(
@@ -136,6 +128,7 @@ class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
       this.input.agentFactory,
       toolsProvider,
       this.input.crewContext,
+      this.input.streamRetry,
     );
   }
 }
@@ -172,6 +165,7 @@ class ProfileMappedFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
       this.input.agentFactory,
       toolsProvider,
       this.input.crewContext,
+      this.input.streamRetry,
     );
   }
 }
@@ -262,6 +256,7 @@ function createResponder(
   agentFactory?: FullAgentFactory,
   toolsProvider?: () => readonly AgentTool[],
   crewContext?: CrewConfig["context"],
+  streamRetry?: StreamRetryConfig,
 ): FullAgentResponder {
   return new FullAgentResponder({
     ...(agentFactory !== undefined ? { agentFactory } : {}),
@@ -278,6 +273,7 @@ function createResponder(
     temperature: runtime.model.temperature,
     tools: runtime.tools,
     toolsProvider,
+    streamRetry,
     contextPolicyProvider: createFullAgentContextPolicyResolver({
       crewContext: crewContext ?? {
         defaultContextLength: 131072,

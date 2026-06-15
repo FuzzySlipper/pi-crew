@@ -5,6 +5,7 @@ import type {
   DelegationSpawnRequest,
   EffectiveDelegationRuntime,
 } from "./delegation.js";
+import type { ModelStreamRetryPayload } from "./model-stream-retry-events.js";
 
 /** Optional Den worker correlation carried by runtime-originated events. */
 export interface DenWorkerCorrelationPayload {
@@ -17,27 +18,23 @@ export interface DenWorkerCorrelationPayload {
   readonly batchIndex?: string;
 }
 
-/** Fired when a new fullAgent, worker, or delegated session is created. */
 export interface SessionCreatedPayload {
   readonly sessionId: string;
   readonly kind: "full" | "worker" | "delegated";
   readonly delegation?: DelegationLineage;
 }
 
-/** Fired when a session is routed to (including fallback-creation visibility). */
 export interface SessionRoutingPayload {
   readonly sessionId: string;
   readonly channelId: string;
   readonly reason: "existing_session" | "fallback_created";
 }
 
-/** Fired when a session expires or is explicitly released. */
 export interface SessionExpiredPayload {
   readonly sessionId: string;
   readonly reason: string;
 }
 
-/** Fired when an agent tool invocation begins. */
 export interface ToolCalledPayload extends DenWorkerCorrelationPayload {
   readonly toolName: string;
   readonly sessionId: string;
@@ -460,6 +457,9 @@ export type GatewayEvent =
   | { event: "mcp.reload.started"; payload: McpReloadPayload }
   | { event: "mcp.reload.completed"; payload: McpReloadPayload }
   | { event: "mcp.reload.failed"; payload: McpReloadPayload }
+  | { event: "model.stream.retry_scheduled"; payload: ModelStreamRetryPayload }
+  | { event: "model.stream.retry_exhausted"; payload: ModelStreamRetryPayload }
+  | { event: "model.stream.partial_failure"; payload: ModelStreamRetryPayload }
   | { event: "worker.stuck"; payload: WorkerStuckPayload }
   | { event: "gateway.shutdown"; payload: GatewayShutdownPayload }
   | { event: "tool.denied"; payload: ToolDeniedPayload }

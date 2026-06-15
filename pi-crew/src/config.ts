@@ -17,6 +17,7 @@ import {
   GatewayConfigSchema,
   WorkerRoleMappingConfigSchema,
   DEFAULT_WORKER_ROLE_BINDINGS,
+  DEFAULT_STREAM_RETRY_CONFIG,
 } from "@pi-crew/service";
 
 export const DEFAULT_INSTALL_ROOT = "/home/agents/pi-crew";
@@ -76,6 +77,19 @@ const ContextConfigSchema = z.object({
   defaultContextLength: z.number().int().positive().default(131_072),
   compactionThresholdPercent: z.number().int().min(1).max(100).default(80),
   minimumRecentMessages: z.number().int().positive().default(24),
+});
+
+const StreamRetryConfigSchema = z.object({
+  enabled: z.boolean().default(DEFAULT_STREAM_RETRY_CONFIG.enabled),
+  maxAttempts: z.number().int().min(1).max(10).default(DEFAULT_STREAM_RETRY_CONFIG.maxAttempts),
+  baseDelayMs: z.number().int().nonnegative().default(DEFAULT_STREAM_RETRY_CONFIG.baseDelayMs),
+  maxDelayMs: z.number().int().nonnegative().default(DEFAULT_STREAM_RETRY_CONFIG.maxDelayMs),
+  jitterRatio: z.number().min(0).max(1).default(DEFAULT_STREAM_RETRY_CONFIG.jitterRatio),
+  retryableHttpStatuses: z.array(z.number().int().min(100).max(599)).default([...DEFAULT_STREAM_RETRY_CONFIG.retryableHttpStatuses]),
+}).default({}).superRefine((value, ctx) => {
+  if (value.maxDelayMs < value.baseDelayMs) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "maxDelayMs must be greater than or equal to baseDelayMs", path: ["maxDelayMs"] });
+  }
 });
 
 const ToolPolicyDefaultsSchema = z.object({
@@ -223,6 +237,7 @@ export const CrewConfigSchema = z.object({
   mcp: McpConfigSchema.default({}),
   sessions: SessionsConfigSchema.default({}),
   context: ContextConfigSchema.default({}),
+  streamRetry: StreamRetryConfigSchema,
   toolPolicy: ToolPolicyDefaultsSchema.default({}),
   fullAgents: z.array(FullAgentConfigSchema).default([]),
   workerPool: WorkerPoolConfigSchema,

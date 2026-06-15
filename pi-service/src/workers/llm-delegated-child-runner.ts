@@ -1,18 +1,8 @@
-/**
- * LLM-backed delegated child runner: creates a real Agent session for
- * delegated subagent execution.
- *
- * DESIGN (#2284): Child tool surface is derived from spawnRequest.allowedTools
- * and policy.allowedTools (intersection), minus deniedTools (union). A tool
- * provider resolves allowed tool names to AgentTool implementations.
- * Rationale: children should only see a bounded subset of parent tools,
- * preventing privilege amplification.
- */
-
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { streamSimple, type Api, type Model } from "@earendil-works/pi-ai";
+import type { EventBus } from "@pi-crew/core";
 import type {
   DelegatedImplementationResult,
   DelegatedResult,
@@ -41,27 +31,17 @@ import {
 } from "./delegated-child-drain-mode.js";
 import { createDelegatedResultPostTools } from "./delegated-result-post-tools.js";
 import { resolveDelegatedChildModel } from "./llm-delegated-child-model-resolution.js";
-
-const USAGE_ACCUMULATION_INTERVAL_MS = 50;
+import { DEFAULT_STREAM_RETRY_CONFIG, withRetryingStream } from "../model-stream-retry.js";
+import type { StreamRetryConfig } from "../model-stream-retry.js";
 
 export interface LlmDelegatedChildRunnerConfig {
   readonly baseUrl?: string;
   readonly apiKey?: string;
   readonly modelName?: string;
-
-  /**
-   * Tool provider for resolving allowed tool names to AgentTool instances.
-   *
-   * DESIGN: The runner does not own tool implementations. It receives
-   * allowed tool names from the spawn policy and resolves them via this
-   * provider. This keeps the runner agnostic of specific tool implementations
-   * and prevents granting ambient tools.
-   *
-   * When omitted or when provider returns empty, the child runs without tools
-   * (prompt-only, single-turn — backward compatible with current behavior).
-   */
   readonly toolProvider?: ToolProvider;
   readonly runtimeResolver?: DelegatedChildRuntimeResolver;
+  readonly streamRetry?: StreamRetryConfig;
+  readonly eventBus?: EventBus;
 }
 
 export interface DelegatedChildRuntimeResolutionInput {
@@ -181,19 +161,30 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
         input.spawnRequest,
         runtimeResolution?.systemPrompt,
       );
+      const streamFn = (m: Model<Api>, context: Parameters<typeof streamSimple>[1], options: Parameters<typeof streamSimple>[2]) =>
+        streamSimple(m, context, {
+          ...options,
+          temperature: 0.3,
+          maxTokens:
+            runtimeResolution?.runtimeConfig?.maxTokensPerTurn ?? input.policy.maxTokensPerTurn,
+        });
 
       const agent = new Agent({
         getApiKey: () =>
           runtimeResolution?.apiKey ??
           this.#config.apiKey ??
           (this.#config.baseUrl !== undefined ? "unused" : undefined),
-        streamFn: (m, context, options) =>
-          streamSimple(m, context, {
-            ...options,
-            temperature: 0.3,
-            maxTokens:
-              runtimeResolution?.runtimeConfig?.maxTokensPerTurn ?? input.policy.maxTokensPerTurn,
-          }),
+        streamFn: withRetryingStream(streamFn, {
+          config: this.#config.streamRetry ?? DEFAULT_STREAM_RETRY_CONFIG,
+          eventBus: this.#config.eventBus,
+          correlation: {
+            sessionId: input.childSession.sessionId,
+            profileId: input.correlation.profileId ?? resolvedRuntime.profileId,
+            assignmentId: input.correlation.assignmentId,
+            runId: input.correlation.runId,
+            taskId: input.correlation.taskId,
+          },
+        }),
         sessionId: input.childSession.sessionId,
         initialState: {
           model,
@@ -372,10 +363,10 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     spawnAllowedTools: readonly string[] | undefined,
     policy: ExecutionPolicy,
   ): ChildToolFilterResult {
-    const policyTools = policy.allowedTools ?? [];
+    const policyTools = policy.allowedTools;
 
     if (policyTools.length === 0) {
-      return { allowedToolNames: [], deniedToolNames: [...(policy.deniedTools ?? [])] };
+      return { allowedToolNames: [], deniedToolNames: [...policy.deniedTools] };
     }
 
     let allowSet: Set<string>;
@@ -386,7 +377,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     }
 
     const spawnDenied = spawnAllowedTools !== undefined ? inputDeniedTools() : [];
-    const policyDenied = policy.deniedTools ?? [];
+    const policyDenied = policy.deniedTools;
     const denySet = new Set([...spawnDenied, ...policyDenied]);
 
     for (const denied of denySet) {
@@ -411,7 +402,7 @@ export class LlmDelegatedChildRunner implements DelegatedChildRunner {
     input: DelegatedChildRunInput,
     runtimeConfig: DelegatedRuntimeConfig | undefined,
   ): number {
-    return runtimeConfig?.maxIterations ?? input.policy.maxIterations ?? 0;
+    return runtimeConfig?.maxIterations ?? input.policy.maxIterations;
   }
 
   #resolveModel(runtime: EffectiveDelegationRuntime) {

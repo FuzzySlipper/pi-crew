@@ -59,6 +59,7 @@ export function buildRuntimeResponderFactory(
         sessionSearchRepository,
         defaultDenProjectId: runtime.den.channelsProjectId,
         crewContext: runtime.context,
+        streamRetry: runtime.streamRetry,
       });
     }
     return buildRuntimeResponderFactory(runtime.runtime, eventBus);

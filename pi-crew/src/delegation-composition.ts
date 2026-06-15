@@ -1,9 +1,11 @@
+import type { EventBus } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
 import {
   LlmDelegatedChildRunner,
   type DelegatedChildRunner,
   type DelegatedSpawnLifecycle,
   type DelegatedSpawnLifecyclePort,
+  type StreamRetryConfig,
 } from "@pi-crew/service";
 import type { CrewConfig } from "./config.js";
 import {
@@ -36,13 +38,15 @@ export function createDeferredDelegationLifecyclePort(): DeferredDelegationLifec
 
 export function createDelegatedChildRunner(
   config: CrewConfig["delegation"],
-  deps?: DelegatedChildToolProviderDeps & { readonly profilesRoot?: string },
+  deps?: DelegatedChildToolProviderDeps & { readonly profilesRoot?: string; readonly streamRetry?: StreamRetryConfig; readonly eventBus?: EventBus },
 ): DelegatedChildRunner {
   const toolProvider = deps === undefined ? undefined : createDelegatedChildToolProvider(deps);
   return new LlmDelegatedChildRunner({
     baseUrl: config.llmBaseUrl,
     apiKey: config.llmApiKey,
     modelName: config.llmModelName,
+    streamRetry: deps?.streamRetry,
+    eventBus: deps?.eventBus,
     ...(toolProvider === undefined ? {} : { toolProvider }),
     ...(deps?.profilesRoot === undefined || toolProvider === undefined
       ? {}

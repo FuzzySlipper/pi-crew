@@ -226,6 +226,38 @@ describe("installed config layout", () => {
     expect(config.mcp.servers["test-runner"]?.requestTimeout).toBe(120000);
   });
 
+  it("loads and validates stream retry config", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "streamRetry:",
+        "  enabled: true",
+        "  maxAttempts: 4",
+        "  baseDelayMs: 250",
+        "  maxDelayMs: 2000",
+        "  jitterRatio: 0.1",
+        "  retryableHttpStatuses: [408, 429, 502, 503, 504]",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const config = loadCrewConfig(configPath);
+    expect(config.streamRetry).toMatchObject({
+      enabled: true,
+      maxAttempts: 4,
+      baseDelayMs: 250,
+      maxDelayMs: 2000,
+      jitterRatio: 0.1,
+      retryableHttpStatuses: [408, 429, 502, 503, 504],
+    });
+  });
+
   it("loads config-defined UTC script cron jobs and rejects llm_driven jobs", () => {
     const root = tempRoot();
     const configPath = join(root, "config.yaml");

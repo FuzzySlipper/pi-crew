@@ -138,6 +138,7 @@ export {
   type OperatorControlCompletedPayload,
   type WorkerCloseoutAssessedPayload,
 } from "./events.js";
+export type { ModelStreamRetryPayload, ModelStreamRetryCorrelationPayload } from "./model-stream-retry-events.js";
 
 // ── Hook registry / extensions ───────────────────────────────
 export {

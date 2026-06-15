@@ -10,8 +10,10 @@ import {
   type KnownProvider,
   type Model,
 } from "@earendil-works/pi-ai";
-import type { DelegationConstraints, EffectiveDelegationRuntime } from "@pi-crew/core";
+import type { DelegationConstraints, EffectiveDelegationRuntime, EventBus } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
+import { DEFAULT_STREAM_RETRY_CONFIG, withRetryingStream } from "../model-stream-retry.js";
+import type { StreamRetryConfig, StreamRetryCorrelation } from "../model-stream-retry.js";
 import type { AgentLike, SteerableAgent } from "./agent-supervisor.js";
 import type { AgentTool } from "./guarded-tool-types.js";
 import type {
@@ -59,6 +61,9 @@ export interface AgentWorkerFactoryInput {
   readonly maxTokens?: number;
   readonly apiKey?: string;
   readonly usesCustomBaseUrl?: boolean;
+  readonly streamRetry?: StreamRetryConfig;
+  readonly eventBus?: EventBus;
+  readonly correlation?: StreamRetryCorrelation;
 }
 
 export interface AgentWorkerFactory {
@@ -79,6 +84,8 @@ export interface AgentWorkerExecutorConfig {
   readonly delegatedSpawnLifecycle?: DelegatedSpawnLifecycle;
   readonly delegatedSpawnConstraints?: DelegationConstraints;
   readonly delegatedSpawnAllowedRuntimes?: readonly EffectiveDelegationRuntime[];
+  readonly streamRetry?: StreamRetryConfig;
+  readonly eventBus?: EventBus;
 }
 
 interface ResolvedWorkerModelConfig {
@@ -94,14 +101,19 @@ interface ResolvedWorkerModelConfig {
 
 export class DefaultAgentWorkerFactory implements AgentWorkerFactory {
   create(input: AgentWorkerFactoryInput): AgentWorkerAdapter {
+    const streamFn = (model: Model<Api>, context: Parameters<typeof streamSimple>[1], options: Parameters<typeof streamSimple>[2]) =>
+      streamSimple(model, context, {
+        ...options,
+        temperature: input.temperature ?? options?.temperature,
+        maxTokens: input.maxTokens ?? options?.maxTokens,
+      });
     const agent = new Agent({
       getApiKey: () => input.apiKey ?? (input.usesCustomBaseUrl === true ? "unused" : undefined),
-      streamFn: (model, context, options) =>
-        streamSimple(model, context, {
-          ...options,
-          temperature: input.temperature ?? options?.temperature,
-          maxTokens: input.maxTokens ?? options?.maxTokens,
-        }),
+      streamFn: withRetryingStream(streamFn, {
+        config: input.streamRetry ?? DEFAULT_STREAM_RETRY_CONFIG,
+        eventBus: input.eventBus,
+        correlation: input.correlation ?? { sessionId: input.sessionId },
+      }),
       sessionId: input.sessionId,
       initialState: {
         model: input.model,
@@ -119,6 +131,8 @@ export class AgentWorkerExecutor implements WorkerExecutor {
   readonly #delegatedSpawnLifecycle: DelegatedSpawnLifecycle | undefined;
   readonly #delegatedSpawnConstraints: DelegationConstraints;
   readonly #delegatedSpawnAllowedRuntimes: readonly EffectiveDelegationRuntime[] | undefined;
+  readonly #streamRetry: StreamRetryConfig | undefined;
+  readonly #eventBus: EventBus | undefined;
 
   constructor(config: AgentWorkerExecutorConfig = {}) {
     this.#agentFactory = config.agentFactory ?? new DefaultAgentWorkerFactory();
@@ -127,6 +141,8 @@ export class AgentWorkerExecutor implements WorkerExecutor {
     this.#delegatedSpawnLifecycle = config.delegatedSpawnLifecycle;
     this.#delegatedSpawnConstraints = config.delegatedSpawnConstraints ?? { maxSpawnDepth: 1 };
     this.#delegatedSpawnAllowedRuntimes = config.delegatedSpawnAllowedRuntimes;
+    this.#streamRetry = config.streamRetry;
+    this.#eventBus = config.eventBus;
   }
 
   async execute(context: WorkerExecutionContext): Promise<WorkerExecutionResult> {
@@ -218,6 +234,16 @@ export class AgentWorkerExecutor implements WorkerExecutor {
       maxTokens: modelConfig.maxTokens,
       apiKey: modelConfig.apiKey,
       usesCustomBaseUrl: modelConfig.usesCustomBaseUrl,
+      streamRetry: this.#streamRetry,
+      eventBus: this.#eventBus,
+      correlation: {
+        sessionId: context.session.id,
+        profileId: roleInput.profileId,
+        assignmentId: context.binding.assignmentId,
+        runId: context.binding.runId,
+        taskId: context.binding.taskId,
+        role: context.binding.role,
+      },
     });
     agent.state.tools = tools;
 

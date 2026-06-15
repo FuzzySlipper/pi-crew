@@ -15,6 +15,15 @@ export {
 } from "./config.js";
 export { createServiceRegistry, type ServiceRegistry, type CreateRegistryOptions } from "./di.js";
 export {
+  DEFAULT_STREAM_RETRY_CONFIG,
+  classifyStreamError,
+  retryDelayMs,
+  withRetryingStream,
+  type RetryingStreamOptions,
+  type StreamRetryConfig,
+  type StreamRetryCorrelation,
+} from "./model-stream-retry.js";
+export {
   ExtensionActivator,
   ExtensionActivationError,
   ExtensionConfigReloadError,
