@@ -94,6 +94,11 @@ describe("installed config layout", () => {
     ).toBe("/tmp/from-env.yaml");
   });
 
+  it("rejects --config without a path instead of falling back to installed default", () => {
+    expect(() => resolveCrewConfigPath({ argv: ["node", "main.js", "--config"], env: {}, cwd: "/repo" })).toThrow(ConfigurationError);
+    expect(() => resolveCrewConfigPath({ argv: ["node", "main.js", "--config", "--other"], env: {}, cwd: "/repo" })).toThrow(ConfigurationError);
+  });
+
   it("loads installed root and profile root from config", () => {
     const root = tempRoot();
     const config = loadCrewConfig(writeInstalledConfig(root));

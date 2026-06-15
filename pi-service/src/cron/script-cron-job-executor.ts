@@ -3,7 +3,7 @@
 import { execFile } from "node:child_process";
 import { relative, resolve } from "node:path";
 import { promisify } from "node:util";
-import type { ChannelProvider } from "@pi-crew/core";
+import type { ChannelProvider, Logger } from "@pi-crew/core";
 import type { CronJobExecutionResult, CronJobExecutor, CronJobRecord, CronRunRecord } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -14,20 +14,30 @@ export interface ScriptCronJobExecutorOptions {
   readonly scriptRoot: string;
   readonly timeoutMs?: number;
   readonly channelProvider?: ChannelProvider;
+  readonly logger?: Logger;
 }
 
 export class ScriptCronJobExecutor implements CronJobExecutor {
   readonly #scriptRoot: string;
   readonly #timeoutMs: number;
   readonly #channelProvider: ChannelProvider | null;
+  readonly #logger: Logger | null;
 
   constructor(options: ScriptCronJobExecutorOptions) {
     this.#scriptRoot = resolve(options.scriptRoot);
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.#channelProvider = options.channelProvider ?? null;
+    this.#logger = options.logger ?? null;
   }
 
   async execute(job: CronJobRecord, run: CronRunRecord): Promise<CronJobExecutionResult> {
+    const result = await this.executeScript(job);
+    const deliveryErrorMessage = await this.tryDeliver(job, run, result);
+    if (deliveryErrorMessage === null) return result;
+    return { ...result, errorMessage: appendErrorMessage(result.errorMessage, deliveryErrorMessage) };
+  }
+
+  private async executeScript(job: CronJobRecord): Promise<CronJobExecutionResult> {
     const cwd = resolveInsideRoot(this.#scriptRoot, job.cwd ?? ".");
     try {
       const result = await execFileAsync("bash", ["-lc", job.script], {
@@ -35,14 +45,24 @@ export class ScriptCronJobExecutor implements CronJobExecutor {
         timeout: this.#timeoutMs,
         maxBuffer: 2_000_000,
       });
-      const stdout = truncate(result.stdout);
-      const stderr = truncate(result.stderr);
-      await this.deliver(job, run, stdout, stderr, "succeeded", null);
-      return { status: "succeeded", stdout, stderr, exitCode: 0, errorMessage: null };
+      return { status: "succeeded", stdout: truncate(result.stdout), stderr: truncate(result.stderr), exitCode: 0, errorMessage: null };
     } catch (error: unknown) {
-      const failure = executionFailure(error);
-      await this.deliver(job, run, failure.stdout, failure.stderr, failure.status, failure.errorMessage);
-      return failure;
+      return executionFailure(error);
+    }
+  }
+
+  private async tryDeliver(
+    job: CronJobRecord,
+    run: CronRunRecord,
+    result: CronJobExecutionResult,
+  ): Promise<string | null> {
+    try {
+      await this.deliver(job, run, result.stdout, result.stderr, result.status, result.errorMessage);
+      return null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#logger?.warn("Cron delivery failed", { jobId: job.id, runId: run.id, error: message });
+      return `delivery failed: ${message}`;
     }
   }
 
@@ -75,6 +95,10 @@ function executionFailure(error: unknown): CronJobExecutionResult {
     };
   }
   return { status: "failed", stdout: "", stderr: "", exitCode: null, errorMessage: String(error) };
+}
+
+function appendErrorMessage(current: string | null, deliveryError: string): string {
+  return current === null || current.length === 0 ? deliveryError : `${current}; ${deliveryError}`;
 }
 
 function renderDelivery(

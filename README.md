@@ -219,4 +219,4 @@ Operator CLI:
 
 Cron semantics are deliberately minimal: five fields, minute granularity, UTC only, numeric fields, ranges, lists, and steps. Day-of-month and day-of-week are strict matches when both are restricted. Unsupported LLM-driven cron is not a valid config shape until an agent executor/prompt-safety path exists.
 
-Run outcomes are durable in `cron_runs`; a configured `deliveryChannelId` also posts the outcome through Den Channels. On startup the scheduler marks stale `running` rows older than `staleRunAfterMs` as failed, and manual runs use unique run IDs so repeated `run` invocations in the same minute do not collide.
+Run outcomes are durable in `cron_runs`; scheduled service runs with a configured `deliveryChannelId` also post the outcome through Den Channels. Manual `pi-crew-cron run` invocations are local operator readback only unless a future CLI delivery adapter is added. On startup the scheduler marks stale `running` rows older than `staleRunAfterMs` as failed, and manual runs use unique run IDs so repeated `run` invocations in the same minute do not collide.

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FakeEventBus, type Logger } from "@pi-crew/core";
+import { FakeEventBus, type ChannelProvider, type Logger } from "@pi-crew/core";
 import { RuntimeDb } from "../../persistence/runtime-db.js";
 import { CronScheduler } from "../../cron/cron-scheduler.js";
 import { ScriptCronJobExecutor } from "../../cron/script-cron-job-executor.js";
@@ -54,4 +54,56 @@ describe("CronScheduler", () => {
     }
   });
 
+
+  it("preserves successful script output when Den delivery fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-cron-"));
+    const db = new RuntimeDb({ path: join(dir, "runtime.db"), wal: true }, logger);
+    try {
+      const repository = new SqliteCronJobRepository(db.handle);
+      await repository.upsert({
+        id: "delivered",
+        projectId: "pi-crew",
+        schedule: "* * * * *",
+        shape: "script_only",
+        script: "printf delivery-ok",
+        deliveryChannelId: "642",
+        cwd: ".",
+      }, new Date("2026-06-15T09:00:00Z"));
+      const scheduler = new CronScheduler({
+        repository,
+        executor: new ScriptCronJobExecutor({ scriptRoot: dir, channelProvider: throwingChannelProvider() }),
+        logger,
+        eventBus: new FakeEventBus(),
+        tickIntervalMs: 60_000,
+        runIdFactory: () => "delivery-run",
+      });
+      const run = await scheduler.runNow("delivered", new Date("2026-06-15T09:01:00Z"));
+
+      expect(run).toMatchObject({ status: "succeeded", stdout: "delivery-ok", stderr: "", exitCode: 0 });
+      expect(run.errorMessage).toContain("delivery failed: channel unavailable");
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
 });
+
+
+function throwingChannelProvider(): ChannelProvider {
+  return {
+    name: "throwing",
+    providerId: "fake",
+    isConnected: true,
+    connect: () => Promise.resolve(),
+    disconnect: () => Promise.resolve(),
+    listChannels: () => Promise.resolve([]),
+    channelExists: () => Promise.resolve(true),
+    onMessage: () => undefined,
+    sendMessage: () => Promise.reject(new Error("channel unavailable")),
+    updateMessage: () => Promise.resolve(),
+    deleteMessage: () => Promise.resolve(),
+    sendBreadcrumb: () => Promise.resolve(),
+    updateBreadcrumb: () => Promise.resolve(),
+  };
+}

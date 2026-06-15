@@ -221,8 +221,11 @@ export function resolveCrewConfigPath(input: ResolveCrewConfigPathInput): string
   }
 
   const configIdx = input.argv.indexOf("--config");
-  const cliPath = input.argv[configIdx + 1];
-  if (configIdx !== -1 && cliPath !== undefined && cliPath.length > 0) {
+  if (configIdx !== -1) {
+    const cliPath = input.argv[configIdx + 1];
+    if (cliPath === undefined || cliPath.length === 0 || cliPath.startsWith("--")) {
+      throw new ConfigurationError("--config requires a path value");
+    }
     return absolutize(cliPath, input.cwd);
   }
 
