@@ -29,4 +29,29 @@ describe("CronScheduler", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("uses unique default run IDs and reconciles stale running rows", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-cron-"));
+    const db = new RuntimeDb({ path: join(dir, "runtime.db"), wal: true }, logger);
+    try {
+      const repository = new SqliteCronJobRepository(db.handle);
+      await repository.upsert({ id: "manual", projectId: "pi-crew", schedule: "* * * * *", shape: "script_only", script: "printf run", cwd: "." }, new Date("2026-06-15T09:00:00Z"));
+      const scheduler = new CronScheduler({ repository, executor: new ScriptCronJobExecutor({ scriptRoot: dir }), logger, eventBus: new FakeEventBus(), tickIntervalMs: 60_000 });
+      const first = await scheduler.runNow("manual", new Date("2026-06-15T09:01:00Z"));
+      const second = await scheduler.runNow("manual", new Date("2026-06-15T09:01:00Z"));
+      expect(first.id).not.toBe(second.id);
+
+      const job = await repository.get("manual");
+      expect(job).not.toBeNull();
+      if (job === null) throw new Error("missing cron job");
+      await repository.startRun(job, "stale-run", new Date("2026-06-14T09:00:00Z"));
+      const stale = await scheduler.reconcileStaleRuns(new Date("2026-06-15T10:00:00Z"));
+      expect(stale).toHaveLength(1);
+      expect(stale[0]).toMatchObject({ id: "stale-run", status: "failed" });
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
 });

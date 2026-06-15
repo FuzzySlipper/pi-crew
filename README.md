@@ -190,3 +190,33 @@ Safe remediation controls must build on this projection without adding an altern
 V1 established the background-agent foundation: service runtime, Den Channels HTTP/direct-agent ingress, cursor/replay safety, deterministic response path, and lifecycle telemetry compatibility evidence. V2 is about turning that foundation into a trusted Den worker substrate: real supervised worker roles, Den-authoritative completions, policy enforcement, context/drain behavior, diagnostics, and safe operator controls.
 
 Avoid commit-heavy or one-session status claims here. For current status, read Den tasks under the `pi-crew` project, especially parent roadmap task #2046 and the V2 roadmap document.
+
+
+## Cron scheduler
+
+`pi-crew` can run a small UTC-only cron scheduler when `cron.enabled: true` is set in the crew config. Jobs are loaded from `cron.jobs` at service startup and before every `pi-crew-cron` CLI operation, so operators do not need to write directly to SQLite.
+
+```yaml
+cron:
+  enabled: true
+  tickIntervalMs: 60000
+  scriptRoot: /home/agents/pi-crew
+  staleRunAfterMs: 86400000
+  jobs:
+    - id: heartbeat
+      schedule: '* * * * *'
+      shape: script_only # or data_collection; llm_driven is intentionally not exposed yet
+      script: 'printf cron-ok'
+      cwd: .
+      deliveryChannelId: '642' # optional Den Channels destination for run outcome messages
+```
+
+Operator CLI:
+
+- `pi-crew-cron list --config /home/agents/pi-crew/config.yaml`
+- `pi-crew-cron run --job heartbeat --config /home/agents/pi-crew/config.yaml`
+- `pi-crew-cron runs --job heartbeat --limit 10 --config /home/agents/pi-crew/config.yaml`
+
+Cron semantics are deliberately minimal: five fields, minute granularity, UTC only, numeric fields, ranges, lists, and steps. Day-of-month and day-of-week are strict matches when both are restricted. Unsupported LLM-driven cron is not a valid config shape until an agent executor/prompt-safety path exists.
+
+Run outcomes are durable in `cron_runs`; a configured `deliveryChannelId` also posts the outcome through Den Channels. On startup the scheduler marks stale `running` rows older than `staleRunAfterMs` as failed, and manual runs use unique run IDs so repeated `run` invocations in the same minute do not collide.

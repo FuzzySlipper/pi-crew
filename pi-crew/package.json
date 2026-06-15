@@ -9,7 +9,8 @@
     ".": "./src/index.ts"
   },
   "bin": {
-    "pi-crew-debug": "./src/debug-cli.ts"
+    "pi-crew-debug": "./src/debug-cli.ts",
+    "pi-crew-cron": "./src/cron-cli.ts"
   },
   "dependencies": {
     "@pi-crew/channels": "*",

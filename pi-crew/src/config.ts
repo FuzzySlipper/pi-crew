@@ -140,10 +140,26 @@ const FullAgentConfigSchema = z.object({
   lifecycle: FullAgentLifecycleConfigSchema,
 });
 
+const CronJobShapeSchema = z.enum(["script_only", "data_collection"]);
+
+const CronJobConfigSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1).default("pi-crew"),
+  schedule: z.string().min(1),
+  shape: CronJobShapeSchema.default("script_only"),
+  script: z.string().min(1),
+  cwd: z.string().min(1).nullable().default(null),
+  deliveryChannelId: z.string().min(1).nullable().default(null),
+  enabled: z.boolean().default(true),
+  timezone: z.literal("UTC").default("UTC"),
+});
+
 const CronConfigSchema = z.object({
   enabled: z.boolean().default(false),
   tickIntervalMs: z.number().int().positive().default(60_000),
   scriptRoot: z.string().min(1).default(DEFAULT_INSTALL_ROOT),
+  staleRunAfterMs: z.number().int().positive().default(86_400_000),
+  jobs: z.array(CronJobConfigSchema).default([]),
 }).default({});
 
 const DelegationProjectionConfigSchema = z.object({

@@ -1,15 +1,136 @@
 /** Minute-granularity cron scheduler loop with single-tick locking. */
+
+import { randomUUID } from "node:crypto";
 import type { EventBus, Logger } from "@pi-crew/core";
 import { CronExpression } from "./cron-expression.js";
 import type { CronJobExecutor, CronJobRecord, CronJobRepository, CronRunRecord } from "./types.js";
-export interface CronSchedulerOptions { readonly repository: CronJobRepository; readonly executor: CronJobExecutor; readonly logger: Logger; readonly eventBus: EventBus; readonly tickIntervalMs: number; readonly runIdFactory?: (job: CronJobRecord, now: Date) => string; }
-export class CronScheduler { readonly #repository: CronJobRepository; readonly #executor: CronJobExecutor; readonly #logger: Logger; readonly #eventBus: EventBus; readonly #tickIntervalMs: number; readonly #runIdFactory: (job: CronJobRecord, now: Date) => string; #timer: NodeJS.Timeout | null = null; #ticking = false; constructor(options: CronSchedulerOptions) { this.#repository = options.repository; this.#executor = options.executor; this.#logger = options.logger; this.#eventBus = options.eventBus; this.#tickIntervalMs = options.tickIntervalMs; this.#runIdFactory = options.runIdFactory ?? defaultRunId; }
-start(): void { if (this.#timer !== null) return; this.#timer = setInterval(() => { void this.tick(new Date()); }, this.#tickIntervalMs); this.#timer.unref(); this.#logger.info("Cron scheduler started", { tickIntervalMs: this.#tickIntervalMs }); }
-stop(): void { if (this.#timer === null) return; clearInterval(this.#timer); this.#timer = null; this.#logger.info("Cron scheduler stopped"); }
-async tick(now: Date): Promise<readonly CronRunRecord[]> { if (this.#ticking) { this.#logger.warn("Cron tick skipped because previous tick is still running"); return []; } this.#ticking = true; try { const dueJobs = await this.#repository.due(now); const runs: CronRunRecord[] = []; for (const job of dueJobs) runs.push(await this.runNow(job.id, now)); return runs; } finally { this.#ticking = false; } }
-async runNow(jobId: string, now: Date = new Date()): Promise<CronRunRecord> { const job = await this.#repository.get(jobId); if (job === null) throw new CronSchedulerError(`cron job not found: ${jobId}`); const startedAtMs = Date.now(); const run = await this.#repository.startRun(job, this.#runIdFactory(job, now), now); this.#eventBus.emit({ event: "tool.called", payload: cronCalledPayload(job, run) }); try { const result = await this.#executor.execute(job, run); const completed = await this.#repository.completeRun(run.id, { finishedAt: new Date().toISOString(), status: result.status, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, errorMessage: result.errorMessage }); await this.reschedule(job, now); this.#eventBus.emit({ event: "tool.completed", payload: cronCompletedPayload(job, completed, result.status === "succeeded", startedAtMs) }); return completed; } catch (error: unknown) { const completed = await this.#repository.completeRun(run.id, { finishedAt: new Date().toISOString(), status: "failed", stdout: "", stderr: "", exitCode: null, errorMessage: error instanceof Error ? error.message : String(error) }); await this.reschedule(job, now); this.#eventBus.emit({ event: "tool.completed", payload: cronCompletedPayload(job, completed, false, startedAtMs) }); return completed; } }
-private async reschedule(job: CronJobRecord, now: Date): Promise<void> { const nextRunAt = job.enabled ? new CronExpression(job.schedule).nextAfter(now) : null; await this.#repository.reschedule(job.id, now, nextRunAt); }}
-export class CronSchedulerError extends Error { readonly code = "CRON_SCHEDULER_ERROR"; constructor(message: string) { super(message); this.name = "CronSchedulerError"; } }
-function cronCalledPayload(job: CronJobRecord, run: CronRunRecord) { return { toolName: "cron.run", sessionId: `cron:${job.id}`, params: { jobId: job.id, runId: run.id, shape: job.shape } }; }
-function cronCompletedPayload(job: CronJobRecord, run: CronRunRecord, success: boolean, startedAtMs: number) { return { toolName: "cron.run", sessionId: `cron:${job.id}`, success, durationMs: Date.now() - startedAtMs, result: { jobId: job.id, runId: run.id, status: run.status } }; }
-function defaultRunId(job: CronJobRecord, now: Date): string { const stamp = now.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14); return `cron_${job.id}_${stamp}`; }
+
+export interface CronSchedulerOptions {
+  readonly repository: CronJobRepository;
+  readonly executor: CronJobExecutor;
+  readonly logger: Logger;
+  readonly eventBus: EventBus;
+  readonly tickIntervalMs: number;
+  readonly staleRunAfterMs?: number;
+  readonly runIdFactory?: (job: CronJobRecord, now: Date) => string;
+}
+
+export class CronScheduler {
+  readonly #repository: CronJobRepository;
+  readonly #executor: CronJobExecutor;
+  readonly #logger: Logger;
+  readonly #eventBus: EventBus;
+  readonly #tickIntervalMs: number;
+  readonly #staleRunAfterMs: number;
+  readonly #runIdFactory: (job: CronJobRecord, now: Date) => string;
+  #timer: NodeJS.Timeout | null = null;
+  #ticking = false;
+
+  constructor(options: CronSchedulerOptions) {
+    this.#repository = options.repository;
+    this.#executor = options.executor;
+    this.#logger = options.logger;
+    this.#eventBus = options.eventBus;
+    this.#tickIntervalMs = options.tickIntervalMs;
+    this.#staleRunAfterMs = options.staleRunAfterMs ?? 24 * 60 * 60 * 1000;
+    this.#runIdFactory = options.runIdFactory ?? defaultRunId;
+  }
+
+  async start(): Promise<void> {
+    if (this.#timer !== null) return;
+    await this.reconcileStaleRuns(new Date());
+    this.#timer = setInterval(() => { void this.tick(new Date()); }, this.#tickIntervalMs);
+    this.#timer.unref();
+    this.#logger.info("Cron scheduler started", { tickIntervalMs: this.#tickIntervalMs });
+  }
+
+  stop(): void {
+    if (this.#timer === null) return;
+    clearInterval(this.#timer);
+    this.#timer = null;
+    this.#logger.info("Cron scheduler stopped");
+  }
+
+  async reconcileStaleRuns(now: Date): Promise<readonly CronRunRecord[]> {
+    const cutoff = new Date(now.getTime() - this.#staleRunAfterMs);
+    const stale = await this.#repository.markStaleRunning(cutoff, now);
+    if (stale.length > 0) this.#logger.warn("Cron stale runs reconciled", { count: stale.length });
+    return stale;
+  }
+
+  async tick(now: Date): Promise<readonly CronRunRecord[]> {
+    if (this.#ticking) {
+      this.#logger.warn("Cron tick skipped because previous tick is still running");
+      return [];
+    }
+    this.#ticking = true;
+    try {
+      const dueJobs = await this.#repository.due(now);
+      const runs: CronRunRecord[] = [];
+      for (const job of dueJobs) runs.push(await this.runNow(job.id, now));
+      return runs;
+    } finally {
+      this.#ticking = false;
+    }
+  }
+
+  async runNow(jobId: string, now: Date = new Date()): Promise<CronRunRecord> {
+    const job = await this.#repository.get(jobId);
+    if (job === null) throw new CronSchedulerError(`cron job not found: ${jobId}`);
+    const startedAtMs = Date.now();
+    const run = await this.#repository.startRun(job, this.#runIdFactory(job, now), now);
+    this.#eventBus.emit({ event: "tool.called", payload: cronCalledPayload(job, run) });
+    try {
+      const result = await this.#executor.execute(job, run);
+      const completed = await this.#repository.completeRun(run.id, {
+        finishedAt: new Date().toISOString(),
+        status: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        errorMessage: result.errorMessage,
+      });
+      await this.reschedule(job, now);
+      this.#eventBus.emit({
+        event: "tool.completed",
+        payload: cronCompletedPayload(job, completed, result.status === "succeeded", startedAtMs),
+      });
+      return completed;
+    } catch (error: unknown) {
+      const completed = await this.#repository.completeRun(run.id, {
+        finishedAt: new Date().toISOString(),
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        exitCode: null,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      await this.reschedule(job, now);
+      this.#eventBus.emit({ event: "tool.completed", payload: cronCompletedPayload(job, completed, false, startedAtMs) });
+      return completed;
+    }
+  }
+
+  private async reschedule(job: CronJobRecord, now: Date): Promise<void> {
+    const nextRunAt = job.enabled ? new CronExpression(job.schedule).nextAfter(now) : null;
+    await this.#repository.reschedule(job.id, now, nextRunAt);
+  }
+}
+
+export class CronSchedulerError extends Error {
+  readonly code = "CRON_SCHEDULER_ERROR";
+  constructor(message: string) { super(message); this.name = "CronSchedulerError"; }
+}
+
+function cronCalledPayload(job: CronJobRecord, run: CronRunRecord) {
+  return { toolName: "cron.run", sessionId: `cron:${job.id}`, params: { jobId: job.id, runId: run.id, shape: job.shape } };
+}
+
+function cronCompletedPayload(job: CronJobRecord, run: CronRunRecord, success: boolean, startedAtMs: number) {
+  return { toolName: "cron.run", sessionId: `cron:${job.id}`, success, durationMs: Date.now() - startedAtMs, result: { jobId: job.id, runId: run.id, status: run.status } };
+}
+
+function defaultRunId(job: CronJobRecord, now: Date): string {
+  const stamp = now.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  return `cron_${job.id}_${stamp}_${randomUUID().slice(0, 8)}`;
+}

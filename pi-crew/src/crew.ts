@@ -43,6 +43,7 @@ import {
   CronScheduler,
   SqliteCronJobRepository,
   ScriptCronJobExecutor,
+  type CronJobRepository,
 } from "@pi-crew/service";
 import { loadCrewConfig, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
 export {
@@ -86,6 +87,7 @@ import {
   validateGatewayConfig,
 } from "./crew-helpers.js";
 import type { CompletionPoster } from "@pi-crew/tools";
+import { syncConfiguredCronJobs } from "./cron-jobs.js";
 export class Crew {
   readonly #config: CrewConfig;
   readonly #gatewayConfig: GatewayConfig;
@@ -112,6 +114,7 @@ export class Crew {
   readonly #agentRegistry: AgentRuntimeRegistry;
   readonly #steerFollowUpBridge: SteerFollowUpBridge;
   readonly #instancePool: InstancePoolImpl;
+  readonly #cronRepository: CronJobRepository;
   readonly #cronScheduler: CronScheduler | null;
   #started = false;
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
@@ -168,10 +171,11 @@ export class Crew {
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
     } satisfies DenChannelsAdapterConfig);
+    this.#cronRepository = new SqliteCronJobRepository(this.#runtimeDb.handle);
     this.#cronScheduler = config.cron.enabled ? new CronScheduler({
-      repository: new SqliteCronJobRepository(this.#runtimeDb.handle),
+      repository: this.#cronRepository,
       executor: new ScriptCronJobExecutor({ scriptRoot: config.cron.scriptRoot, channelProvider: this.#channelProvider }),
-      logger: this.#logger, eventBus: this.#eventBus, tickIntervalMs: config.cron.tickIntervalMs,
+      logger: this.#logger, eventBus: this.#eventBus, tickIntervalMs: config.cron.tickIntervalMs, staleRunAfterMs: config.cron.staleRunAfterMs,
     }) : null;
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
@@ -207,14 +211,12 @@ export class Crew {
       },
       this.#logger,
     );
-
     const agentFactory = new AgentFactoryImpl(
       this.#instancePool,
       sessionStore,
       this.#eventBus,
       this.#logger,
     );
-
     this.#sessionManager = new SessionManagerImpl(
       sessionStore,
       agentFactory,
@@ -225,7 +227,6 @@ export class Crew {
       createFallbackChannelBinding(config),
     );
     configureFullSessionManager(this.#sessionManager, config);
-
     const sessionResetService = new FullSessionResetService({
       sessionStore,
       instancePool: this.#instancePool,
@@ -264,7 +265,6 @@ export class Crew {
           agentWorkBreadcrumbs: this.#agentWorkBreadcrumbRepository,
         })
       : null;
-
     const delegationBridge = new SessionManagerDelegationSessionBridge({
       sessionManager: this.#sessionManager,
       sessionStore,
@@ -330,7 +330,6 @@ export class Crew {
       }),
     });
     new SessionPresenceBridge(this.#eventBus, this.#channelProvider, this.#logger);
-
     this.#channelProvider.onMessage((message) => {
       if (this.#steerFollowUpBridge.route(message)) return Promise.resolve();
       return this.#sessionManager.routeMessage(this.#channelProvider, message);
@@ -391,8 +390,9 @@ export class Crew {
       });
     }
 
+    await syncConfiguredCronJobs(this.#cronRepository, this.#config.cron.jobs, new Date());
     await this.#gateway.start();
-    this.#cronScheduler?.start();
+    await this.#cronScheduler?.start();
     await this.#adminServer?.start();
     if (this.#gatewayConfig.admin.bearerToken === null)
       this.#logger.warn("Admin diagnostics auth disabled", {

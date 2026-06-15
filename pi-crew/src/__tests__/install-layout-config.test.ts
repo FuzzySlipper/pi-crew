@@ -184,6 +184,63 @@ describe("installed config layout", () => {
     expect(config.delegation.projection.projectToolCalledEvents).toBe(true);
   });
 
+
+
+  it("loads config-defined UTC script cron jobs and rejects llm_driven jobs", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    mkdirSync(join(root, "profiles"), { recursive: true });
+    writeFileSync(
+      configPath,
+      [
+        "install:",
+        `  root: "${root}"`,
+        "profiles:",
+        `  root: "${join(root, "profiles")}"`,
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "cron:",
+        "  enabled: true",
+        "  jobs:",
+        "    - id: heartbeat",
+        "      schedule: '* * * * *'",
+        "      shape: data_collection",
+        "      script: 'printf ok'",
+        "      deliveryChannelId: '642'",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const config = loadCrewConfig(configPath);
+    expect(config.cron.jobs[0]).toMatchObject({
+      id: "heartbeat",
+      projectId: "pi-crew",
+      shape: "data_collection",
+      timezone: "UTC",
+      deliveryChannelId: "642",
+    });
+
+    writeFileSync(
+      configPath,
+      [
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "cron:",
+        "  jobs:",
+        "    - id: no-agent-yet",
+        "      schedule: '* * * * *'",
+        "      shape: llm_driven",
+        "      script: 'printf nope'",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    expect(() => loadCrewConfig(configPath)).toThrow(ConfigurationError);
+  });
+
   it("uses installed profiles root for full-agent responder assembly", () => {
     const root = tempRoot();
     const profileDir = join(root, "profiles", "installed-profile");
