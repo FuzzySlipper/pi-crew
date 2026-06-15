@@ -394,6 +394,12 @@ function parseModelConfig(
   if (!isPlainRecord(raw)) {
     throw new ConfigurationError(`Profile "${profileId}" field "modelConfig" must be an object`);
   }
+  const api = raw["api"];
+  if (api !== undefined && api !== "openai-completions" && api !== "openai-responses") {
+    throw new ConfigurationError(
+      `Profile "${profileId}" field "modelConfig.api" must be "openai-completions" or "openai-responses"`,
+    );
+  }
   return raw;
 }
 

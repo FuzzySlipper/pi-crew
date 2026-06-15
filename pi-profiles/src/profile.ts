@@ -53,6 +53,9 @@ export interface ModelConfig {
   /** Optional OpenAI-compatible model endpoint URL. */
   baseUrl?: string;
 
+  /** Optional API path/adapter selection for OpenAI-compatible routes. Defaults to chat completions. */
+  api?: "openai-completions" | "openai-responses";
+
   /** Environment variable that supplies the provider API key. */
   apiKeyEnv?: string;
 

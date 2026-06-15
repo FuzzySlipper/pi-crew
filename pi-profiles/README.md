@@ -47,6 +47,8 @@ skills:
     version: "0.1.0"
 modelConfig:
   temperature: 0.2
+  # Optional. Defaults to openai-completions; use openai-responses for Den Router GPT routes.
+  api: openai-responses
 toolPolicy:
   allow:
     - terminal
@@ -81,6 +83,15 @@ profiles/
 ```
 
 The global `skills/` directory is the sibling of the configured `profiles/` directory. For the installed service this is `/home/agents/pi-crew/skills/`; profile-local skills live under `/home/agents/pi-crew/profiles/<profile>/skills/`.
+
+## Model API routing
+
+`modelConfig.api` selects the pi-ai OpenAI-compatible adapter/path for custom `baseUrl` providers:
+
+- omit it, or set `openai-completions`, for the default `/chat/completions` path;
+- set `openai-responses` for Den Router GPT-style routes that require the OpenAI Responses API path.
+
+The same route selection can be used from full-agent runtime overrides (`runtime.api`) and worker role config (`modelApi`). Known limitation: this only selects the client API adapter/path; the target router must still expose the named model and support the corresponding request shape.
 
 Skill selection uses the existing `skills` field while preserving inline metadata compatibility:
 

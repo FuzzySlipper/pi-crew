@@ -107,6 +107,7 @@ describe("FilesystemProfileSource", () => {
         "modelConfig:",
         '  provider: "local"',
         '  model: "base-model"',
+        '  api: "openai-responses"',
         "  temperature: 0.1",
         "toolPolicy:",
         "  mode: allow_list",
@@ -160,6 +161,7 @@ describe("FilesystemProfileSource", () => {
     expect(coder.modelConfig).toEqual({
       provider: "local",
       model: "base-model",
+      api: "openai-responses",
       temperature: 0.2,
     });
     expect(coder.skills.map((skill) => skill.name)).toEqual(["coder-skill"]);
@@ -172,6 +174,7 @@ describe("FilesystemProfileSource", () => {
     expect(reviewer.modelConfig).toEqual({
       provider: "local",
       model: "base-model",
+      api: "openai-responses",
       temperature: 0.1,
     });
     expect(reviewer.skills.map((skill) => skill.name)).toEqual(["reviewer-skill"]);

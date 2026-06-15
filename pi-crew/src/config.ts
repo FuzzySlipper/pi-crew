@@ -103,12 +103,15 @@ const FullAgentChannelConfigSchema = z.object({
   wakePolicy: z.enum(["subscription", "direct_polling"]).default("subscription"),
 });
 
+const ModelApiSchema = z.enum(["openai-completions", "openai-responses"]);
+
 const FullAgentRuntimeConfigSchema = z
   .object({
     mode: z.literal("agent").default("agent"),
     provider: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
+    api: ModelApiSchema.optional(),
     apiKeyEnv: z.string().min(1).optional(),
     systemPromptSource: z.literal("profile").default("profile"),
     tools: z.object({ allow: z.array(z.string().min(1)).default([]) }).default({}),

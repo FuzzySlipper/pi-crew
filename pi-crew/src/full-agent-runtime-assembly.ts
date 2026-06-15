@@ -46,6 +46,7 @@ export interface FullAgentRuntimeModelConfig {
   readonly provider: string;
   readonly modelName: string;
   readonly modelBaseUrl?: string;
+  readonly api?: "openai-completions" | "openai-responses";
   readonly apiKey?: string;
   readonly temperature?: number;
   readonly maxTokens?: number;
@@ -422,6 +423,7 @@ function resolveModelConfig(
     provider,
     modelName,
     modelBaseUrl: agent.runtime.baseUrl ?? profile.modelConfig?.baseUrl,
+    api: agent.runtime.api ?? profile.modelConfig?.api,
     apiKey,
     temperature: profile.modelConfig?.temperature,
     maxTokens: profile.modelConfig?.maxTokens,
@@ -433,6 +435,7 @@ function createAgentModel(config: FullAgentRuntimeModelConfig): Model<Api> {
     if (registered !== undefined) {
       return {
         ...registered,
+        api: config.api ?? registered.api,
         baseUrl: config.modelBaseUrl ?? registered.baseUrl,
         maxTokens: config.maxTokens ?? registered.maxTokens,
       };
@@ -450,7 +453,7 @@ function createAgentModel(config: FullAgentRuntimeModelConfig): Model<Api> {
   return {
     id: config.modelName,
     name: config.modelName,
-    api: "openai-completions",
+    api: config.api ?? "openai-completions",
     provider: config.provider,
     baseUrl: config.modelBaseUrl ?? "",
     reasoning: false,

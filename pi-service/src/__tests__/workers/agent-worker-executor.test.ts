@@ -88,6 +88,7 @@ class CapturingAgentFactory implements AgentWorkerFactory {
   readonly created: Array<{
     readonly provider: string;
     readonly model: string;
+    readonly api: string;
     readonly baseUrl: string;
     readonly systemPrompt: string;
     readonly sessionId: string;
@@ -101,6 +102,7 @@ class CapturingAgentFactory implements AgentWorkerFactory {
     this.created.push({
       provider: input.model.provider,
       model: input.model.id,
+      api: input.model.api,
       baseUrl: input.model.baseUrl,
       systemPrompt: input.systemPrompt,
       sessionId: input.sessionId,
@@ -206,6 +208,7 @@ describe("AgentWorkerExecutor", () => {
                 modelProvider: "local-openai-compatible",
                 modelName: "local-model",
                 modelBaseUrl: "http://192.168.1.23:13305/v1",
+                modelApi: "openai-responses",
                 mcpToolSet: ["den", "delegation"],
               },
             }
@@ -237,6 +240,7 @@ describe("AgentWorkerExecutor", () => {
       expect.objectContaining({
         provider: "local-openai-compatible",
         model: "local-model",
+        api: "openai-responses",
         baseUrl: "http://192.168.1.23:13305/v1",
         sessionId: "session-1",
       }),

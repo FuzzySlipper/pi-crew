@@ -24,6 +24,7 @@ describe("Profile type (compile-time structural checks)", () => {
     const modelConfig: ModelConfig = {
       provider: "openai",
       model: "gpt-4o",
+      api: "openai-responses",
       temperature: 0.3,
       maxTokens: 4096,
     };

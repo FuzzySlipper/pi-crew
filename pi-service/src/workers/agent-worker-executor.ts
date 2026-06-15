@@ -30,6 +30,7 @@ export interface WorkerModelConfig {
   readonly provider?: string;
   readonly modelName?: string;
   readonly modelBaseUrl?: string;
+  readonly modelApi?: "openai-completions" | "openai-responses";
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly apiKey?: string;
@@ -84,6 +85,7 @@ interface ResolvedWorkerModelConfig {
   readonly provider: string;
   readonly modelName: string;
   readonly modelBaseUrl?: string;
+  readonly modelApi?: "openai-completions" | "openai-responses";
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly apiKey?: string;
@@ -343,6 +345,7 @@ function resolveWorkerModelConfig(
     provider,
     modelName,
     modelBaseUrl: roleConfig?.modelBaseUrl ?? profileConfig?.modelBaseUrl,
+    modelApi: roleConfig?.modelApi ?? profileConfig?.modelApi,
     temperature: roleConfig?.temperature ?? profileConfig?.temperature,
     maxTokens: roleConfig?.maxTokens ?? profileConfig?.maxTokens,
     apiKey: profileConfig?.apiKey,
@@ -376,12 +379,12 @@ function asKnownProvider(provider: string): KnownProvider | null {
 
 function createOpenAiCompatibleModel(
   config: ResolvedWorkerModelConfig,
-): Model<"openai-completions"> {
+): Model<Api> {
   const maxTokens = config.maxTokens ?? 2048;
   return {
     id: config.modelName,
     name: config.modelName,
-    api: "openai-completions",
+    api: config.modelApi ?? "openai-completions",
     provider: config.provider,
     baseUrl: config.modelBaseUrl ?? "",
     reasoning: false,

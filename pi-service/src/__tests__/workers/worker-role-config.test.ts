@@ -96,6 +96,7 @@ describe("WorkerRoleBindingSchema", () => {
         modelProvider: "local-openai-compatible",
         modelName: "Qwen3.6-35B-A3B-MTP-GGUF",
         modelBaseUrl: "http://192.168.1.23:13305/v1",
+        modelApi: "openai-responses",
         temperature: 0.2,
         maxTokens: 4096,
         systemPromptSource: "coder-worker",
@@ -112,6 +113,7 @@ describe("WorkerRoleBindingSchema", () => {
     if (result.success) {
       expect(result.data.config?.executionMode).toBe("llmAgent");
       expect(result.data.config?.modelBaseUrl).toBe("http://192.168.1.23:13305/v1");
+      expect(result.data.config?.modelApi).toBe("openai-responses");
       expect(result.data.config?.mcpToolSet).toEqual(["file", "terminal"]);
       expect(result.data.config?.deterministicMode).toBe(false);
       expect(result.data.config?.toolPolicyDefaults?.allowedTools).toEqual([

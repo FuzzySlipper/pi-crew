@@ -46,6 +46,7 @@ class FilesystemWorkerModelConfigSource implements WorkerModelConfigSource {
         provider: config.provider,
         modelName: config.model,
         modelBaseUrl: config.baseUrl,
+        modelApi: config.api,
         temperature: config.temperature,
         maxTokens: config.maxTokens,
         apiKey: resolveApiKey(config.apiKeyEnv, this.env),

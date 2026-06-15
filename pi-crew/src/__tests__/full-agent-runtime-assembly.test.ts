@@ -235,11 +235,86 @@ describe("resolveFullAgentRuntime", () => {
     expect(runtime.profile.id).toBe("child-profile");
     expect(runtime.model.provider).toBe("openai");
     expect(runtime.model.modelName).toBe("gpt-4.1-mini");
+    expect(runtime.agentModel.api).toBe("openai-responses");
     expect(runtime.model.temperature).toBe(0.4);
     expect(runtime.systemPrompt).toContain("Base soul prompt.");
     expect(runtime.systemPrompt).toContain("Child soul prompt.");
     expect(runtime.systemPrompt).toContain("Inherited prompt: base-profile");
     expect(runtime.tools.map((tool) => tool.name)).toEqual(["mcp_den_get_task"]);
+  });
+
+  it("defaults custom OpenAI-compatible full-agent routes to chat completions", () => {
+    const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-chat-default-"));
+    writeProfile(
+      profilesRoot,
+      "custom-profile",
+      [
+        'name: "Custom Profile"',
+        'description: "Custom OpenAI-compatible profile"',
+        "modelConfig:",
+        '  provider: "den-router"',
+        '  model: "grok"',
+        '  baseUrl: "http://127.0.0.1:18082/v1"',
+        "toolPolicy:",
+        "  mode: allow_all",
+        "",
+      ].join("\n"),
+      "Custom profile soul.",
+    );
+
+    const runtime = resolveFullAgentRuntime({
+      agent: parsedAgent("custom-profile", {
+        mode: "agent",
+        systemPromptSource: "profile",
+        tools: { allow: [] },
+        toolPolicy: { mode: "profile" },
+      }),
+      profilesRoot,
+      mcpSurfaceManager: surfaceManager(new ToolRegistry(new FakeLogger())),
+      logger: new FakeLogger(),
+      env: {},
+    });
+
+    expect(runtime.model.api).toBeUndefined();
+    expect(runtime.agentModel.api).toBe("openai-completions");
+  });
+
+  it("selects openai-responses for Den Router profiles that opt into the Responses API", () => {
+    const profilesRoot = mkdtempSync(join(tmpdir(), "pi-crew-conv-openai-responses-"));
+    writeProfile(
+      profilesRoot,
+      "gpt-profile",
+      [
+        'name: "GPT Profile"',
+        'description: "Den Router GPT profile"',
+        "modelConfig:",
+        '  provider: "den-router"',
+        '  model: "gpt"',
+        '  baseUrl: "http://127.0.0.1:18082/v1"',
+        '  api: "openai-responses"',
+        "toolPolicy:",
+        "  mode: allow_all",
+        "",
+      ].join("\n"),
+      "GPT profile soul.",
+    );
+
+    const runtime = resolveFullAgentRuntime({
+      agent: parsedAgent("gpt-profile", {
+        mode: "agent",
+        systemPromptSource: "profile",
+        tools: { allow: [] },
+        toolPolicy: { mode: "profile" },
+      }),
+      profilesRoot,
+      mcpSurfaceManager: surfaceManager(new ToolRegistry(new FakeLogger())),
+      logger: new FakeLogger(),
+      env: {},
+    });
+
+    expect(runtime.model.api).toBe("openai-responses");
+    expect(runtime.agentModel.api).toBe("openai-responses");
+    expect(runtime.agentModel.baseUrl).toBe("http://127.0.0.1:18082/v1");
   });
 
   it("applies profile deny-list after runtime tool selection", () => {

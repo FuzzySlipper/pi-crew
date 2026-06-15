@@ -51,6 +51,8 @@ export interface WorkerRoleConfig {
   readonly modelName?: string;
   /** Optional OpenAI-compatible base URL for local/no-key model endpoints. */
   readonly modelBaseUrl?: string;
+  /** Optional API path/adapter selection for OpenAI-compatible routes. */
+  readonly modelApi?: "openai-completions" | "openai-responses";
   /** Optional role-level sampling temperature. */
   readonly temperature?: number;
   /** Optional role-level maximum output tokens. */
@@ -112,6 +114,7 @@ const WorkerRoleConfigSchema = z
     modelProvider: z.string().min(1).optional(),
     modelName: z.string().min(1).optional(),
     modelBaseUrl: z.string().url().optional(),
+    modelApi: z.enum(["openai-completions", "openai-responses"]).optional(),
     temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().int().positive().optional(),
     systemPromptSource: z.string().min(1).optional(),
