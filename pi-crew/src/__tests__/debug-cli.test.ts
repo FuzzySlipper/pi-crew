@@ -18,6 +18,9 @@ describe("pi-crew-debug CLI", () => {
       command: "tui",
       session: "sess-prime-coder",
     });
+    expect(parseArgs(["tui", "--help"])).toEqual({
+      command: "help",
+    });
   });
 
   it("lists sessions and sends diagnostic turns through the debug API", async () => {

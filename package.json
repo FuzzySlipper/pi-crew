@@ -16,6 +16,7 @@
     "build": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint .",
+    "debug:tui": "PI_CREW_DEBUG_URL=${PI_CREW_DEBUG_URL:-http://127.0.0.1:9237} tsx pi-crew/src/debug-cli.ts tui",
     "format": "prettier --check .",
     "format:fix": "prettier --write ."
   },

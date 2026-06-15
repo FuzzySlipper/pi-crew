@@ -1,8 +1,6 @@
 #!/usr/bin/env -S tsx
-/** Direct-debug terminal UI for service-backed pi-crew full-agent sessions. */
-
-import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
+/** Human-navigable direct-debug terminal client for service-backed pi-crew sessions. */
+import { stdin as defaultInput, stdout as defaultOutput } from "node:process";
 import {
   DebugApiClient,
   DebugApiClientError,
@@ -11,6 +9,14 @@ import {
   type DebugMessageRecord,
   type DebugSessionSummary,
 } from "./debug-api-client.js";
+import { renderDebugTui } from "./debug-tui-render.js";
+import {
+  actionFromKey,
+  createDebugTuiModel,
+  reduceDebugTuiModel,
+  type DebugTranscriptLine,
+  type DebugTuiModel,
+} from "./debug-tui-state.js";
 
 export interface DebugTuiOptions extends DebugApiClientConfig {
   readonly initialSessionId?: string;
@@ -19,201 +25,259 @@ export interface DebugTuiOptions extends DebugApiClientConfig {
   readonly clearScreen?: boolean;
 }
 
-export interface DebugTuiState {
+export type DebugTuiState = LegacyDebugTuiState;
+export interface LegacyDebugTuiState {
   selectedSessionId: string | null;
   sessions: readonly DebugSessionSummary[];
-  transcript: readonly TranscriptLine[];
+  transcript: readonly DebugTranscriptLine[];
   events: readonly DebugEventRecord[];
   status: string;
 }
 
-export interface TranscriptLine {
-  readonly role: "operator" | "assistant" | "system";
-  readonly text: string;
+const CONTEXT_LIMIT = 60;
+const EVENTS_LIMIT = 80;
+
+interface RawInputStream extends NodeJS.ReadableStream {
+  readonly isTTY?: boolean;
+  setRawMode?(mode: boolean): this;
+  resume(): this;
+  pause(): this;
 }
 
-const CONTEXT_LIMIT = 30;
-const EVENTS_LIMIT = 30;
-const MAX_PANEL_LINES = 12;
+interface RenderOutputStream extends NodeJS.WritableStream {
+  readonly columns?: number;
+  readonly rows?: number;
+}
 
 export async function runPiCrewDebugTui(options: DebugTuiOptions): Promise<number> {
   const client = new DebugApiClient(options);
-  const screen = new TuiScreen(options.output ?? output, options.clearScreen ?? true);
-  const rl = createInterface({ input: options.input ?? input, output: options.output ?? output });
-  const state: DebugTuiState = {
-    selectedSessionId: options.initialSessionId ?? null,
-    sessions: [],
-    transcript: [],
-    events: [],
-    status: "connecting to direct-debug API",
-  };
+  const input = (options.input ?? defaultInput) as RawInputStream;
+  const output = (options.output ?? defaultOutput) as RenderOutputStream;
+  let model = createDebugTuiModel(options.initialSessionId);
+  const controller = new TerminalController(input, output, options.clearScreen ?? true);
   try {
-    await refreshSessions(client, state);
-    if (state.selectedSessionId === null) {
-      state.selectedSessionId = state.sessions[0]?.sessionId ?? null;
-    }
-    await refreshEvents(client, state);
-    screen.render(state);
+    controller.enter();
+    model = await refreshModel(client, model, options.initialSessionId);
+    controller.render(model);
     for (;;) {
-      const line = await rl.question(promptFor(state));
-      const trimmed = line.trim();
-      if (trimmed === "") continue;
-      if (trimmed === "/quit" || trimmed === "/exit") return 0;
-      await handleLine(client, state, trimmed);
-      screen.render(state);
+      const key = await controller.nextKey();
+      const action = actionFromKey(key, model);
+      if (action === null) continue;
+      model = reduceDebugTuiModel(model, action);
+      model = await runEffects(client, model);
+      controller.render(model);
+      if (model.shouldQuit) return 0;
     }
   } catch (error: unknown) {
-    if (isReadlineClosed(error)) return 0;
-    screen.writeLine(formatError(error));
+    if (isInputClosed(error)) return 0;
+    output.write(`\n${formatError(error)}\n`);
     return 1;
   } finally {
-    rl.close();
+    controller.exit();
   }
 }
 
 export async function handleLine(
   client: DebugApiClient,
-  state: DebugTuiState,
+  state: LegacyDebugTuiState,
   line: string,
 ): Promise<void> {
   if (line === "/sessions") {
-    await refreshSessions(client, state);
+    state.sessions = await client.listSessions();
+    state.status = `loaded ${String(state.sessions.length)} session(s)`;
     return;
   }
   if (line.startsWith("/select ")) {
-    const sessionId = line.slice("/select ".length).trim();
-    state.selectedSessionId = sessionId;
-    state.status = `selected ${sessionId}`;
-    await refreshEvents(client, state);
+    state.selectedSessionId = line.slice("/select ".length).trim();
+    state.status = `selected ${state.selectedSessionId}`;
+    state.events = await client.listEvents(requireLegacySession(state), EVENTS_LIMIT);
     return;
   }
   if (line === "/context") {
-    await loadContext(client, state);
+    const context = await client.getContext(requireLegacySession(state), 30);
+    state.transcript = context.messages.map(messageToTranscriptLine);
+    state.status = `loaded ${String(context.messages.length)} context message(s)`;
     return;
   }
   if (line === "/events") {
-    await refreshEvents(client, state);
+    state.events = await client.listEvents(requireLegacySession(state), EVENTS_LIMIT);
+    state.status = `loaded ${String(state.events.length)} event(s)`;
     return;
   }
   if (line === "/tools") {
-    await loadTools(client, state);
+    const inventory = await client.listTools(requireLegacySession(state));
+    state.transcript = [...state.transcript, { role: "system", text: JSON.stringify(inventory, null, 2) }];
+    state.status = "loaded tool inventory";
     return;
   }
   if (line === "/help") {
-    state.status = "local TUI commands: /sessions, /select <id>, /context, /events, /tools, /quit. Other slash commands are sent to the service router.";
+    state.status = "TUI-local: keyboard navigation, session list, context/events/tools views. Service slash commands are sent as turns.";
     return;
   }
-  await sendTurn(client, state, line);
-}
-
-async function refreshSessions(client: DebugApiClient, state: DebugTuiState): Promise<void> {
-  state.sessions = await client.listSessions();
-  state.status = `loaded ${String(state.sessions.length)} session(s)`;
-}
-
-async function refreshEvents(client: DebugApiClient, state: DebugTuiState): Promise<void> {
-  const sessionId = requireSelectedSession(state);
-  state.events = await client.listEvents(sessionId, EVENTS_LIMIT);
-  state.status = `loaded ${String(state.events.length)} recent event(s) for ${sessionId}`;
-}
-
-async function loadContext(client: DebugApiClient, state: DebugTuiState): Promise<void> {
-  const sessionId = requireSelectedSession(state);
-  const context = await client.getContext(sessionId, CONTEXT_LIMIT);
-  state.transcript = context.messages.map(messageToTranscriptLine);
-  state.status = `loaded ${String(context.messages.length)} of ${String(context.messageCount)} message(s) for ${sessionId}`;
-}
-
-async function loadTools(client: DebugApiClient, state: DebugTuiState): Promise<void> {
-  const sessionId = requireSelectedSession(state);
-  const inventory = await client.listTools(sessionId);
-  state.transcript = [
-    ...state.transcript,
-    { role: "system", text: `tool inventory for ${sessionId}:\n${JSON.stringify(inventory, null, 2)}` },
-  ];
-  state.status = `loaded tool inventory for ${sessionId}`;
-}
-
-async function sendTurn(client: DebugApiClient, state: DebugTuiState, line: string): Promise<void> {
-  const sessionId = requireSelectedSession(state);
   state.transcript = [...state.transcript, { role: "operator", text: line }];
-  state.status = `sending turn to ${sessionId}`;
-  const response = await client.postTurn(sessionId, line, "direct-debug-tui");
+  const response = await client.postTurn(requireLegacySession(state), line, "direct-debug-tui");
   state.transcript = [...state.transcript, { role: "assistant", text: response.message }];
-  state.events = response.events.map((event) => ({ payload: event }));
-  state.status = `turn ${response.turnId} completed; toolCalls=${String(response.toolCalls.length)} delegations=${String(response.delegationHandles.length)}`;
+  state.events = response.events.map((payload) => ({ payload }));
+  state.status = `turn ${response.turnId} completed`;
 }
 
-function messageToTranscriptLine(message: DebugMessageRecord): TranscriptLine {
+async function refreshModel(
+  client: DebugApiClient,
+  model: DebugTuiModel,
+  preferredSessionId?: string,
+): Promise<DebugTuiModel> {
+  try {
+    let next = reduceDebugTuiModel(model, {
+      type: "sessionsLoaded",
+      sessions: await client.listSessions(),
+      preferredSessionId,
+    });
+    next = await refreshSelectedDetails(client, next);
+    return next;
+  } catch (error: unknown) {
+    return reduceDebugTuiModel(model, { type: "error", message: formatError(error) });
+  }
+}
+
+async function refreshSelectedDetails(client: DebugApiClient, model: DebugTuiModel): Promise<DebugTuiModel> {
+  if (model.selectedSessionId === null) return model;
+  let next = reduceDebugTuiModel(model, {
+    type: "contextLoaded",
+    ...(await contextAction(client, model.selectedSessionId)),
+  });
+  next = reduceDebugTuiModel(next, {
+    type: "eventsLoaded",
+    events: await client.listEvents(model.selectedSessionId, EVENTS_LIMIT),
+  });
+  if (next.view === "tools") {
+    next = reduceDebugTuiModel(next, { type: "toolsLoaded", tools: await client.listTools(model.selectedSessionId) });
+  }
+  return next;
+}
+
+async function runEffects(client: DebugApiClient, model: DebugTuiModel): Promise<DebugTuiModel> {
+  let next = model;
+  if (next.refreshRequested) {
+    next = reduceDebugTuiModel(next, { type: "clearTransient" });
+    next = await refreshModel(client, next, next.selectedSessionId ?? undefined);
+  }
+  if (next.submitRequested !== null) {
+    const message = next.submitRequested;
+    next = reduceDebugTuiModel(next, { type: "turnStarted", message });
+    try {
+      const response = await client.postTurn(requireSelectedSession(next), message, "direct-debug-tui");
+      next = reduceDebugTuiModel(next, {
+        type: "turnCompleted",
+        message: response.message,
+        turnId: response.turnId,
+        events: response.events,
+      });
+    } catch (error: unknown) {
+      next = reduceDebugTuiModel(next, { type: "error", message: formatError(error) });
+    }
+  }
+  if (next.view === "tools" && next.toolsText.length === 0 && next.selectedSessionId !== null) {
+    try {
+      next = reduceDebugTuiModel(next, { type: "toolsLoaded", tools: await client.listTools(next.selectedSessionId) });
+    } catch (error: unknown) {
+      next = reduceDebugTuiModel(next, { type: "error", message: formatError(error) });
+    }
+  }
+  return next;
+}
+
+async function contextAction(
+  client: DebugApiClient,
+  sessionId: string,
+): Promise<{ messages: readonly DebugMessageRecord[]; messageCount: number }> {
+  const context = await client.getContext(sessionId, CONTEXT_LIMIT);
+  return { messages: context.messages, messageCount: context.messageCount };
+}
+
+class TerminalController {
+  readonly #input: RawInputStream;
+  readonly #output: RenderOutputStream;
+  readonly #clearScreen: boolean;
+  readonly #queue: string[] = [];
+  readonly #waiting: Array<(value: string) => void> = [];
+  readonly #onData = (chunk: Buffer | string): void => {
+    for (const key of splitKeyData(chunk.toString("utf8"))) this.#pushKey(key);
+  };
+
+  constructor(input: RawInputStream, output: RenderOutputStream, clearScreen: boolean) {
+    this.#input = input;
+    this.#output = output;
+    this.#clearScreen = clearScreen;
+  }
+
+  enter(): void {
+    this.#input.setRawMode?.(true);
+    this.#input.resume();
+    this.#input.on("data", this.#onData);
+    if (this.#clearScreen) this.#output.write("\x1b[?1049h\x1b[?25l");
+  }
+
+  exit(): void {
+    this.#input.off("data", this.#onData);
+    this.#input.setRawMode?.(false);
+    if (this.#clearScreen) this.#output.write("\x1b[?25h\x1b[?1049l");
+  }
+
+  render(model: DebugTuiModel): void {
+    const width = this.#output.columns ?? 100;
+    const height = this.#output.rows ?? 32;
+    if (this.#clearScreen) this.#output.write("\x1b[H\x1b[2J");
+    this.#output.write(renderDebugTui(model, { width, height }));
+  }
+
+  nextKey(): Promise<string> {
+    const next = this.#queue.shift();
+    if (next !== undefined) return Promise.resolve(next);
+    return new Promise((resolve) => this.#waiting.push(resolve));
+  }
+
+  #pushKey(key: string): void {
+    const waiter = this.#waiting.shift();
+    if (waiter === undefined) this.#queue.push(key);
+    else waiter(key);
+  }
+}
+
+function splitKeyData(data: string): readonly string[] {
+  const keys: string[] = [];
+  for (let index = 0; index < data.length;) {
+    if (data.startsWith("\x1b[5~", index) || data.startsWith("\x1b[6~", index)) {
+      keys.push(data.slice(index, index + 4));
+      index += 4;
+    } else if (data.startsWith("\x1b[Z", index) || data.startsWith("\x1b[A", index) || data.startsWith("\x1b[B", index)) {
+      keys.push(data.slice(index, index + 3));
+      index += 3;
+    } else if (data[index] === "\x1b") {
+      keys.push("\x1b");
+      index += 1;
+    } else {
+      keys.push(data[index] ?? "");
+      index += 1;
+    }
+  }
+  return keys.filter((key) => key.length > 0);
+}
+
+function messageToTranscriptLine(message: DebugMessageRecord): DebugTranscriptLine {
   if (message.role === "assistant") return { role: "assistant", text: message.content };
   if (message.role === "user") return { role: "operator", text: message.content };
   const label = message.toolName === null ? message.role : `${message.role}:${message.toolName}`;
   return { role: "system", text: `[${label} #${String(message.id)}] ${message.content}` };
 }
 
-function requireSelectedSession(state: DebugTuiState): string {
-  if (state.selectedSessionId !== null && state.selectedSessionId.trim() !== "") {
-    return state.selectedSessionId;
-  }
-  throw new DebugApiClientError("No session selected; use /sessions then /select <sessionId>");
+function requireSelectedSession(model: DebugTuiModel): string {
+  if (model.selectedSessionId !== null && model.selectedSessionId.trim().length > 0) return model.selectedSessionId;
+  throw new DebugApiClientError("No session selected");
 }
 
-function promptFor(state: DebugTuiState): string {
-  return `\n${state.selectedSessionId ?? "no-session"}> `;
-}
-
-class TuiScreen {
-  readonly #output: NodeJS.WritableStream;
-  readonly #clearScreen: boolean;
-
-  constructor(outputStream: NodeJS.WritableStream, clearScreen: boolean) {
-    this.#output = outputStream;
-    this.#clearScreen = clearScreen;
-  }
-
-  render(state: DebugTuiState): void {
-    if (this.#clearScreen) this.#output.write("\x1b[2J\x1b[H");
-    this.writeLine("pi-crew direct-debug TUI (high-trust diagnostic path; not Den Channels transport)");
-    this.writeLine(`status: ${state.status}`);
-    this.writeLine("");
-    this.writeLine("sessions");
-    for (const session of state.sessions.slice(0, MAX_PANEL_LINES)) {
-      const marker = session.sessionId === state.selectedSessionId ? "→" : " ";
-      this.writeLine(
-        `${marker} ${session.sessionId} profile=${session.profileId} instance=${session.instanceId ?? "none"} ` +
-          `state=${session.sessionState}/${session.presenceStatus} class=${session.classification} ` +
-          `errors=${String(session.recentErrorCount)} messages=${String(session.messageCount)}`,
-      );
-    }
-    this.writeLine("");
-    this.writeLine("chat/context");
-    for (const line of state.transcript.slice(-MAX_PANEL_LINES)) this.writeLine(formatTranscriptLine(line));
-    this.writeLine("");
-    this.writeLine("events");
-    for (const event of state.events.slice(-MAX_PANEL_LINES)) this.writeLine(formatEvent(event));
-    this.writeLine("");
-    this.writeLine("local commands: /sessions /select <id> /context /events /tools /help /quit");
-    this.writeLine("service slash commands: type /status, /new, /reload-mcp, etc. as normal chat input");
-  }
-
-  writeLine(line: string): void {
-    this.#output.write(`${line}\n`);
-  }
-}
-
-function formatTranscriptLine(line: TranscriptLine): string {
-  const prefix = line.role === "operator" ? "you" : line.role;
-  return `${prefix}: ${firstLines(line.text, 4)}`;
-}
-
-function formatEvent(event: DebugEventRecord): string {
-  const head = [event.sequence, event.observedAt, event.event].filter((value) => value !== undefined).join(" ");
-  const payload = event.payload === undefined ? "" : JSON.stringify(event.payload);
-  return firstLines(`${head} ${payload}`.trim(), 3);
-}
-
-function firstLines(text: string, limit: number): string {
-  return text.split("\n").slice(0, limit).join("\n  ");
+function requireLegacySession(state: LegacyDebugTuiState): string {
+  if (state.selectedSessionId !== null && state.selectedSessionId.trim().length > 0) return state.selectedSessionId;
+  throw new DebugApiClientError("No session selected");
 }
 
 function formatError(error: unknown): string {
@@ -221,6 +285,6 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
-function isReadlineClosed(error: unknown): boolean {
-  return error instanceof Error && error.message === "readline was closed";
+function isInputClosed(error: unknown): boolean {
+  return error instanceof Error && (error.message === "readline was closed" || error.name === "AbortError");
 }

@@ -64,9 +64,23 @@ PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug ask --session sess-prime-c
 PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug events --session sess-prime-coder --limit 20
 PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug chat --session sess-prime-coder
 PI_CREW_DEBUG_URL=http://127.0.0.1:9237 pi-crew-debug tui --session sess-prime-coder
+npm run debug:tui
 ```
 
-The `tui` command is a remote client for the service/debug API. It renders a terminal dashboard with session overview, chat/context, and events panels. Local TUI commands are `/sessions`, `/select <sessionId>`, `/context`, `/events`, `/tools`, `/help`, and `/quit`. Other slash input such as `/status`, `/new`, and `/reload-mcp` is sent through `POST /debug/sessions/{sessionId}/turn` so the existing service command router owns command semantics.
+The `tui` command is a remote client for the service/debug API. It opens a full-screen terminal client with a keyboard-selectable session list, selected-session summary, chat transcript/input, context/history browser, events/diagnostics browser, and optional tool diagnostics view. `npm run debug:tui` defaults to `http://127.0.0.1:9237`; override with `PI_CREW_DEBUG_URL=http://host:port npm run debug:tui`.
+
+Default TUI controls:
+
+- `↑`/`↓` or `j`/`k` — move the session selection when the session pane has focus, otherwise scroll the active view.
+- `Enter` — select the highlighted session, or submit input when the input pane has focus.
+- `Tab` / `Shift-Tab` — cycle focus between sessions, body, and input.
+- `c`, `e`, `t`, `?` — switch to context, events, tools, or help views.
+- `x` — expand/collapse the selected event JSON in events view.
+- `r` — refresh sessions plus selected-session context/events/tools.
+- `/` — jump to input and start a service slash command.
+- `q` or `Ctrl-C` — quit.
+
+Slash input such as `/status`, `/new`, and `/reload-mcp` is sent through `POST /debug/sessions/{sessionId}/turn` so the existing service command router owns command semantics. TUI-local keyboard controls are separate from service slash commands.
 
 The debug API also exposes bounded persisted context for this client:
 
@@ -74,7 +88,7 @@ The debug API also exposes bounded persisted context for this client:
 curl -s 'http://127.0.0.1:9237/debug/sessions/sess-prime-coder/context?limit=30'
 ```
 
-Implementation note: the pi.dev TUI source under `/home/research/pi-fleet/pi/packages/` was re-inspected for this TUI pass, especially `packages/tui/src/index.ts`, `packages/tui/src/components/select-list.ts`, `packages/tui/src/editor-component.ts`, and `packages/coding-agent/src/modes/interactive/interactive-mode.ts`. The reusable ideas were the split between terminal rendering, selectable sessions, editor/input, and chat/event components. The code was not imported directly because pi.dev's interactive mode is a local agent/runtime TUI with a large dependency surface and local-agent assumptions; pi-crew's client stays a small remote debug API client and does not read the runtime DB directly.
+Implementation note: the pi.dev TUI source under `/home/research/pi-fleet/pi/packages/` was re-inspected for this TUI pass, especially `packages/tui/src/tui.ts`, `packages/tui/src/components/select-list.ts`, `packages/tui/src/components/editor.ts`, `packages/tui/src/editor-component.ts`, `packages/tui/src/keybindings.ts`, `packages/tui/src/keys.ts`, `packages/tui/src/stdin-buffer.ts`, `packages/tui/src/components/box.ts`, and `packages/coding-agent/src/modes/interactive/`. The reusable ideas were the split between terminal rendering, keyboard-selectable lists, keybinding dispatch, input/editor state, and separately scrollable chat/context/event panes. The code was not imported directly because pi.dev's TUI package is a larger component/differential-renderer stack coupled to local-agent interactive-mode assumptions and `.ts` package internals; pi-crew's client keeps a small remote debug API boundary, reimplements only the needed terminal rendering/key handling/state reducer patterns, and does not read the runtime DB directly.
 
 Known limitation: `/debug/*` is intentionally unauthenticated for the initial high-trust LAN/local diagnostic pass. Do not expose it outside the trusted operator network until a later hardening task adds auth/roles/TLS/CSRF posture.
 

@@ -87,6 +87,7 @@ export function parseArgs(args: readonly string[]): ParsedCommand {
     return { command, session: readFlag(rest, "--session") ?? rest[0] };
   }
   if (command === "tui") {
+    if (rest.includes("--help") || rest.includes("-h")) return { command: "help" };
     return { command, session: readFlag(rest, "--session") ?? rest[0] };
   }
   throw new DebugCliError(`Unknown command: ${command}`);
