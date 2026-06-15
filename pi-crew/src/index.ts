@@ -10,7 +10,18 @@ export { MCPClient, type ServerConfig, type AgentTool } from "@pi-crew/mcp";
 export { DenChannelsAdapter, type DenChannelsAdapterConfig } from "@pi-crew/channels";
 export { createToolRegistry, type ToolDefinition, type ToolRegistry } from "@pi-crew/tools";
 export { BreadcrumbManager, AuditLogger } from "@pi-crew/governance";
-export { type MemoryStore, type MemoryEntry } from "@pi-crew/memory";
+export {
+  DenMemoryClient,
+  PiCrewDenMemoryAdapter,
+  DEN_MEMORY_TOOL_NAMES,
+  createPiCrewRuntimeContext,
+  defaultCaptureMode,
+  registerDenMemoryTools,
+  type DenMemoryRuntimeContext,
+  type DenMemoryToolDefinition,
+  type DenMemoryToolName,
+  type DenMemoryToolCallResult,
+} from "@pi-crew/memory";
 export {
   createDenCompletionPoster,
   type DenCompletionPosterConfig,
