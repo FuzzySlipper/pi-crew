@@ -35,6 +35,7 @@ const MIGRATIONS: Migration[] = [
   { version: 6, name: "006_full_session_kind", sql: "" },
   { version: 7, name: "007_agent_work_breadcrumbs", sql: "" },
   { version: 8, name: "008_session_fts", sql: "" },
+  { version: 9, name: "009_cron_jobs", sql: "" },
 ];
 
 // ── RuntimeDb ─────────────────────────────────────────────────────

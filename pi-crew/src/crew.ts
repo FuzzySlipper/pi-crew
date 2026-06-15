@@ -40,6 +40,9 @@ import {
   type WorkerRoleMappingConfig,
   type WorkerRuntimeConfig,
   type AgentWorkerExecutor,
+  CronScheduler,
+  SqliteCronJobRepository,
+  ScriptCronJobExecutor,
 } from "@pi-crew/service";
 import { loadCrewConfig, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
 export {
@@ -109,6 +112,7 @@ export class Crew {
   readonly #agentRegistry: AgentRuntimeRegistry;
   readonly #steerFollowUpBridge: SteerFollowUpBridge;
   readonly #instancePool: InstancePoolImpl;
+  readonly #cronScheduler: CronScheduler | null;
   #started = false;
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
@@ -118,7 +122,6 @@ export class Crew {
     this.#eventBus = eventBus ?? new FakeEventBus();
     const hookRegistry = new InMemoryHookRegistry(this.#logger);
     const toolPolicySessions = new InMemoryToolPolicySessionRegistry();
-
     this.#gatewayConfig = loadConfig({
       admin: config.admin,
       database: config.database,
@@ -127,7 +130,6 @@ export class Crew {
       logging: config.logging,
       runtime: config.runtime,
     });
-
     this.#registry = createServiceRegistry({
       config: this.#gatewayConfig,
       logger: this.#logger,
@@ -140,7 +142,6 @@ export class Crew {
       this.#registry.logger,
       this.#registry.eventBus,
     );
-
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
     const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
@@ -157,7 +158,6 @@ export class Crew {
       runtimeDb: this.#runtimeDb,
       sessionStore,
     });
-
     const cursorStore = createSqliteCursorStore(this.#runtimeDb);
     const denConnection = buildDenConnection(
       config.den,
@@ -168,11 +168,14 @@ export class Crew {
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
     } satisfies DenChannelsAdapterConfig);
-
+    this.#cronScheduler = config.cron.enabled ? new CronScheduler({
+      repository: new SqliteCronJobRepository(this.#runtimeDb.handle),
+      executor: new ScriptCronJobExecutor({ scriptRoot: config.cron.scriptRoot, channelProvider: this.#channelProvider }),
+      logger: this.#logger, eventBus: this.#eventBus, tickIntervalMs: config.cron.tickIntervalMs,
+    }) : null;
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
     this.#mcpSurfaceManager = new DefaultMcpSurfaceManager({ config: config.mcp, logger: this.#logger, eventBus: this.#eventBus });
-
     this.#denCompletionPoster = createDenCompletionPoster({
       mcpClient: this.#mcpClient,
       projectId: "pi-crew",
@@ -180,10 +183,8 @@ export class Crew {
       logger: this.#logger,
       completionDefaults: completionDefaultsFromEnv(process.env),
     });
-
     this.#agentRegistry = new AgentRuntimeRegistry();
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
-
     const fullAgentDelegationLifecycle = createDeferredDelegationLifecyclePort();
     const messageRepository = new SqliteMessageRepository(this.#runtimeDb.handle);
     const fullAgentFactory = buildRuntimeResponderFactory(
@@ -391,6 +392,7 @@ export class Crew {
     }
 
     await this.#gateway.start();
+    this.#cronScheduler?.start();
     await this.#adminServer?.start();
     if (this.#gatewayConfig.admin.bearerToken === null)
       this.#logger.warn("Admin diagnostics auth disabled", {
@@ -412,6 +414,7 @@ export class Crew {
     this.#logger.info("Crew stopping", { reason });
     await this.#extensionActivator.deactivateAll();
 
+    this.#cronScheduler?.stop();
     this.#breadcrumbManager.dispose();
     this.#auditLogger.dispose();
     await this.#mcpClient.disconnect();

@@ -140,6 +140,12 @@ const FullAgentConfigSchema = z.object({
   lifecycle: FullAgentLifecycleConfigSchema,
 });
 
+const CronConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  tickIntervalMs: z.number().int().positive().default(60_000),
+  scriptRoot: z.string().min(1).default(DEFAULT_INSTALL_ROOT),
+}).default({});
+
 const DelegationProjectionConfigSchema = z.object({
   channelEnabled: z.boolean().default(false),
   localLogEnabled: z.boolean().default(true),
@@ -174,6 +180,7 @@ export const CrewConfigSchema = z.object({
   workers: WorkerRoleMappingConfigSchema.default({
     bindings: DEFAULT_WORKER_ROLE_BINDINGS,
   }),
+  cron: CronConfigSchema,
   delegation: DelegationConfigSchema,
 });
 

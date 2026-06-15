@@ -331,3 +331,9 @@ export {
   type PacketAuditFetchFailure,
   type PacketCompletionReader,
 } from "./workers/packet-auditor-workflow.js";
+
+export { CronExpression, CronExpressionError } from "./cron/cron-expression.js";
+export { SqliteCronJobRepository, CronRepositoryError } from "./cron/sqlite-cron-job-repository.js";
+export { ScriptCronJobExecutor, CronExecutionError } from "./cron/script-cron-job-executor.js";
+export { CronScheduler, CronSchedulerError } from "./cron/cron-scheduler.js";
+export type { CronJobDraft, CronJobExecutionResult, CronJobExecutor, CronJobRecord, CronJobRepository, CronJobShape, CronRunCompletion, CronRunRecord, CronRunStatus } from "./cron/types.js";
