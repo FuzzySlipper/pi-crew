@@ -36,7 +36,7 @@ import {
   type ConfiguredFullSession,
 } from "./configured-full-sessions.js";
 import { withReplyIdentity } from "./session-reply-identity.js";
-
+import { handleFullAgentResponseTimeout } from "./full-agent-response-timeout.js";
 /**
  * Multi-session orchestrator.
  *
@@ -54,7 +54,6 @@ export interface SessionManager {
    * @returns The persisted session record.
    */
   create(config: SessionConfig): Promise<SessionRecord>;
-
   /**
    * Get a session by ID.
    *
@@ -300,11 +299,11 @@ export class SessionManagerImpl implements SessionManager {
     instance: AgentInstance,
   ): Promise<void> {
     this.emitPresence(record, "routed", "busy", "active");
+    const timeoutMs = this.responseTimeoutMs(record);
+    const startedAt = Date.now();
+    const operation = instance.processMessage(message);
     try {
-      const response = await withTurnTimeout(
-        instance.processMessage(message),
-        this.turnCoordinator.turnTimeoutMs,
-      );
+      const response = await withTurnTimeout(operation, timeoutMs);
       await channel.sendMessage(message.channelId, withReplyIdentity(response, message));
       this.emitPresence(record, "routed", "active", "active");
       this.logger.debug("Agent response sent", {
@@ -312,43 +311,48 @@ export class SessionManagerImpl implements SessionManager {
         channelId: message.channelId,
       });
     } catch (error: unknown) {
-      const timedOut = isFullAgentTurnTimeoutError(error);
+      if (isFullAgentTurnTimeoutError(error)) {
+        await handleFullAgentResponseTimeout({
+          channel,
+          message,
+          record,
+          instance,
+          operation,
+          timeoutMs,
+          startedAt,
+          eventBus: this.eventBus,
+          logger: this.logger,
+          emitPresence: (session, reason, subscriptionStatus, membershipStatus) => {
+            this.emitPresence(session, reason, subscriptionStatus, membershipStatus);
+          },
+        });
+        return;
+      }
       this.emitPresence(record, "idle_evicted", "degraded", "active");
       this.logger.error("Agent processMessage failed", {
         sessionId: record.id,
         channelId: message.channelId,
         error: error instanceof Error ? error.message : String(error),
-        timedOut,
+        timedOut: false,
       });
-      if (timedOut) await this.markTimedOutTurnIdle(record, instance.id);
       await channel.sendMessage(
         message.channelId,
         withReplyIdentity(
           {
             kind: "text",
-            text: timedOut
-              ? "The agent timed out while responding. Please try again."
-              : "The agent hit an internal error while responding. Please try again.",
+            text: "The agent hit an internal error while responding. Please try again.",
           },
           message,
         ),
       );
-      this.emitPresence(record, "routed", timedOut ? "idle" : "active", "active");
+      this.emitPresence(record, "routed", "active", "active");
     }
   }
 
-  private async markTimedOutTurnIdle(record: SessionRecord, instanceId: string): Promise<void> {
-    await this.pool.release(instanceId);
-    const current = await this.store.get(record.id);
-    if (current?.instanceId !== instanceId) return;
-    const updated: SessionRecord = {
-      ...current,
-      state: "idle",
-      instanceId: null,
-      lastActiveAt: new Date().toISOString(),
-    };
-    await this.store.save(updated);
-    this.emitPresence(updated, "idle_evicted", "idle", "active");
+  private responseTimeoutMs(record: SessionRecord): number {
+    if (record.responseTimeoutMs !== undefined) return record.responseTimeoutMs;
+    return this.configuredSessions.find((config) => config.sessionId === record.id)?.responseTimeoutMs
+      ?? this.turnCoordinator.turnTimeoutMs;
   }
 
   private async resolveSession(message: ChannelMessage): Promise<SessionRecord> {

@@ -338,6 +338,9 @@ function evidenceRefs(
   if (events.some((event) => event.event === "worker.stuck") && session.workerBinding) {
     refs.push(`worker.stuck:${session.workerBinding.assignmentId}`);
   }
+  if (events.some((event) => event.event === "session.response_timeout")) {
+    refs.push(`session.response_timeout:${session.id}`);
+  }
   if (denAssignment?.isActive === false) {
     refs.push(
       `den.assignment.${denAssignment.terminalState ?? "terminal"}:${denAssignment.assignmentId}`,
@@ -365,7 +368,9 @@ function uptimeSeconds(startedAt: string, current: string): number {
 
 function countRecentErrors(sessionId: string, events: readonly DiagnosticEventRecord[]): number {
   return events.filter(
-    (event) => event.event === "turn.errored" && asRecord(event.payload)?.sessionId === sessionId,
+    (event) =>
+      (event.event === "turn.errored" || event.event === "session.response_timeout") &&
+      asRecord(event.payload)?.sessionId === sessionId,
   ).length;
 }
 

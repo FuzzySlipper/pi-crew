@@ -2,27 +2,21 @@
 import { FakeEventBus } from "@pi-crew/core";
 import type { GatewayEvent } from "@pi-crew/core";
 import { describe, expect, it } from "vitest";
-
 import type { DenAssignmentStatus } from "../../persistence/types.js";
 import { InMemorySessionStore } from "../../sessions/session-store.js";
 import type { SessionRecord } from "../../sessions/types.js";
 import { DiagnosticsService } from "../../diagnostics/diagnostics-service.js";
 import { InMemoryDiagnosticEventJournal } from "../../diagnostics/event-journal.js";
 import type { DiagnosticStatusReader, RuntimeHealthReader } from "../../diagnostics/types.js";
-
 const now = "2026-06-08T04:30:00.000Z";
-
 class StaticStatusReader implements DiagnosticStatusReader {
   constructor(private readonly status: "ok" | "degraded" | "unreachable") {}
-
   readStatus() {
     return Promise.resolve({ status: this.status, lastOkAt: this.status === "ok" ? now : null });
   }
 }
-
 class StaticRuntimeHealthReader implements RuntimeHealthReader {
   constructor(private readonly failed = false) {}
-
   health() {
     if (this.failed) {
       return { status: "failed" as const, error: "runtime db closed" };
@@ -36,15 +30,12 @@ class StaticRuntimeHealthReader implements RuntimeHealthReader {
     };
   }
 }
-
 class StaticDenAssignmentReader {
   constructor(private readonly statuses: DenAssignmentStatus[]) {}
-
   checkAssignments(ids: string[]) {
     return Promise.resolve(this.statuses.filter((status) => ids.includes(status.assignmentId)));
   }
 }
-
 describe("DiagnosticsService", () => {
   it("projects worker sessions with Den assignment/run binding readback", async () => {
     const eventBus = new FakeEventBus();
@@ -52,15 +43,12 @@ describe("DiagnosticsService", () => {
     const store = new InMemorySessionStore();
     await store.save(workerSession("session-worker-1", "assignment-1", "run-1"));
     eventBus.emit(turnStarted("session-worker-1", "assignment-1", "run-1"));
-
     const service = makeService(store, journal, {
       assignmentReader: new StaticDenAssignmentReader([
         { assignmentId: "assignment-1", isActive: true },
       ]),
     });
-
     const overview = await service.projectOverview();
-
     expect(overview.classification.kind).toBe("healthy");
     expect(overview.counts.workerSessions).toBe(1);
     expect(overview.counts.degradedFullSessions).toBe(0);
@@ -84,7 +72,6 @@ describe("DiagnosticsService", () => {
       classification: "healthy",
     });
   });
-
   it("classifies remediation-required stuck worker evidence as pi_crew_local", async () => {
     const eventBus = new FakeEventBus();
     const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
@@ -256,6 +243,42 @@ describe("DiagnosticsService", () => {
       presenceStatus: "active",
       classification: "pi_crew_local",
     });
+  });
+
+  it("classifies full-agent response timeout events as visible local diagnostics", async () => {
+    const eventBus = new FakeEventBus();
+    const journal = new InMemoryDiagnosticEventJournal(eventBus, { clock: () => now });
+    const store = new InMemorySessionStore();
+    await store.save(fullSession("session-timeout"));
+    eventBus.emit({
+      event: "session.response_timeout",
+      payload: {
+        sessionId: "session-timeout",
+        profileId: "conv-agent",
+        instanceId: "instance-session-timeout",
+        channelId: "channel-general",
+        messageId: "message-1",
+        timeoutMs: 10,
+        elapsedMs: 11,
+        phase: "timed_out",
+        stillSettling: true,
+      },
+    });
+    eventBus.emit(sessionPresence("session-timeout", "degraded", "response_timeout"));
+
+    const overview = await makeService(store, journal).projectOverview();
+
+    expect(overview.classification.kind).toBe("pi_crew_local");
+    expect(overview.counts.degradedFullSessions).toBe(1);
+    expect(overview.sessions[0]).toMatchObject({
+      sessionId: "session-timeout",
+      recentErrorCount: 1,
+      presenceStatus: "degraded",
+      localLifecycleState: "session.presence",
+      classification: "pi_crew_local",
+    });
+    expect(overview.sessions[0]?.evidenceRefs).toContain("session.response_timeout:session-timeout");
+    expect(overview.recentEvents.some((event) => event.event === "session.response_timeout")).toBe(true);
   });
 
   it("classifies full-agent sessions with degraded presence as pi_crew_local", async () => {
@@ -453,7 +476,11 @@ function turnErrored(sessionId: string, error: string): GatewayEvent {
   };
 }
 
-function sessionPresence(sessionId: string, subscriptionStatus: string): GatewayEvent {
+function sessionPresence(
+  sessionId: string,
+  subscriptionStatus: string,
+  reason: "routed" | "response_timeout" = "routed",
+): GatewayEvent {
   return {
     event: "session.presence",
     payload: {
@@ -467,7 +494,7 @@ function sessionPresence(sessionId: string, subscriptionStatus: string): Gateway
       agentInstanceId: `instance-${sessionId}`,
       subscriptionStatus: subscriptionStatus as "active" | "degraded" | "idle",
       membershipStatus: "active",
-      reason: "routed",
+      reason,
     },
   };
 }

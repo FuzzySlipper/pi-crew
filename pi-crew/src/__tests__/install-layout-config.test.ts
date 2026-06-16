@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { loadCrewConfig, resolveCrewConfigPath, resolveCrewInstallLayout } from "../config.js";
 import { buildRuntimeResponderFactory } from "../runtime-responder-factory.js";
+import { configuredFullSessionConfigs } from "../full-agent-sessions.js";
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "pi-crew-install-layout-"));
@@ -374,6 +375,10 @@ describe("installed config layout", () => {
     );
 
     expect(() => factory.createResponder({ profileId: "installed-profile" })).not.toThrow();
+    expect(configuredFullSessionConfigs(config)[0]).toMatchObject({
+      sessionId: "sess-installed",
+      responseTimeoutMs: 300000,
+    });
   });
 
   it("fails loudly for legacy conversationalAgents config", () => {

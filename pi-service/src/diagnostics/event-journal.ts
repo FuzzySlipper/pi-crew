@@ -44,6 +44,7 @@ const JOURNALED_EVENTS: readonly GatewayEvent["event"][] = [
   "policy.enforced",
   "completion.posted",
   "session.rehydrated",
+  "session.response_timeout",
   "session.presence",
   "admin.control.requested",
   "admin.control.completed",

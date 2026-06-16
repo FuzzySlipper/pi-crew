@@ -38,6 +38,7 @@ export interface SessionRow {
   delegation_spawn_request_json: string | null;
   delegation_constraints_json: string | null;
   effective_runtime_json: string | null;
+  response_timeout_ms: number | null;
   status: SessionState;
   created_at: string;
   last_activity: string;
@@ -234,6 +235,7 @@ export function rowToRecord(row: SessionRow): SessionRecord {
     delegationSpawnRequest: parseDelegationSpawnRequest(row.delegation_spawn_request_json),
     delegationConstraints: parseDelegationConstraints(row.delegation_constraints_json),
     effectiveRuntime: parseEffectiveRuntime(row.effective_runtime_json),
+    responseTimeoutMs: row.response_timeout_ms ?? undefined,
   };
 }
 
@@ -259,6 +261,7 @@ export function recordToRow(record: SessionRecord): SessionRow {
       ? JSON.stringify(record.effectiveRuntime)
       : null,
     status: record.state,
+    response_timeout_ms: record.responseTimeoutMs ?? null,
     created_at: record.createdAt,
     last_activity: record.lastActiveAt,
     expires_at: null,
