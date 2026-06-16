@@ -17,6 +17,7 @@ export function configuredFullSessionConfigs(config: CrewConfig): readonly Sessi
         subscriptionIdentity: channel.subscriptionIdentity,
         sessionOwnerId: agent.session.ownerId,
       })),
+      responseTimeoutMs: agent.lifecycle.turnTimeoutMs,
     }));
 }
 

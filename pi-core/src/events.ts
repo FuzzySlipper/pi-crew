@@ -6,7 +6,6 @@ import type {
   EffectiveDelegationRuntime,
 } from "./delegation.js";
 import type { ModelStreamRetryPayload } from "./model-stream-retry-events.js";
-
 /** Optional Den worker correlation carried by runtime-originated events. */
 export interface DenWorkerCorrelationPayload {
   readonly policyId?: string;
@@ -17,31 +16,26 @@ export interface DenWorkerCorrelationPayload {
   readonly batchId?: string;
   readonly batchIndex?: string;
 }
-
 export interface SessionCreatedPayload {
   readonly sessionId: string;
   readonly kind: "full" | "worker" | "delegated";
   readonly delegation?: DelegationLineage;
 }
-
 export interface SessionRoutingPayload {
   readonly sessionId: string;
   readonly channelId: string;
   readonly reason: "existing_session" | "fallback_created";
 }
-
 export interface SessionExpiredPayload {
   readonly sessionId: string;
   readonly reason: string;
 }
-
 export interface ToolCalledPayload extends DenWorkerCorrelationPayload {
   readonly toolName: string;
   readonly sessionId: string;
   /** Optional raw parameters for audit logging. */
   readonly params?: unknown;
 }
-
 /** Fired when an agent tool invocation completes (success or failure). */
 export interface ToolCompletedPayload extends DenWorkerCorrelationPayload {
   readonly toolName: string;
@@ -51,7 +45,6 @@ export interface ToolCompletedPayload extends DenWorkerCorrelationPayload {
   /** Optional raw result for audit logging. */
   readonly result?: unknown;
 }
-
 /**
  * Fired when structured data is written to the blackboard.
  *
@@ -64,21 +57,18 @@ export interface BlackboardWrittenPayload {
   readonly entryId: string;
   readonly sessionId: string;
 }
-
 /** Fired when a worker claims an assignment from the pool. */
 export interface AssignmentClaimedPayload {
   readonly assignmentId: number;
   readonly workerIdentity: string;
   readonly taskId: number;
 }
-
 /** Fired when a worker releases an assignment back to the pool. */
 export interface AssignmentReleasedPayload {
   readonly assignmentId: number;
   readonly workerIdentity: string;
   readonly reason: string;
 }
-
 /** Fired when a worker assignment exceeds its duration timeout. */
 export interface AssignmentTimedOutPayload {
   readonly assignmentId: number;
@@ -91,13 +81,11 @@ export interface AssignmentTimedOutPayload {
   readonly elapsedMs: number;
   readonly reason: string;
 }
-
 /** Fired when a turn (agent reasoning step) begins. */
 export interface TurnStartedPayload extends DenWorkerCorrelationPayload {
   readonly sessionId: string;
   readonly turnNumber: number;
 }
-
 /** Fired when a turn completes successfully. */
 export interface TurnCompletedPayload extends DenWorkerCorrelationPayload {
   readonly sessionId: string;
@@ -289,6 +277,14 @@ export interface SessionRehydratedPayload {
   readonly reason: "idle_session" | "instance_missing";
 }
 
+export interface FullAgentResponseTimeoutPayload {
+  readonly sessionId: string; readonly profileId: string; readonly instanceId: string;
+  readonly channelId: string; readonly messageId: string;
+  readonly timeoutMs: number; readonly elapsedMs: number;
+  readonly phase: "timed_out" | "settled" | "failed";
+  readonly stillSettling: boolean; readonly error?: string;
+}
+
 /** Fired when /new resets a full-agent session boundary. */
 export interface SessionResetPayload {
   readonly sessionId: string;
@@ -325,6 +321,7 @@ export interface SessionPresencePayload {
     | "routed"
     | "rehydrated"
     | "idle_evicted"
+    | "response_timeout"
     | "archived"
     | "bound"
     | "unbound";
@@ -468,6 +465,7 @@ export type GatewayEvent =
   | { event: "policy.enforced"; payload: PolicyEnforcedPayload }
   | { event: "completion.posted"; payload: CompletionPostedPayload }
   | { event: "session.rehydrated"; payload: SessionRehydratedPayload }
+  | { event: "session.response_timeout"; payload: FullAgentResponseTimeoutPayload }
   | { event: "session.presence"; payload: SessionPresencePayload }
   | { event: "admin.control.requested"; payload: AdminControlRequestedPayload }
   | { event: "admin.control.completed"; payload: AdminControlCompletedPayload }

@@ -6,6 +6,7 @@ export interface ConfiguredFullSession {
   readonly sessionId: string;
   readonly profileId: string;
   readonly channelBindings: readonly ChannelBinding[];
+  readonly responseTimeoutMs?: number;
 }
 
 export function normalizeConfiguredFullSessions(
@@ -17,6 +18,7 @@ export function normalizeConfiguredFullSessions(
       sessionId: config.sessionId ?? "",
       profileId: config.profileId,
       channelBindings: config.channelBindings ?? [],
+      responseTimeoutMs: config.responseTimeoutMs,
     }));
 }
 
@@ -51,6 +53,7 @@ export function sessionConfigFromConfigured(
     kind: "full",
     profileId: config.profileId,
     channelBindings: [...config.channelBindings],
+    responseTimeoutMs: config.responseTimeoutMs,
   };
 }
 

@@ -123,6 +123,7 @@ export {
   type PolicyEnforcedPayload,
   type CompletionPostedPayload,
   type SessionRehydratedPayload,
+  type FullAgentResponseTimeoutPayload,
   type SessionResetPayload,
   type SessionPresenceBindingPayload,
   type SessionPresencePayload,

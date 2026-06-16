@@ -72,6 +72,7 @@ export class AgentFactoryImpl implements AgentFactory {
       createdAt: now,
       lastActiveAt: now,
       state: "active",
+      responseTimeoutMs: config.responseTimeoutMs,
       messageCount: 0,
       channelBindings: config.kind === "full" ? (config.channelBindings ?? []) : [],
       workerBinding: config.kind === "worker" ? (config.workerBinding ?? null) : null,
