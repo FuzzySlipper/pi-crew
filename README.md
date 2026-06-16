@@ -175,7 +175,8 @@ Current runtime-local model-callable catalog:
 | `den_memory_recall` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_recall | `pi-crew/src/den-memory-tools.ts` |
 | `den_memory_read` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_read | `pi-crew/src/den-memory-tools.ts` |
 | `den_memory_search` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_search | `pi-crew/src/den-memory-tools.ts` |
-| `den_memory_store_candidate` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_store_candidate | `pi-crew/src/den-memory-tools.ts` |
+| `den_memory_store` | memory | full-agent | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_store | `pi-crew/src/den-memory-tools.ts` |
+| `den_memory_propose` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_propose | `pi-crew/src/den-memory-tools.ts` |
 | `browser_navigate` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_snapshot` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_click` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
@@ -203,7 +204,7 @@ memory:
   workerPolicy: manual
 ```
 
-The pi-crew surface exposes `den_memory_recall`, `den_memory_read`, `den_memory_search`, and `den_memory_store_candidate`. Recall is manual by default and returns bounded Den Memories packets with provenance/skipped-node warnings. Candidate writes attach pi-crew source refs (`session_id`, `task_id`, `assignment_id`, `run_id` when available) and remain candidates; pi-crew does not implement automatic capture, raw memory-body prompt injection, or curated-memory promotion. Bounded workers do not inherit or own durable memory unless their task/profile explicitly selects these tools.
+The pi-crew surface exposes `den_memory_recall`, `den_memory_read`, `den_memory_search`, `den_memory_store`, and `den_memory_propose`. Recall is manual by default and returns bounded Den Memories packets with provenance/skipped-node warnings. `den_memory_store` auto-promotes to a curated entry (full agents with permissive policy). `den_memory_propose` creates a candidate that remains pending curator review. Candidate writes attach pi-crew source refs (`session_id`, `task_id`, `assignment_id`, `run_id` when available). Bounded workers and assistants default to `metadata_only` and cannot store or propose memories.
 
 ### Model stream retry policy
 

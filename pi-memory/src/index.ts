@@ -17,13 +17,14 @@ export type DenMemoryPolicyMode =
   | "candidate_capture"
   | "permissive_candidates";
 export type DenMemoryRecallMode = "planning" | "implementation" | "review" | "ops" | "general";
-export type DenMemoryToolName = "den_memory_recall" | "den_memory_read" | "den_memory_search" | "den_memory_store_candidate";
+export type DenMemoryToolName = "den_memory_recall" | "den_memory_read" | "den_memory_search" | "den_memory_store" | "den_memory_propose";
 
 export const DEN_MEMORY_TOOL_NAMES: readonly DenMemoryToolName[] = [
   "den_memory_recall",
   "den_memory_read",
   "den_memory_search",
-  "den_memory_store_candidate",
+  "den_memory_store",
+  "den_memory_propose",
 ];
 
 export interface DenMemoryRuntimeContext {
@@ -148,6 +149,10 @@ export class DenMemoryClient {
     return this.#requestJson("POST", "/api/memory-entries/search", request);
   }
 
+  store(request: Record<string, unknown>): Promise<unknown> {
+    return this.#requestJson("POST", "/api/memory-entries", request);
+  }
+
   storeCandidate(request: Record<string, unknown>): Promise<unknown> {
     return this.#requestJson("POST", "/api/candidates", request);
   }
@@ -209,14 +214,18 @@ export class PiCrewDenMemoryAdapter {
       tool("den_memory_recall", "Read-only guided Den Memories recall packet with provenance and skipped-node reasons.", recallProperties(), ["query"]),
       tool("den_memory_read", "Read one Den Memories entry by slug; use only when you already have a memory handle.", { slug: stringSchema("Memory entry slug.") }, ["slug"]),
       tool("den_memory_search", "Search Den Memories entries/candidates; recall is preferred for guided context.", searchProperties(), ["query"]),
-      tool("den_memory_store_candidate", "Create a candidate memory with pi-crew source refs; never promotes canonical memory.", candidateProperties(), ["title", "body_md", "proposed_kind"]),
+      tool("den_memory_store", "Store a curated Den Memories entry directly (auto-promotes). For full agents that can create durable memory without curator review.", storeProperties(), ["title", "body_md", "proposed_kind"]),
+      tool("den_memory_propose", "Propose a candidate memory for curator review; never promotes. For workers and explicit staging where curation review is required.", candidateProperties(), ["title", "body_md", "proposed_kind"]),
     ];
   }
 
   async callTool(name: DenMemoryToolName, args: Record<string, unknown> = {}): Promise<DenMemoryToolCallResult> {
     if (this.policyMode === "off") return { ok: false, error: "Den Memories policy is off", code: "policy_off", toolName: name };
-    if (name === "den_memory_store_candidate" && !policyAllowsCandidateStore(this.policyMode)) {
+    if (name === "den_memory_propose" && !policyAllowsCandidateStore(this.policyMode)) {
       return { ok: false, error: `Den Memories policy ${this.policyMode} does not allow candidate storage`, code: "policy_candidate_store_denied", toolName: name };
+    }
+    if (name === "den_memory_store" && !policyAllowsStore(this.policyMode, this.runtimeContext)) {
+      return { ok: false, error: `Den Memories policy ${this.policyMode} does not allow direct store for session kind ${this.runtimeContext.session_kind}`, code: "policy_store_denied", toolName: name };
     }
     try {
       switch (name) {
@@ -226,7 +235,9 @@ export class PiCrewDenMemoryAdapter {
           return ok(await this.client.read(String(args.slug)));
         case "den_memory_search":
           return ok(await this.client.search(searchPayload(this.runtimeContext, args)));
-        case "den_memory_store_candidate":
+        case "den_memory_store":
+          return ok(await this.client.store(storePayload(this.runtimeContext, args)));
+        case "den_memory_propose":
           return ok(await this.client.storeCandidate(candidatePayload(this.runtimeContext, args)));
       }
     } catch (error: unknown) {
@@ -265,6 +276,12 @@ export function defaultPolicyMode(context: DenMemoryRuntimeContext): DenMemoryPo
 
 function policyAllowsCandidateStore(policyMode: DenMemoryPolicyMode): boolean {
   return policyMode === "candidate_capture" || policyMode === "permissive_candidates";
+}
+
+function policyAllowsStore(policyMode: DenMemoryPolicyMode, context: DenMemoryRuntimeContext): boolean {
+  if (policyMode === "off") return false;
+  if (context.session_kind === "worker_assignment" || context.session_kind === "assistant_delegate") return false;
+  return policyMode === "permissive_candidates" || policyMode === "manual" || policyMode === "suggested" || policyMode === "automatic_recall";
 }
 
 export function registerDenMemoryTools(registry: { registerStatic(tool: DenMemoryToolDefinition): void }, adapter: PiCrewDenMemoryAdapter): void {
@@ -314,6 +331,18 @@ function candidatePayload(context: DenMemoryRuntimeContext, args: Record<string,
   };
 }
 
+function storePayload(context: DenMemoryRuntimeContext, args: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...args,
+    created_by: context.agent_identity ?? "pi_crew",
+    scope_kind: args.scope_kind ?? (context.project_id === undefined ? "global" : "project"),
+    scope_id: args.scope_id ?? context.project_id,
+    curation_state: "curated",
+    source_refs: args.source_refs ?? defaultSourceRefs(context),
+    runtime_context: context,
+  };
+}
+
 function normalizeMemoryQuery(query: string): string {
   return query.replace(/(?<=\p{L}|\p{N})-(?=\p{L}|\p{N})/gu, " ");
 }
@@ -332,6 +361,10 @@ function searchProperties(): Record<string, unknown> {
 
 function candidateProperties(): Record<string, unknown> {
   return { title: stringSchema("Candidate title."), body_md: stringSchema("Candidate body markdown."), summary: stringSchema("Short candidate summary."), proposed_kind: stringSchema("Memory kind proposed for curator review."), scope_kind: stringSchema("Optional scope kind."), scope_id: stringSchema("Optional scope id."), source_refs: { type: "array", items: { type: "object" } } };
+}
+
+function storeProperties(): Record<string, unknown> {
+  return { title: stringSchema("Memory entry title."), body_md: stringSchema("Memory entry body markdown."), summary: stringSchema("Short summary."), proposed_kind: stringSchema("Memory kind."), scope_kind: stringSchema("Optional scope kind."), scope_id: stringSchema("Optional scope id."), source_refs: { type: "array", items: { type: "object" } } };
 }
 
 function stringSchema(description: string): Record<string, unknown> {

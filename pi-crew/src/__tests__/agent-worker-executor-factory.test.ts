@@ -110,7 +110,8 @@ describe("createCrewAgentWorkerToolProvider", () => {
       "post_structured_completion",
       "context_status",
       "den_memory_recall",
-      "den_memory_store_candidate",
+      "den_memory_store",
+      "den_memory_propose",
     ]));
   });
 });

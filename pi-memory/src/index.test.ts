@@ -76,7 +76,7 @@ describe("pi-memory Den Memories adapter", () => {
     expect(defaultPolicyMode(context)).toBe("metadata_only");
   });
 
-  it("exposes four shared logical tools without name collisions", () => {
+  it("exposes five shared logical tools without name collisions", () => {
     const adapter = adapterWithFetch(makeFetch(() => jsonResponse({ ok: true })));
     const tools = adapter.toolDefinitions();
     const names = tools.map((tool) => tool.name);
@@ -115,7 +115,7 @@ describe("pi-memory Den Memories adapter", () => {
       return jsonResponse({ candidate: { id: 42, curation_state: "candidate" } });
     }), "permissive_candidates");
 
-    const result = await adapter.callTool("den_memory_store_candidate", { title: "Candidate", body_md: "body", proposed_kind: "procedure_note" });
+    const result = await adapter.callTool("den_memory_propose", { title: "Candidate", body_md: "body", proposed_kind: "procedure_note" });
     expect(result.ok).toBe(true);
     expect(result.data).toMatchObject({ candidate: { curation_state: "candidate" } });
     expect(body).toBeDefined();
@@ -133,8 +133,8 @@ describe("pi-memory Den Memories adapter", () => {
       return jsonResponse({ ok: true });
     }), "metadata_only");
 
-    const result = await adapter.callTool("den_memory_store_candidate", { title: "Candidate", body_md: "body", proposed_kind: "procedure_note" });
-    expect(result).toMatchObject({ ok: false, code: "policy_candidate_store_denied", toolName: "den_memory_store_candidate" });
+    const result = await adapter.callTool("den_memory_propose", { title: "Candidate", body_md: "body", proposed_kind: "procedure_note" });
+    expect(result).toMatchObject({ ok: false, code: "policy_candidate_store_denied", toolName: "den_memory_propose" });
     expect(called).toBe(false);
   });
 
