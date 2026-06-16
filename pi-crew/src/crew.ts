@@ -51,7 +51,9 @@ export {
   loadCrewConfig,
   resolveCrewConfigPath,
   resolveCrewInstallLayout,
+  tryLoadCrewConfigDegraded,
   type CrewConfig,
+  type FullAgentConfig,
 } from "./config.js";
 import { MCPClient, ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import type { ServerConfig } from "@pi-crew/mcp";
@@ -79,6 +81,7 @@ import {
 import {
   configureFullSessionManager,
   configuredFullAgentMemberIdentities,
+  configuredFullAgentAdditionalProjectIds,
 } from "./full-agent-sessions.js";
 import {
   auditEntryToRecord,
@@ -167,6 +170,7 @@ export class Crew {
       this.#logger,
       cursorStore,
       configuredFullAgentMemberIdentities(config),
+      configuredFullAgentAdditionalProjectIds(config, config.den.channelsProjectId),
     );
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
@@ -318,7 +322,7 @@ export class Crew {
           logger: this.#logger,
           bindings: config.fullAgents.filter((agent) => agent.enabled).map((agent) => ({
             sessionId: agent.session.sessionId, channelId: agent.channels[0]?.channelId ?? config.den.channelsSubscriptionChannelId,
-            projectId: config.den.channelsProjectId, agentIdentity: agent.memberIdentity, profileId: agent.profileId,
+            projectId: agent.channels[0]?.projectId ?? config.den.channelsProjectId, agentIdentity: agent.memberIdentity, profileId: agent.profileId,
             provider: agent.runtime.provider, model: agent.runtime.model,
           })),
         }),

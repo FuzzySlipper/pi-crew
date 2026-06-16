@@ -13,6 +13,7 @@ import { load as parseYaml } from "js-yaml";
 import { z } from "zod";
 
 import { ConfigurationError } from "@pi-crew/core";
+import type { ConfigErrorMessage } from "./degraded-health-server.js";
 import {
   GatewayConfigSchema,
   WorkerRoleMappingConfigSchema,
@@ -167,6 +168,7 @@ const FullAgentSessionConfigSchema = z.object({
 
 const FullAgentChannelConfigSchema = z.object({
   providerId: z.string().min(1),
+  projectId: z.string().min(1).optional(),
   channelId: z.string().min(1),
   subscriptionIdentity: z.string().min(1),
   wakePolicy: z.enum(["subscription", "direct_polling"]).default("subscription"),
@@ -272,6 +274,7 @@ export const CrewConfigSchema = z.object({
 });
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;
+export type FullAgentConfig = z.infer<typeof FullAgentConfigSchema>;
 
 export interface CrewInstallLayout {
   readonly root: string;
@@ -380,4 +383,139 @@ function absolutize(path: string, cwd: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// ── Per-agent config isolation ──────────────────────────────────
+
+/**
+ * Validate each full agent config entry independently.
+ *
+ * Returns clean agents that passed validation separately from agents
+ * that failed. This prevents one bad entry from blocking the entire
+ * service from starting.
+ */
+export function validateFullAgentConfigIsolated(
+  rawAgents: unknown[],
+): { valid: FullAgentConfig[]; errors: ConfigErrorMessage[] } {
+  const valid: FullAgentConfig[] = [];
+  const errors: ConfigErrorMessage[] = [];
+
+  for (let i = 0; i < rawAgents.length; i++) {
+    const raw = rawAgents[i];
+    const result = FullAgentConfigSchema.safeParse(raw);
+    if (result.success) {
+      valid.push(result.data);
+    } else {
+      const issues = result.error.issues
+        .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+        .join("\\n");
+      errors.push({
+        field: `fullAgents[${i}]`,
+        message: `Invalid agent config at index ${i}:\\n${issues}`,
+      });
+    }
+  }
+
+  return { valid, errors };
+}
+
+/**
+ * Attempt to load config with per-agent error isolation.
+ *
+ * If the top-level schema fails on agent-specific fields, retries with
+ * individual agent validation and logs the bad entries. Infrastructure
+ * failures (missing den.coreUrl, bad YAML) still throw.
+ *
+ * Returns the validated config (with bad agents removed) and any
+ * per-agent errors that were isolated.
+ */
+export function loadCrewConfigWithIsolation(
+  yamlPath: string,
+): { config: CrewConfig; skippedAgentErrors: ConfigErrorMessage[] } {
+  const raw = readConfigFile(yamlPath);
+  const parsed = parseConfigYaml(raw, yamlPath);
+  rejectLegacyTerminologyConfig(parsed);
+
+  // Try normal parse first
+  const result = CrewConfigSchema.safeParse(parsed ?? {});
+  if (result.success) {
+    validateConfiguredProfilesRoot(result.data.profiles.root);
+    return { config: result.data, skippedAgentErrors: [] };
+  }
+
+  // Check if failures are all agent-related — try isolation
+  const issues = result.error.issues;
+  const agentIssues = issues.filter((i) => i.path.length >= 1 && i.path[0] === "fullAgents");
+  const otherIssues = issues.filter((i) => !(i.path.length >= 1 && i.path[0] === "fullAgents"));
+
+  // If there are non-agent issues, the full validation still fails
+  if (otherIssues.length > 0) {
+    const formatted = issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\\n");
+    throw new ConfigurationError(`Invalid crew configuration:\\n${formatted}`);
+  }
+
+  // All failures are agent-related — do per-agent isolation
+  const rawParsed = parsed as Record<string, unknown>;
+  const rawAgents = Array.isArray(rawParsed["fullAgents"]) ? (rawParsed["fullAgents"] as unknown[]) : [];
+
+  const { valid, errors } = validateFullAgentConfigIsolated(rawAgents);
+
+  // Build a cleaned-up raw object with only valid agents
+  const cleanedRaw: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawParsed)) {
+    if (value !== undefined) cleanedRaw[key] = value;
+  }
+  cleanedRaw["fullAgents"] = valid;
+
+  // Re-parse with cleaned agents
+  const retryResult = CrewConfigSchema.safeParse(cleanedRaw);
+  if (!retryResult.success) {
+    // Something still fails — throw with combined errors
+    const formatted = retryResult.error.issues
+      .concat(errors.map((e) => ({
+        code: z.ZodIssueCode.custom,
+        message: e.message,
+        path: [e.field],
+      } as z.ZodIssue)))
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\\n");
+    throw new ConfigurationError(`Invalid crew configuration (with isolated agents):\\n${formatted}`);
+  }
+
+  validateConfiguredProfilesRoot(retryResult.data.profiles.root);
+  return { config: retryResult.data, skippedAgentErrors: errors };
+}
+
+/**
+ * Degraded-mode config loader. Reads and parses YAML, returns either a
+ * valid config or a structured degraded result. Never throws.
+ */
+export function tryLoadCrewConfigDegraded(
+  yamlPath: string,
+): { ok: true; config: CrewConfig; skippedAgentErrors: ConfigErrorMessage[] } | { ok: false; result: import("./degraded-health-server.js").ConfigDegradedResult } {
+  try {
+    const { config, skippedAgentErrors } = loadCrewConfigWithIsolation(yamlPath);
+    return { ok: true as const, config, skippedAgentErrors };
+  } catch (error: unknown) {
+    if (error instanceof ConfigurationError) {
+      return {
+        ok: false as const,
+        result: {
+          errors: [{ field: "config", message: error.message }],
+          configPath: yamlPath,
+        },
+      };
+    }
+    // File I/O errors, YAML parse errors
+    return {
+      ok: false as const,
+      result: {
+        errors: [{ field: "config", message: errorMessage(error) }],
+        configPath: yamlPath,
+        fileError: errorMessage(error),
+      },
+    };
+  }
 }

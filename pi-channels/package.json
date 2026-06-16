@@ -11,6 +11,7 @@
     "./den-channels/connection-types": "./src/den-channels/connection-types.ts",
     "./den-channels/connection-websocket": "./src/den-channels/connection-websocket.ts",
     "./den-channels/connection-simulated": "./src/den-channels/connection-simulated.ts",
+    "./den-channels/connection-compound": "./src/den-channels/connection-compound.ts",
     "./den-channels/connection-http": "./src/den-channels/connection-http.ts"
   },
   "dependencies": {

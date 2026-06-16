@@ -1,0 +1,13 @@
+# EXAMPLE profile for pi-profiles documentation.
+# Inherits from example-base-worker and demonstrates the extends pattern.
+extends: example-base-worker
+name: "Example Coder Worker"
+description: "Example implementation worker for pi-profiles documentation."
+modelConfig:
+  temperature: 0.15
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "terminal"
+    - "filesystem"
+    - "den"

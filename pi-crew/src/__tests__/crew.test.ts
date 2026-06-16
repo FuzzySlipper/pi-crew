@@ -385,7 +385,7 @@ describe("Crew composition root", () => {
   it("loads config with custom values overridden", () => {
     const customCrew = new Crew(
       makeTestCrewConfig({
-        profiles: { root: join(process.cwd(), process.cwd().endsWith("pi-crew/pi-crew") ? "../pi-profiles/profiles" : "pi-profiles/profiles") }, sessions: { maxTotal: 8, maxPerProfile: 2, idleTimeoutMs: 1_000, fallbackProfileId: "pi-crew-planner" },
+        profiles: { root: join(process.cwd(), process.cwd().endsWith("pi-crew/pi-crew") ? "../pi-profiles/profiles" : "pi-profiles/profiles") }, sessions: { maxTotal: 8, maxPerProfile: 2, idleTimeoutMs: 1_000, fallbackProfileId: "example-base-worker" },
         logging: { level: "debug", json: true },
       }),
     );
@@ -393,7 +393,7 @@ describe("Crew composition root", () => {
     expect(customCrew.config.sessions.maxTotal).toBe(8);
     expect(customCrew.config.sessions.maxPerProfile).toBe(2);
     expect(customCrew.config.sessions.idleTimeoutMs).toBe(1_000);
-    expect(customCrew.config.sessions.fallbackProfileId).toBe("pi-crew-planner");
+    expect(customCrew.config.sessions.fallbackProfileId).toBe("example-base-worker");
   });
 
   // ── Channel provider wiring ─────────────────────────────────

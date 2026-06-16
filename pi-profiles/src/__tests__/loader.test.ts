@@ -50,17 +50,16 @@ describe("FilesystemProfileSource", () => {
     expect(profiles[0]?.id).toBe("test-agent");
   });
 
-  it("loads the real production profiles", () => {
+  it("loads the example documentation profiles", () => {
     const profilesDir = join(__dirname, "..", "..", "profiles");
     const profiles = loadProfiles(profilesDir);
-    expect(profiles.length).toBeGreaterThanOrEqual(3);
+    expect(profiles.length).toBeGreaterThanOrEqual(2);
 
     const ids = profiles.map((p) => p.id).sort();
-    expect(ids).toContain("system-architect");
-    expect(ids).toContain("pi-crew-planner");
-    expect(ids).toContain("pi-crew-runner");
+    expect(ids).toContain("example-base-worker");
+    expect(ids).toContain("example-coder-worker");
 
-    // Every production profile must have a non-trivial system prompt.
+    // Every example profile must have a non-trivial system prompt.
     for (const p of profiles) {
       expect(p.systemPrompt.length).toBeGreaterThan(50);
       expect(p.name.length).toBeGreaterThan(0);
@@ -81,7 +80,7 @@ describe("FilesystemProfileSource", () => {
     }
   });
 
-  it("toolPolicy is represented on production profiles", () => {
+  it("toolPolicy is represented on example profiles", () => {
     const profilesDir = join(__dirname, "..", "..", "profiles");
     const profiles = loadProfiles(profilesDir);
     for (const p of profiles) {
@@ -304,11 +303,11 @@ describe("loadProfile", () => {
     expect(profile.systemPrompt).toContain("You are a test agent");
   });
 
-  it("loads from the default production profiles directory", () => {
+  it("loads from the default example profiles directory", () => {
     // loadProfile uses DEFAULT_PROFILES_DIR when no path is given.
-    // That directory is pi-profiles/profiles/ — the real production set.
-    const profile = loadProfile("pi-crew-runner");
-    expect(profile.id).toBe("pi-crew-runner");
+    // That directory is pi-profiles/profiles/ — the example set.
+    const profile = loadProfile("example-base-worker");
+    expect(profile.id).toBe("example-base-worker");
     expect(profile.name.length).toBeGreaterThan(0);
     expect(profile.systemPrompt.length).toBeGreaterThan(50);
   });

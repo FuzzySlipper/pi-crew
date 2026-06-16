@@ -9,6 +9,7 @@
 
 import type { Logger } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
+import { CompoundDenConnection } from "@pi-crew/channels/den-channels/connection-compound";
 import { DenWebSocketConnection } from "@pi-crew/channels/den-channels/connection-websocket";
 import { SimulatedDenConnection } from "@pi-crew/channels/den-channels/connection-simulated";
 import { DenHttpDirectAgentConnection } from "@pi-crew/channels/den-channels/connection-http";
@@ -35,6 +36,7 @@ export function buildDenConnection(
   logger: Logger,
   cursorStore: CursorStore,
   memberIdentities: readonly string[] = [],
+  additionalProjectIds: readonly string[] = [],
 ): DenConnection {
   if (den.channelsUrl.length === 0) {
     logger.info("No channelsUrl configured — using simulated connection");
@@ -46,7 +48,7 @@ export function buildDenConnection(
     return buildWebSocketConnection(den, logger);
   }
   if (url.protocol === "http:" || url.protocol === "https:") {
-    return buildHttpConnection(den, logger, cursorStore, memberIdentities);
+    return buildHttpConnection(den, logger, cursorStore, memberIdentities, additionalProjectIds);
   }
 
   throw new ConfigurationError(
@@ -106,6 +108,7 @@ function buildHttpConnection(
   logger: Logger,
   cursorStore: CursorStore,
   memberIdentities: readonly string[],
+  additionalProjectIds: readonly string[],
 ): DenConnection {
   validateHttpConfig(den);
   logger.info("Creating live Den HTTP direct-agent connection", {
@@ -116,11 +119,11 @@ function buildHttpConnection(
     pollLimit: den.channelsPollLimit,
     subscriptionChannelId: den.channelsSubscriptionChannelId,
     legacyDirectPolling: den.channelsAllowLegacyDirectPolling,
+    additionalProjects: additionalProjectIds,
   });
 
-  const httpConfig = {
+  const baseConfig = {
     baseUrl: den.channelsUrl,
-    projectId: den.channelsProjectId,
     memberIdentity: den.channelsMemberIdentity,
     memberIdentities,
     token: den.channelsToken,
@@ -138,8 +141,31 @@ function buildHttpConnection(
           subscriptionIdentity: den.channelsSubscriptionIdentity,
         },
     allowLegacyDirectPolling: den.channelsAllowLegacyDirectPolling,
-  } satisfies DenHttpConnectionConfig & { readonly memberIdentities: readonly string[] };
-  return new DenHttpDirectAgentConnection(httpConfig, logger, cursorStore);
+  };
+
+  const primary = new DenHttpDirectAgentConnection(
+    { ...baseConfig, projectId: den.channelsProjectId } satisfies DenHttpConnectionConfig & { readonly memberIdentities: readonly string[] },
+    logger,
+    cursorStore,
+  );
+
+  const additional: DenConnection[] = [];
+  for (const projectId of additionalProjectIds) {
+    if (projectId === den.channelsProjectId) continue; // already have primary
+    const conn = new DenHttpDirectAgentConnection(
+      {
+        ...baseConfig,
+        projectId,
+        cursorPersistenceKey: `den_channels_cursor_${projectId}`,
+      } satisfies DenHttpConnectionConfig & { readonly memberIdentities: readonly string[] },
+      logger,
+      cursorStore,
+    );
+    additional.push(conn);
+  }
+
+  if (additional.length === 0) return primary;
+  return new CompoundDenConnection(primary, additional, logger);
 }
 
 function validateHttpConfig(den: DenConfig): void {

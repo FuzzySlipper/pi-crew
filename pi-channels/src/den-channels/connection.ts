@@ -23,3 +23,4 @@ export type {
 
 export { DenWebSocketConnection } from "./connection-websocket.js";
 export { SimulatedDenConnection } from "./connection-simulated.js";
+export { CompoundDenConnection } from "./connection-compound.js";

@@ -10,6 +10,7 @@ export function configuredFullSessionConfigs(config: CrewConfig): readonly Sessi
       profileId: agent.profileId,
       channelBindings: agent.channels.map((channel): ChannelBinding => ({
         providerId: channel.providerId,
+        projectId: channel.projectId,
         channelId: channel.channelId,
         memberIdentity: agent.memberIdentity,
         profileIdentity: agent.profileIdentity,
@@ -33,4 +34,13 @@ export function configureFullSessionManager(manager: unknown, config: CrewConfig
 
 export function configuredFullAgentMemberIdentities(config: CrewConfig): readonly string[] {
   return [...new Set(config.fullAgents.filter((agent) => agent.enabled).map((agent) => agent.memberIdentity))];
+}
+
+export function configuredFullAgentAdditionalProjectIds(config: CrewConfig, primaryProjectId: string): readonly string[] {
+  return [...new Set(
+    config.fullAgents
+      .filter((agent) => agent.enabled)
+      .flatMap((agent) => agent.channels.map((ch) => ch.projectId))
+      .filter((pid): pid is string => pid !== undefined && pid !== primaryProjectId),
+  )];
 }

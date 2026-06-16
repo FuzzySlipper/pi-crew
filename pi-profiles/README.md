@@ -22,13 +22,10 @@ New pooled-worker profiles should use the directory layout:
 
 ```text
 profiles/
-  base-worker/
+  example-base-worker/
     profile.yaml
     soul.md
-  coder-worker/
-    profile.yaml
-    soul.md
-  reviewer-worker/
+  example-coder-worker/
     profile.yaml
     soul.md
 ```
@@ -38,8 +35,8 @@ profiles/
 A child profile can inherit common config:
 
 ```yaml
-# profiles/coder-worker/profile.yaml
-extends: base-worker
+# profiles/example-coder-worker/profile.yaml
+extends: example-base-worker
 name: Coder
 skills:
   - name: implementation
@@ -74,7 +71,7 @@ skills/
   den-task-evidence-contract/
     SKILL.md
 profiles/
-  coder-worker/
+  example-coder-worker/
     profile.yaml
     soul.md
     skills/

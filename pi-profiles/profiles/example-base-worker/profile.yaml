@@ -1,0 +1,20 @@
+# EXAMPLE profile for pi-profiles documentation.
+# Not a live profile — profiles with the "example-" prefix
+# illustrate pi-profiles features for the README and tests.
+name: "Example Base Worker"
+description: "Shared defaults example for inherited profile documentation."
+modelConfig:
+  provider: "example-openai-compatible"
+  model: "example-model"
+  baseUrl: "http://localhost:8080/v1"
+  maxTokens: 4096
+  temperature: 0.1
+runtimeConfig:
+  maxIterations: 36
+  maxTokensPerTurn: 4096
+toolPolicy:
+  mode: "allow_list"
+  allow:
+    - "context_status"
+    - "post_structured_completion"
+    - "request_checkpoint"

@@ -28,6 +28,7 @@ import type {
 export interface ChannelBindingRecord {
   readonly providerId: string;
   readonly channelId: string;
+  readonly projectId?: string;
   readonly memberIdentity?: string;
   readonly profileIdentity?: string;
   readonly memberRole?: string;
