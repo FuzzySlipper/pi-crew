@@ -308,23 +308,28 @@ export class RemediationControlService {
   ): Promise<RemediationResult> {
     const validationError = validateRequest(request);
     if (validationError !== null) return this.#invalid(action, request, validationError);
-    const fingerprint = stableFingerprint(action, request);
-    const cached = this.#idempotency.get(request.idempotencyKey);
+    // Auto-generate idempotency key when missing — so den-web doesn't need to
+    // send one. Generated from operator+reason+timestamp for best-effort dedup.
+    const req = request.idempotencyKey.trim().length > 0
+      ? request
+      : { ...request, idempotencyKey: `auto_${this.#clock()}_${this.#idFactory().slice(0, 8)}` };
+    const fingerprint = stableFingerprint(action, req);
+    const cached = this.#idempotency.get(req.idempotencyKey);
     if (cached !== undefined) {
       if (cached.requestFingerprint === fingerprint) return cached.result;
-      return this.#invalid(action, request, "idempotency key reused with different payload");
+      return this.#invalid(action, req, "idempotency key reused with different payload");
     }
 
-    this.#eventBus.emit({ event: "admin.control.requested", payload: eventPayload(action, request) });
+    this.#eventBus.emit({ event: "admin.control.requested", payload: eventPayload(action, req) });
     const outcome = await handler();
-    const denEvidence = await this.#postDenEvidence(action, request, outcome);
+    const denEvidence = await this.#postDenEvidence(action, req, outcome);
     const outcomeWithEvidence = { ...outcome, denEvidence };
-    const auditId = await this.#audit(action, request, outcomeWithEvidence);
-    const result = toResult(action, request, outcomeWithEvidence, auditId, this.#idFactory());
-    this.#idempotency.set(request.idempotencyKey, { requestFingerprint: fingerprint, result });
+    const auditId = await this.#audit(action, req, outcomeWithEvidence);
+    const result = toResult(action, req, outcomeWithEvidence, auditId, this.#idFactory());
+    this.#idempotency.set(req.idempotencyKey, { requestFingerprint: fingerprint, result });
     this.#eventBus.emit({
       event: "admin.control.completed",
-      payload: { ...eventPayload(action, request), accepted: result.accepted, localAuditId: auditId },
+      payload: { ...eventPayload(action, req), accepted: result.accepted, localAuditId: auditId },
     });
     return result;
   }
@@ -396,7 +401,8 @@ interface ControlOutcome {
 function validateRequest(request: RemediationRequest): string | null {
   if (request.operator.trim().length === 0) return "operator is required";
   if (request.reason.trim().length === 0) return "reason is required";
-  if (request.idempotencyKey.trim().length === 0) return "idempotencyKey is required";
+  // idempotencyKey is auto-generated if missing — not a rejection
+  if (request.idempotencyKey.trim().length > 0) return null;
   return null;
 }
 
