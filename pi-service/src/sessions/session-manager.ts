@@ -312,13 +312,15 @@ export class SessionManagerImpl implements SessionManager {
       });
     } catch (error: unknown) {
       if (isFullAgentTurnTimeoutError(error)) {
+        if (timeoutMs === null) throw error;
+        const enforcedTimeoutMs = timeoutMs;
         await handleFullAgentResponseTimeout({
           channel,
           message,
           record,
           instance,
           operation,
-          timeoutMs,
+          timeoutMs: enforcedTimeoutMs,
           startedAt,
           eventBus: this.eventBus,
           logger: this.logger,
@@ -349,10 +351,11 @@ export class SessionManagerImpl implements SessionManager {
     }
   }
 
-  private responseTimeoutMs(record: SessionRecord): number {
+  private responseTimeoutMs(record: SessionRecord): number | null {
     if (record.responseTimeoutMs !== undefined) return record.responseTimeoutMs;
-    return this.configuredSessions.find((config) => config.sessionId === record.id)?.responseTimeoutMs
-      ?? this.turnCoordinator.turnTimeoutMs;
+    const configured = this.configuredSessions.find((config) => config.sessionId === record.id);
+    if (configured !== undefined && configured.responseTimeoutMs !== undefined) return configured.responseTimeoutMs;
+    return this.turnCoordinator.turnTimeoutMs;
   }
 
   private async resolveSession(message: ChannelMessage): Promise<SessionRecord> {

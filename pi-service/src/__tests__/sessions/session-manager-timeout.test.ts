@@ -142,4 +142,37 @@ describe("SessionManagerImpl full-agent response timeout", () => {
     responderFactory.deferred.resolve("settled");
     await route;
   });
+
+  it("allows configured full-agent response timeouts to be disabled", async () => {
+    const responderFactory = new SequencedResponderFactory();
+    const logger = new FakeLogger();
+    const eventBus = new FakeEventBus();
+    const store = new InMemorySessionStore();
+    const pool = new InstancePoolImpl(new InstanceFactoryImpl(logger, responderFactory), DEFAULT_POOL_CONFIG, logger);
+    const manager = new SessionManagerImpl(
+      store,
+      new AgentFactoryImpl(pool, store, eventBus, logger),
+      pool,
+      eventBus,
+      logger,
+      "fallback-test",
+      null,
+      { turnTimeoutMs: 10 },
+    );
+    manager.configureFullSessions([
+      makeSessionConfig({ sessionId: "sess-disabled", channelBindings: ["ch-alpha"], responseTimeoutMs: null }),
+    ]);
+    const provider = new FakeChannelProvider();
+
+    const route = manager.routeMessage(provider, makeMessage("msg-disabled", "ch-alpha", { sessionId: "sess-disabled" }));
+    await wait(30);
+
+    expect(provider.sentMessages).toHaveLength(0);
+    expect(eventBus.emitted.some((event) => event.event === "session.response_timeout")).toBe(false);
+
+    responderFactory.deferred.resolve("eventually ok");
+    await route;
+
+    expect(provider.sentMessages.map((sent) => textContent(sent.content))).toEqual(["eventually ok"]);
+  });
 });

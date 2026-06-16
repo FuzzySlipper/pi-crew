@@ -381,6 +381,48 @@ describe("installed config layout", () => {
     });
   });
 
+  it("accepts null turnTimeoutMs to disable full-agent response timeouts", () => {
+    const root = tempRoot();
+    const configPath = join(root, "config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "install:",
+        `  root: "${root}"`,
+        "den:",
+        '  coreUrl: "http://localhost:3030"',
+        "  requiredAtStartup: false",
+        "fullAgents:",
+        "  - agentId: installed",
+        "    enabled: true",
+        "    profileId: installed-profile",
+        "    profileIdentity: installed-profile",
+        "    memberIdentity: installed-profile",
+        "    session:",
+        "      ownerId: owner",
+        "      sessionId: sess-installed",
+        "      maxHistoryMessages: 20",
+        "    channels:",
+        "      - providerId: den-channels",
+        "        channelId: '642'",
+        "        subscriptionIdentity: installed:ordinary",
+        "    runtime:",
+        "      mode: agent",
+        "    lifecycle:",
+        "      turnTimeoutMs: null",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const config = loadCrewConfig(configPath);
+
+    expect(configuredFullSessionConfigs(config)[0]).toMatchObject({
+      sessionId: "sess-installed",
+      responseTimeoutMs: null,
+    });
+  });
+
   it("fails loudly for legacy conversationalAgents config", () => {
     const root = tempRoot();
     const configPath = join(root, "config.yaml");

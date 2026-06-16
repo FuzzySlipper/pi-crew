@@ -168,7 +168,7 @@ const FullAgentRuntimeConfigSchema = z
 
 const FullAgentLifecycleConfigSchema = z.object({
   singleFlight: z.boolean().default(true),
-  turnTimeoutMs: z.number().int().positive(),
+  turnTimeoutMs: z.number().int().positive().nullable(),
   onStartup: z.literal("rehydrate_or_create").default("rehydrate_or_create"),
   onShutdownStatus: z.literal("offline").default("offline"),
 });

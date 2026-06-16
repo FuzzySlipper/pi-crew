@@ -118,8 +118,8 @@ export interface SessionRecord {
   readonly lastActiveAt: string;
   /** Lifecycle state. */
   readonly state: SessionState;
-  /** Configured full-agent response envelope in milliseconds, if any. */
-  readonly responseTimeoutMs?: number;
+  /** Configured full-agent response envelope in milliseconds; null disables timeout enforcement. */
+  readonly responseTimeoutMs?: number | null;
   /** Running count of messages exchanged in this session. */
   readonly messageCount: number;
   /** Channel bindings for this session (empty for workers). */
@@ -140,8 +140,8 @@ export interface SessionConfig {
   readonly profileId: string;
   /** FullAgent, worker, or delegated child. */
   readonly kind: SessionKind;
-  /** Full-agent response envelope in milliseconds. */
-  readonly responseTimeoutMs?: number;
+  /** Full-agent response envelope in milliseconds; null disables timeout enforcement. */
+  readonly responseTimeoutMs?: number | null;
   /** Initial channel bindings (fullAgent only). */
   readonly channelBindings?: ChannelBinding[];
   /** Den assignment binding (worker only). */

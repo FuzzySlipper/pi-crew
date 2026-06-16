@@ -38,7 +38,8 @@ export class FullAgentTurnTimeoutError extends Error {
   }
 }
 
-export function withTurnTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+export function withTurnTimeout<T>(operation: Promise<T>, timeoutMs: number | null): Promise<T> {
+  if (timeoutMs === null) return operation;
   let timeout: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
