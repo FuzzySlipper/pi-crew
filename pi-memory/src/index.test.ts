@@ -8,6 +8,7 @@ import {
   defaultPolicyMode,
   defaultSourceRefs,
   registerDenMemoryTools,
+  type DenMemoryPolicyMode,
   type DenMemoryToolDefinition,
 } from "./index.js";
 
@@ -27,18 +28,22 @@ function parseBody(init: RequestInit | undefined): Record<string, unknown> {
   return JSON.parse(init.body) as Record<string, unknown>;
 }
 
-function adapterWithFetch(fetchImpl: typeof fetch): PiCrewDenMemoryAdapter {
+function adapterWithFetch(fetchImpl: typeof fetch, policyMode?: DenMemoryPolicyMode): PiCrewDenMemoryAdapter {
   const client = new DenMemoryClient({ baseUrl: "http://den-memory.local", fetchImpl });
-  return PiCrewDenMemoryAdapter.fromContext(client, {
-    agentIdentity: "pi-worker",
-    profileId: "pi-worker",
-    sessionId: "session-1",
-    projectId: "den-memory",
-    taskId: 2476,
-    assignmentId: "assign-1",
-    runId: "run-1",
-    role: "worker",
-    mode: "implementation",
+  return new PiCrewDenMemoryAdapter({
+    client,
+    runtimeContext: createPiCrewRuntimeContext({
+      agentIdentity: "pi-worker",
+      profileId: "pi-worker",
+      sessionId: "session-1",
+      projectId: "den-memory",
+      taskId: 2476,
+      assignmentId: "assign-1",
+      runId: "run-1",
+      role: "worker",
+      mode: "implementation",
+    }),
+    policyMode,
   });
 }
 
@@ -68,7 +73,7 @@ describe("pi-memory Den Memories adapter", () => {
       role: "worker",
       mode: "implementation",
     });
-    expect(defaultPolicyMode(context)).toBe("manual");
+    expect(defaultPolicyMode(context)).toBe("metadata_only");
   });
 
   it("exposes four shared logical tools without name collisions", () => {
@@ -84,19 +89,22 @@ describe("pi-memory Den Memories adapter", () => {
     expect(registered.map((tool) => tool.name).sort()).toEqual([...DEN_MEMORY_TOOL_NAMES].sort());
   });
 
-  it("manual recall returns service packet semantics", async () => {
+  it("manual recall returns service packet semantics and normalizes hyphenated terms for service FTS", async () => {
     let sawRuntimeContext = false;
+    let sawQuery = "";
     const adapter = adapterWithFetch(makeFetch((url, init) => {
       expect(url.pathname).toBe("/api/recall");
       const body = parseBody(init);
+      sawQuery = String(body.query);
       sawRuntimeContext = body.runtime_context instanceof Object && (body.runtime_context as Record<string, unknown>).runtime === "pi_crew" && (body.runtime_context as Record<string, unknown>).assignment_id === "assign-1";
       return jsonResponse({ packet_id: "packet-1", packet_md: "# packet", root_matches: [], included_nodes: [{ slug: "same-semantics" }], skipped: [], warnings: [], provenance: [] });
     }));
 
-    const result = await adapter.callTool("den_memory_recall", { query: "same seed" });
+    const result = await adapter.callTool("den_memory_recall", { query: "pi-crew same seed" });
     expect(result.ok).toBe(true);
     expect(result.data).toMatchObject({ packet_id: "packet-1" });
     expect(sawRuntimeContext).toBe(true);
+    expect(sawQuery).toBe("pi crew same seed");
   });
 
   it("candidate store attaches worker assignment source refs without promotion", async () => {
@@ -105,7 +113,7 @@ describe("pi-memory Den Memories adapter", () => {
       expect(url.pathname).toBe("/api/candidates");
       body = parseBody(init);
       return jsonResponse({ candidate: { id: 42, curation_state: "candidate" } });
-    }));
+    }), "permissive_candidates");
 
     const result = await adapter.callTool("den_memory_store_candidate", { title: "Candidate", body_md: "body", proposed_kind: "procedure_note" });
     expect(result.ok).toBe(true);
@@ -116,6 +124,18 @@ describe("pi-memory Den Memories adapter", () => {
     const refs = candidateBody.source_refs as Array<Record<string, unknown>>;
     expect(refs[0]).toMatchObject({ source_kind: "pi_crew_assignment", source_project_id: "den-memory", source_id: "assign-1" });
     expect(refs[0]?.source_locator).toMatchObject({ task_id: 2476, assignment_id: "assign-1", run_id: "run-1" });
+  });
+
+  it("metadata-only worker policy denies candidate body storage", async () => {
+    let called = false;
+    const adapter = adapterWithFetch(makeFetch(() => {
+      called = true;
+      return jsonResponse({ ok: true });
+    }), "metadata_only");
+
+    const result = await adapter.callTool("den_memory_store_candidate", { title: "Candidate", body_md: "body", proposed_kind: "procedure_note" });
+    expect(result).toMatchObject({ ok: false, code: "policy_candidate_store_denied", toolName: "den_memory_store_candidate" });
+    expect(called).toBe(false);
   });
 
   it("default source refs fall back to task or session handles", () => {

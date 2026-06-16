@@ -319,5 +319,11 @@ describe("Den Channels production connection config", () => {
     expect(config.den.channelsSubscriptionIdentity).toBe(
       "pi-crew-runner:ordinary:sess-pi-crew-runner-live",
     );
+    expect(config.memory).toMatchObject({
+      enabled: true,
+      baseUrl: "http://192.168.1.10:8780",
+      fullAgentPolicy: "permissive_candidates",
+      workerPolicy: "metadata_only",
+    });
   });
 });

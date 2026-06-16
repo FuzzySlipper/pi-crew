@@ -92,14 +92,22 @@ const StreamRetryConfigSchema = z.object({
   }
 });
 
-const MemoryPolicyModeSchema = z.enum(["off", "manual", "suggested", "automatic_recall", "candidate_capture"]);
+const MemoryPolicyModeSchema = z.enum([
+  "off",
+  "metadata_only",
+  "manual",
+  "suggested",
+  "automatic_recall",
+  "candidate_capture",
+  "permissive_candidates",
+]);
 
 const MemoryConfigSchema = z.object({
   enabled: z.boolean().default(false),
   baseUrl: z.string().url().optional(),
   requestTimeoutMs: z.number().int().positive().default(10_000),
   fullAgentPolicy: MemoryPolicyModeSchema.default("manual"),
-  workerPolicy: MemoryPolicyModeSchema.default("manual"),
+  workerPolicy: MemoryPolicyModeSchema.default("metadata_only"),
 }).default({}).superRefine((value, ctx) => {
   if (value.enabled && value.baseUrl === undefined) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "enabled Den Memories config requires baseUrl", path: ["baseUrl"] });

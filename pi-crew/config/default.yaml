@@ -184,7 +184,7 @@ fullAgents:
       apiKeyEnv: "PI_CREW_ROUTER_API_KEY"
       systemPromptSource: "profile"
       tools:
-        allow: ["den", "filesystem", "terminal", "git", "delegation", "planning", "session", "web", "browser"]
+        allow: ["den", "filesystem", "terminal", "git", "delegation", "planning", "session", "memory", "web", "browser"]
       toolPolicy:
         mode: "profile"
     lifecycle:
@@ -272,7 +272,13 @@ workers:
 #   # Future cron integration hook.
 #   enabled: false
 
-# ── Memory / Blackboard (DEFERRED — not required for this task) ───
-# memory:
-#   # Future memory integration hook. pi-memory is deferred.
-#   enabled: false
+# ── Memory / Blackboard ───────────────────────────────────────────
+memory:
+  # Den Memories is a retrieved long-term substrate, not prompt-injected state.
+  # Selected profiles must still request the "memory" tool set or concrete
+  # den_memory_* tools before these runtime-local tools are visible.
+  enabled: true
+  baseUrl: "http://192.168.1.10:8780"
+  requestTimeoutMs: 10000
+  fullAgentPolicy: "permissive_candidates"
+  workerPolicy: "metadata_only"

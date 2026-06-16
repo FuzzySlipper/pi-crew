@@ -99,7 +99,7 @@ describe("createCrewAgentWorkerToolProvider", () => {
         enabled: true,
         baseUrl: "http://den-memory.local",
         requestTimeoutMs: 1000,
-        workerPolicy: "manual",
+        workerPolicy: "metadata_only",
       },
     });
 

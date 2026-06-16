@@ -8,7 +8,14 @@
 export type DenMemoryRuntime = "hermes" | "pi_crew" | "den_core" | "manual" | "import";
 export type DenMemorySessionKind = "durable_agent" | "worker_assignment" | "assistant_delegate" | "diagnostic" | "import";
 export type DenMemoryRole = "planner" | "runner" | "reviewer" | "worker" | "assistant" | "human" | "auditor";
-export type DenMemoryPolicyMode = "off" | "manual" | "suggested" | "automatic_recall" | "candidate_capture";
+export type DenMemoryPolicyMode =
+  | "off"
+  | "metadata_only"
+  | "manual"
+  | "suggested"
+  | "automatic_recall"
+  | "candidate_capture"
+  | "permissive_candidates";
 export type DenMemoryRecallMode = "planning" | "implementation" | "review" | "ops" | "general";
 export type DenMemoryToolName = "den_memory_recall" | "den_memory_read" | "den_memory_search" | "den_memory_store_candidate";
 
@@ -208,6 +215,9 @@ export class PiCrewDenMemoryAdapter {
 
   async callTool(name: DenMemoryToolName, args: Record<string, unknown> = {}): Promise<DenMemoryToolCallResult> {
     if (this.policyMode === "off") return { ok: false, error: "Den Memories policy is off", code: "policy_off", toolName: name };
+    if (name === "den_memory_store_candidate" && !policyAllowsCandidateStore(this.policyMode)) {
+      return { ok: false, error: `Den Memories policy ${this.policyMode} does not allow candidate storage`, code: "policy_candidate_store_denied", toolName: name };
+    }
     try {
       switch (name) {
         case "den_memory_recall":
@@ -249,8 +259,12 @@ export function createPiCrewRuntimeContext(input: PiCrewMemoryContextInput): Den
 }
 
 export function defaultPolicyMode(context: DenMemoryRuntimeContext): DenMemoryPolicyMode {
-  if (context.session_kind === "worker_assignment" || context.session_kind === "assistant_delegate") return "manual";
+  if (context.session_kind === "worker_assignment" || context.session_kind === "assistant_delegate") return "metadata_only";
   return "manual";
+}
+
+function policyAllowsCandidateStore(policyMode: DenMemoryPolicyMode): boolean {
+  return policyMode === "candidate_capture" || policyMode === "permissive_candidates";
 }
 
 export function registerDenMemoryTools(registry: { registerStatic(tool: DenMemoryToolDefinition): void }, adapter: PiCrewDenMemoryAdapter): void {
@@ -275,7 +289,7 @@ export function defaultSourceRefs(context: DenMemoryRuntimeContext): readonly De
 
 function recallPayload(context: DenMemoryRuntimeContext, args: Record<string, unknown>): DenMemoryRecallRequest {
   return {
-    query: String(args.query),
+    query: normalizeMemoryQuery(String(args.query)),
     runtime_context: context,
     audience: arrayArg(args.audience) ?? context.audience,
     mode: modeArg(args.mode) ?? context.mode,
@@ -285,7 +299,7 @@ function recallPayload(context: DenMemoryRuntimeContext, args: Record<string, un
 }
 
 function searchPayload(context: DenMemoryRuntimeContext, args: Record<string, unknown>): Record<string, unknown> {
-  return { query: args.query, limit: args.limit ?? 10, runtime_context: context, audience: args.audience ?? context.audience };
+  return { query: normalizeMemoryQuery(String(args.query)), limit: args.limit ?? 10, runtime_context: context, audience: args.audience ?? context.audience };
 }
 
 function candidatePayload(context: DenMemoryRuntimeContext, args: Record<string, unknown>): Record<string, unknown> {
@@ -298,6 +312,10 @@ function candidatePayload(context: DenMemoryRuntimeContext, args: Record<string,
     source_refs: args.source_refs ?? defaultSourceRefs(context),
     runtime_context: context,
   };
+}
+
+function normalizeMemoryQuery(query: string): string {
+  return query.replace(/(?<=\p{L}|\p{N})-(?=\p{L}|\p{N})/gu, " ");
 }
 
 function tool(name: DenMemoryToolName, description: string, properties: Record<string, unknown>, required: readonly string[]): DenMemoryToolDefinition {
