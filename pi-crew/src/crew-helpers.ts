@@ -30,6 +30,9 @@ export function auditEntryToRecord(entry: AuditEntry): Record<string, unknown> {
 }
 
 export function validateGatewayConfig(raw: unknown): { valid: boolean; errors: string[] } {
+  if (raw === undefined || raw === null) {
+    return { valid: false, errors: ["No configuration provided (request body missing candidateConfig)"] };
+  }
   try {
     loadConfig(raw);
     return { valid: true, errors: [] };
@@ -44,6 +47,9 @@ export function validateGatewayConfig(raw: unknown): { valid: boolean; errors: s
  * (fullAgents, workerPool, etc.) before applying them.
  */
 export function validateCrewConfig(raw: unknown): { valid: boolean; errors: string[] } {
+  if (raw === undefined || raw === null) {
+    return { valid: false, errors: ["No configuration provided (request body missing candidateConfig)"] };
+  }
   const result = CrewConfigSchema.safeParse(raw);
   if (result.success) {
     return { valid: true, errors: [] };

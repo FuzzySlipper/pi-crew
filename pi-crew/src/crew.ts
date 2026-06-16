@@ -161,11 +161,6 @@ export class Crew {
       }),
       logger: this.#logger,
     });
-    const diagnostics = createCrewDiagnostics({
-      eventBus: this.#eventBus,
-      runtimeDb: this.#runtimeDb,
-      sessionStore,
-    });
     const cursorStore = createSqliteCursorStore(this.#runtimeDb);
     const denConnection = buildDenConnection(
       config.den,
@@ -186,6 +181,16 @@ export class Crew {
     this.#mcpClient = new MCPClient(this.#logger, this.#eventBus);
     this.#mcpToolRegistry = new McpToolRegistry(this.#logger);
     this.#mcpSurfaceManager = new DefaultMcpSurfaceManager({ config: config.mcp, logger: this.#logger, eventBus: this.#eventBus });
+
+    // Create diagnostics AFTER channel provider and MCP client are available
+    const diagnostics = createCrewDiagnostics({
+      eventBus: this.#eventBus,
+      runtimeDb: this.#runtimeDb,
+      sessionStore,
+      channelProvider: this.#channelProvider,
+      mcpClient: this.#mcpClient,
+      denCoreUrl: config.den.coreUrl,
+    });
     this.#denCompletionPoster = createDenCompletionPoster({
       mcpClient: this.#mcpClient,
       projectId: "pi-crew",
