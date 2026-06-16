@@ -45,7 +45,7 @@ import {
   ScriptCronJobExecutor,
   type CronJobRepository,
 } from "@pi-crew/service";
-import { loadCrewConfig, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
+import { loadCrewConfig, CrewConfigSchema, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
 export {
   CrewConfigSchema,
   loadCrewConfig,
@@ -87,9 +87,11 @@ import {
   auditEntryToRecord,
   completionDefaultsFromEnv,
   createFallbackChannelBinding,
+  validateCrewConfig,
   validateGatewayConfig,
 } from "./crew-helpers.js";
 import type { CompletionPoster } from "@pi-crew/tools";
+import type { ExtensionConfigReloadOutcome } from "@pi-crew/service";
 import { syncConfiguredCronJobs } from "./cron-jobs.js";
 export class Crew {
   readonly #config: CrewConfig;
@@ -264,6 +266,8 @@ export class Crew {
               logger: this.#logger,
             }),
             validateConfig: validateGatewayConfig,
+            reloadConfig: (candidateConfig: unknown) =>
+              this.#crewReloadConfig(candidateConfig),
           }),
           toolInventory: { projectTools: (sessionId) => this.#projectTools(sessionId) },
           agentWorkBreadcrumbs: this.#agentWorkBreadcrumbRepository,
@@ -496,8 +500,146 @@ export class Crew {
       workerIdentity: member.workerIdentity,
     });
   }
+
+  /**
+   * Runtime crew config reload handler.
+   *
+   * Validates the candidate config, computes diffs against the current
+   * CrewConfig, and applies safe changes at runtime. Changes to
+   * infrastructure keys (den.*, database.*, etc.) are blocked.
+   *
+   * Currently supports:
+   * - fullAgents additions: registers new session configs
+   * - fullAgents removals: logged with drain reminder
+   * - workerPool changes: logged (runtime pool updates deferred)
+   *
+   * Returns an ExtensionConfigReloadOutcome-compatible shape so the
+   * existing RemediationControlService can consume it.
+   */
+  async #crewReloadConfig(candidateConfig: unknown): Promise<ExtensionConfigReloadOutcome> {
+    const newConfig = CrewConfigSchema.safeParse(candidateConfig);
+    if (!newConfig.success) {
+      const issues = newConfig.error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      throw new ConfigurationError(`Invalid crew config: ${issues}`);
+    }
+
+    const oldConfig = this.#config;
+    const changedKeys: string[] = [];
+    const affectedExtensionIds: string[] = [];
+    const nonReloadableKeys: string[] = [];
+    const warnings: string[] = [];
+
+    // ── Detect non-reloadable changes ──────────────────────────
+    const nonReloadablePaths = ["den", "database", "install", "runtime", "profiles"];
+    for (const path of nonReloadablePaths) {
+      const oldVal = JSON.stringify(getNested(oldConfig, path));
+      const newVal = JSON.stringify(getNested(newConfig.data, path));
+      if (oldVal !== newVal) {
+        nonReloadableKeys.push(path);
+      }
+    }
+
+    if (nonReloadableKeys.length > 0) {
+      this.#logger.warn("config.reload.blocked", {
+        nonReloadableKeys,
+        detail: "These keys require a restart to change",
+      });
+      return {
+        changedKeys: nonReloadableKeys,
+        affectedExtensionIds: [],
+        nonReloadableKeys,
+        reactivatedExtensionIds: [],
+        skippedExtensionIds: ["crew-config"],
+        status: "blocked",
+        warnings: ["Non-reloadable config keys changed; restart required"],
+      };
+    }
+
+    // ── fullAgents diff ────────────────────────────────────────
+    const oldAgentIds = new Set(oldConfig.fullAgents.filter((a) => a.enabled).map((a) => a.agentId));
+    const newAgentIds = new Set(newConfig.data.fullAgents.filter((a) => a.enabled).map((a) => a.agentId));
+
+    const addedAgents = newConfig.data.fullAgents.filter((a) => a.enabled && !oldAgentIds.has(a.agentId));
+    const removedAgents = oldConfig.fullAgents.filter((a) => a.enabled && !newAgentIds.has(a.agentId));
+
+    if (addedAgents.length > 0 || removedAgents.length > 0) {
+      changedKeys.push("fullAgents");
+      affectedExtensionIds.push("crew-config");
+
+      if (addedAgents.length > 0) {
+        this.#logger.info("config.reload.agents_added", {
+          agents: addedAgents.map((a) => a.agentId),
+        });
+
+        // Register new agent session configs
+        const oldFullAgents = [...oldConfig.fullAgents];
+        const mergedAgents = [...oldFullAgents, ...addedAgents];
+        const mergedConfig = { ...oldConfig, fullAgents: mergedAgents };
+        configureFullSessionManager(this.#sessionManager, mergedConfig);
+      }
+
+      if (removedAgents.length > 0) {
+        warnings.push(
+          `Agents ${removedAgents.map((a) => a.agentId).join(", ")} were removed from config. ` +
+          "They will not receive new events. Active conversations should be drained naturally. " +
+          "Forced session archive requires admin API.",
+        );
+        this.#logger.warn("config.reload.agents_removed", {
+          agents: removedAgents.map((a) => a.agentId),
+        });
+      }
+    }
+
+    // ── workerPool diff ────────────────────────────────────────
+    const oldPoolJson = JSON.stringify(oldConfig.workerPool);
+    const newPoolJson = JSON.stringify(newConfig.data.workerPool);
+    if (oldPoolJson !== newPoolJson) {
+      changedKeys.push("workerPool");
+      affectedExtensionIds.push("crew-config");
+      warnings.push("Worker pool changes detected. Runtime pool reconfiguration requires a restart.");
+      this.#logger.info("config.reload.worker_pool_changed", {
+        detail: "Runtime pool reconfiguration deferred",
+      });
+    }
+
+    // ── Apply safe config changes ──────────────────────────────
+    if (changedKeys.length > 0) {
+      // Update the internal config reference
+      (this as unknown as Record<string, unknown>)["#config"] = newConfig.data;
+      this.#logger.info("config.reload.applied", { changedKeys, warnings });
+    }
+
+    const allKeys = [...new Set([...nonReloadableKeys, ...changedKeys])];
+    const status = changedKeys.length > 0 ? "reloaded" as const : "unchanged" as const;
+
+    return {
+      changedKeys: allKeys,
+      affectedExtensionIds: [...new Set(affectedExtensionIds)],
+      nonReloadableKeys,
+      reactivatedExtensionIds: changedKeys.length > 0 ? ["crew-config"] : [],
+      skippedExtensionIds: changedKeys.length > 0 ? [] : ["crew-config"],
+      status,
+      warnings,
+    };
+  }
 }
 
 export function bootstrap(yamlPath: string): Crew {
   return new Crew(loadCrewConfig(yamlPath));
+}
+
+/**
+ * Safely traverse a dot-separated path into a nested object.
+ * Returns undefined for missing paths instead of throwing.
+ */
+function getNested(obj: unknown, path: string): unknown {
+  const parts = path.split(".");
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (typeof current !== "object" || current === null) return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
 }

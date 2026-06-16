@@ -1,6 +1,7 @@
 import type { AuditEntry } from "@pi-crew/governance";
 import { loadConfig, type ChannelBinding, type GatewayConfig } from "@pi-crew/service";
 import type { DenCompletionDefaults } from "./den-completion-poster.js";
+import { CrewConfigSchema, type CrewConfig } from "./config.js";
 
 export function createFallbackChannelBinding(
   config: GatewayConfig,
@@ -35,6 +36,22 @@ export function validateGatewayConfig(raw: unknown): { valid: boolean; errors: s
   } catch (error: unknown) {
     return { valid: false, errors: [error instanceof Error ? error.message : String(error)] };
   }
+}
+
+/**
+ * Validate a raw value as a CrewConfig (not just GatewayConfig).
+ * Used by the admin reload endpoint to check crew-level changes
+ * (fullAgents, workerPool, etc.) before applying them.
+ */
+export function validateCrewConfig(raw: unknown): { valid: boolean; errors: string[] } {
+  const result = CrewConfigSchema.safeParse(raw);
+  if (result.success) {
+    return { valid: true, errors: [] };
+  }
+  return {
+    valid: false,
+    errors: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`),
+  };
 }
 
 export function completionDefaultsFromEnv(
