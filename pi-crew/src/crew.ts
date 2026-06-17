@@ -101,7 +101,8 @@ import type { CompletionPoster } from "@pi-crew/tools";
 import type { ExtensionConfigReloadOutcome } from "@pi-crew/service";
 import { syncConfiguredCronJobs } from "./cron-jobs.js";
 import { ServiceWorkConsumer, type ServiceWorkConsumer } from "./service-work-consumer.js";
-import { DefaultCuratorService } from "./curator-service.js";
+import { DefaultCuratorService, type CuratorService } from "./curator-service.js";
+import { createCuratorHandler } from "./curator-router.js";
 export class Crew {
   readonly #config: CrewConfig;
   readonly #gatewayConfig: GatewayConfig;
@@ -134,6 +135,7 @@ export class Crew {
   readonly #denseMemoryStore: SqliteDenseProfileMemoryStore;
   readonly #backgroundReviewUnsubscribers: (() => void)[];
   readonly #serviceWorkConsumer: ServiceWorkConsumer;
+  readonly #curator: CuratorService | null = null;
   #started = false;
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
@@ -441,7 +443,10 @@ export class Crew {
 
     // ── Curator maintenance ───────────────────────────────────────
     if (config.curator.enabled) {
-      const curator = new DefaultCuratorService(config.curator, this.#logger);
+      const curator = new DefaultCuratorService(
+        { ...config.curator, installRoot: config.install.root },
+        this.#logger,
+      );
       this.#cronRepository.upsert({
         id: "curator-maintenance",
         projectId: "pi-crew",
@@ -459,6 +464,44 @@ export class Crew {
         schedule: config.curator.cronSchedule,
         dryRun: config.curator.dryRun,
       });
+
+      // Register curator HTTP diagnostic routes on the Gateway health server
+      const curatorHandler = createCuratorHandler({ curator, logger: this.#logger });
+      this.#gateway.addRouteHandler((req, res) => {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        if (!url.pathname.startsWith("/api/v1/curator/")) return false;
+        // Handle curator routes — fire-and-forget, the handler writes the response
+        curatorHandler(req, res).catch((err) => {
+          this.#logger.error("Curator route handler error", { error: String(err) });
+        });
+        return true;
+      });
+
+      // Register a curator-aware health endpoint on /health
+      this.#gateway.addRouteHandler(async (req, res) => {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        if (url.pathname !== "/health" && url.pathname !== "/") return false;
+        // Return extended health with curator status summary
+        const curatorStatus = await curator.status().catch(() => null);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          status: "ok",
+          uptime: process.uptime(),
+          curator: curatorStatus
+            ? {
+                enabled: true,
+                paused: curatorStatus.paused,
+                lastRunAt: curatorStatus.lastRunAt,
+                lastRunSummary: curatorStatus.lastRunSummary,
+                runCount: curatorStatus.runCount,
+              }
+            : { enabled: true, paused: false },
+        }));
+        return true;
+      });
+
+      // Store the reference on the instance for external access
+      (this as unknown as Record<string, unknown>)["#curator"] = curator;
     }
   }
 

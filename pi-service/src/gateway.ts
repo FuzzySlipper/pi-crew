@@ -11,9 +11,20 @@
  * @module pi-service/gateway
  */
 
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { ConnectionError, type Logger, type EventBus } from "@pi-crew/core";
 import type { GatewayConfig, HealthConfig } from "./config.js";
+
+/**
+ * An extra route handler registered on the health HTTP server.
+ * Return `true` from the handler if the request was handled; return
+ * `false` (or leave undefined) to let the default health handler
+ * respond instead.
+ */
+export type RouteHandler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+) => boolean | void | Promise<boolean | void>;
 
 /** Check that Den is reachable before the gateway accepts work. */
 export type DenReachabilityCheck = (coreUrl: string) => Promise<void>;
@@ -63,6 +74,7 @@ export class Gateway {
   private healthServer: Server | null = null;
   private running = false;
   private shutdownReason = "";
+  private readonly routeHandlers: RouteHandler[] = [];
 
   constructor(
     private readonly config: GatewayConfig,
@@ -71,6 +83,17 @@ export class Gateway {
     private readonly denReachabilityCheck: DenReachabilityCheck =
       defaultDenReachabilityCheck,
   ) {}
+
+  /**
+   * Register an extra route handler on the health HTTP server.
+   * Handlers are checked in registration order before the default
+   * health endpoint responds. If a handler returns `true` (or a
+   * Promise resolving to `true`), the request is considered handled
+   * and no further handlers or the default handler run.
+   */
+  addRouteHandler(handler: RouteHandler): void {
+    this.routeHandlers.push(handler);
+  }
 
   // ── Lifecycle ───────────────────────────────────────────────
 
@@ -151,20 +174,21 @@ export class Gateway {
 
   private startHealthServer(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const server = createServer((_req, res) => {
-        if (!this.running) {
-          res.writeHead(503, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ status: "shutting_down" }));
+      const server = createServer(async (req, res) => {
+        try {
+          // Check registered route handlers in order
+          for (let i = 0; i < this.routeHandlers.length; i++) {
+            const handled = await this.routeHandlers[i](req, res);
+            if (handled) return;
+          }
+        } catch {
+          // Handler threw — respond with 500 and stop
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "internal_error" }));
           return;
         }
 
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            status: "ok",
-            uptime: process.uptime(),
-          }),
-        );
+        this.#defaultHealthHandler(res);
       });
 
       server.once("error", (err) => {
@@ -183,6 +207,22 @@ export class Gateway {
         resolve();
       });
     });
+  }
+
+  #defaultHealthHandler(res: ServerResponse): void {
+    if (!this.running) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "shutting_down" }));
+      return;
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        uptime: process.uptime(),
+      }),
+    );
   }
 
   private stopHealthServer(): Promise<void> {
