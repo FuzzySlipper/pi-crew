@@ -133,7 +133,7 @@ describe("filesystem profile skill loading", () => {
     const profile = loadProfile("agent", join(root, "profiles"));
 
     expect(profile.skills).toEqual([
-      { name: "inline-skill", description: "Inline metadata", version: "0.2.0" },
+      { name: "inline-skill", description: "Inline metadata", version: "0.2.0", provenance: "agent" },
     ]);
     expect(assembleProfilePrompt(profile)).toContain("**inline-skill** (v0.2.0): Inline metadata");
   });

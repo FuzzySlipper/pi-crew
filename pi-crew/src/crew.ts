@@ -465,6 +465,9 @@ export class Crew {
         dryRun: config.curator.dryRun,
       });
 
+      // Start internal auto-scheduler for periodic curator passes
+      curator.startAutoScheduler();
+
       // Register curator HTTP diagnostic routes on the Gateway health server
       const curatorHandler = createCuratorHandler({ curator, logger: this.#logger });
       this.#gateway.addRouteHandler((req, res) => {
@@ -562,6 +565,7 @@ export class Crew {
     await this.#extensionActivator.deactivateAll();
 
     this.#cronScheduler?.stop();
+    (this as unknown as Record<string, unknown>)["#curator"]?.stopAutoScheduler();
     this.#serviceWorkConsumer.stop();
     this.#breadcrumbManager.dispose();
     this.#auditLogger.dispose();

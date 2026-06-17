@@ -305,7 +305,7 @@ export const CrewConfigSchema = z.object({
   delegation: DelegationConfigSchema,
   backgroundReview: BackgroundReviewConfigSchema,
   curator: CuratorConfigSchema.default({}),
-}));
+});
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;
 export type FullAgentConfig = z.infer<typeof FullAgentConfigSchema>;
