@@ -142,6 +142,7 @@ export {
   type DenAssignmentReader,
   rowToRecord,
   recordToRow,
+  SqliteDenseProfileMemoryStore,
 } from "./persistence/index.js";
 
 // ── Workers ──────────────────────────────────────────────────────

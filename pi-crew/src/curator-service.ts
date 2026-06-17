@@ -20,6 +20,7 @@ import {
   type CuratorRunResult,
   type CuratorStatus,
   type ArchivedSkill,
+  CronExpression,
 } from "@pi-crew/service";
 
 export type { CuratorService, CuratorRunResult, CuratorStatus, ArchivedSkill };
@@ -150,8 +151,6 @@ export class DefaultCuratorService implements CuratorService {
    */
   #scheduleNext(): void {
     try {
-      // Dynamic import to avoid top-level loading issues
-      const { CronExpression } = require("@pi-crew/service") as typeof import("@pi-crew/service");
       const cron = new CronExpression(this.#schedule);
       const now = new Date();
       const nextRun = cron.nextAfter(now);
