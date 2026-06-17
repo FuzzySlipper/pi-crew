@@ -193,6 +193,19 @@ fullAgents:
       onStartup: "rehydrate_or_create"
       onShutdownStatus: "offline"
 
+# ── Background review system ─────────────────────────────────────
+# Post-response lifecycle hooks increment turn/iteration counters.
+# When thresholds are reached, a trigger is posted to the configured
+# service-work channel for the caretaker agent to claim and execute.
+backgroundReview:
+  enabled: false
+  defaultMemoryNudgeInterval: 10
+  defaultSkillNudgeInterval: 10
+  maxConcurrentReviews: 3
+  serviceWorkChannel: "service-work"
+  defaultMaxTokens: 5000
+  triggerClaimTTLMs: 60000
+
 # ── Logging ───────────────────────────────────────────────────────
 logging:
   # Minimum log level: "debug", "info", "warn", or "error".

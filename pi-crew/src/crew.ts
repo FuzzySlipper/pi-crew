@@ -391,7 +391,7 @@ export class Crew {
       this.#eventBus.on("turn.completed", (payload) => {
         if (!config.backgroundReview.enabled) return;
         if (payload.profileId === undefined) return;
-        void this.#counterService.incrementTurn(payload.profileId, payload.sessionId);
+        this.#handleTurnCompleted(payload, config);
       }),
       this.#eventBus.on("tool.called", (payload) => {
         if (!config.backgroundReview.enabled) return;
@@ -662,6 +662,84 @@ export class Crew {
       status,
       warnings,
     };
+  }
+
+  /**
+   * Handle a turn.completed event for background review lifecycle.
+   *
+   * 1. Increment the turn counter.
+   * 2. Check if any review trigger threshold has been reached.
+   * 3. If triggered, post a structured trigger message to the service-work channel.
+   * 4. On any failure, log at warning level and silently drop — counter is NOT reset here.
+   *
+   * The caretaker owns counter reset at review START, not the hook.
+   */
+  #handleTurnCompleted(
+    payload: { readonly sessionId: string; readonly profileId: string | undefined; readonly turnNumber: number; readonly durationMs: number },
+    config: CrewConfig,
+  ): void {
+    const profileId = payload.profileId;
+    if (profileId === undefined) return;
+
+    // Step 1: increment turn counter (fire-and-forget, never throws)
+    void this.#counterService.incrementTurn(profileId, payload.sessionId).catch((error: unknown) => {
+      this.#logger.warn("Background review turn increment failed", {
+        profileId,
+        sessionId: payload.sessionId,
+        error: String(error),
+      });
+    });
+
+    // Step 2: check trigger thresholds
+    void this.#counterService
+      .checkTrigger(profileId, payload.sessionId, {
+        memoryNudgeInterval: config.backgroundReview.defaultMemoryNudgeInterval,
+        skillNudgeInterval: config.backgroundReview.defaultSkillNudgeInterval,
+      })
+      .then((trigger) => {
+        if (trigger === null) return;
+
+        // Step 3: post trigger message to service-work channel
+        const triggerMessage = JSON.stringify({
+          type: "background_review_trigger",
+          profileId,
+          sessionId: payload.sessionId,
+          triggerType: trigger.type,
+          turnsSinceMemory: trigger.turnsSinceMemory,
+          itersSinceSkill: trigger.itersSinceSkill,
+        });
+
+        void this.#channelProvider
+          .sendMessage(config.backgroundReview.serviceWorkChannel, {
+            kind: "text",
+            text: triggerMessage,
+          })
+          .then(() => {
+            this.#logger.info("Background review trigger posted", {
+              profileId,
+              sessionId: payload.sessionId,
+              triggerType: trigger.type,
+              channelId: config.backgroundReview.serviceWorkChannel,
+            });
+          })
+          .catch((error: unknown) => {
+            // Step 4: failure — silently drop, counter NOT reset
+            this.#logger.warn("Background review trigger post failed", {
+              profileId,
+              sessionId: payload.sessionId,
+              triggerType: trigger.type,
+              channelId: config.backgroundReview.serviceWorkChannel,
+              error: String(error),
+            });
+          });
+      })
+      .catch((error: unknown) => {
+        this.#logger.warn("Background review checkTrigger failed", {
+          profileId,
+          sessionId: payload.sessionId,
+          error: String(error),
+        });
+      });
   }
 }
 

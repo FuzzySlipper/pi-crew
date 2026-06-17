@@ -1,0 +1,24 @@
+# Caretaker profile YAML definition
+name: "Service Caretaker"
+description: >-
+  Background review lifecycle agent. Monitors review counters posted
+  to the #service-work channel, claims review triggers via idempotent
+  first-claimer semantics, spawns review subagents, and resets counters
+  at review start. Does NOT itself generate review triggers.
+skills: []
+modelConfig:
+  temperature: 0.3
+  maxTokens: 5000
+backgroundReview:
+  enabled: false
+toolPolicy:
+  mode: allow_list
+  allow:
+    - delegate_task
+    - den_memory_recall
+    - den_memory_read
+    - den_memory_search
+    - den_memory_propose
+    - den_channels_send
+    - den_channels_get_messages
+    - counter_reset
