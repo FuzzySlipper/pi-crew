@@ -189,12 +189,27 @@ export interface Profile {
   memoryConfig?: MemoryConfig;
 
   /** Optional background review configuration for auto-triggered skill/memory nudge passes. */
-  backgroundReview?: {
-    /** Turn interval for memory review nudges. Overrides crew-level defaultMemoryNudgeInterval. */
-    memoryNudgeInterval?: number;
-    /** Tool-iteration interval for skill review nudges. Overrides crew-level defaultSkillNudgeInterval. */
-    skillNudgeInterval?: number;
-  };
+  backgroundReview?: BackgroundReviewConfig;
+}
+
+// ── BackgroundReviewConfig ───────────────────────────────────────
+
+/** Configuration for per-profile background review settings. */
+export interface BackgroundReviewConfig {
+  /** Whether background review is enabled for this profile. Defaults to crew-level default. */
+  enabled?: boolean;
+
+  /** Turn interval for memory review nudges. Overrides crew-level defaultMemoryNudgeInterval. */
+  memoryNudgeInterval?: number;
+
+  /** Tool-iteration interval for skill review nudges. Overrides crew-level defaultSkillNudgeInterval. */
+  skillNudgeInterval?: number;
+
+  /** Maximum tokens per review subagent turn. Overrides crew-level defaultMaxTokens. */
+  maxTokens?: number;
+
+  /** Model configuration for review subagents. Falls back to crew defaults / profile modelConfig. */
+  reviewModel?: ModelConfig;
 }
 
 // ── MemoryConfig ────────────────────────────────────────────────

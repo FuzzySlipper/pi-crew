@@ -13,6 +13,7 @@ export {
   type McpConfig,
   type ToolPolicy,
   type MemoryConfig,
+  type BackgroundReviewConfig,
 } from "./profile.js";
 
 // ── Loader ────────────────────────────────────────────────────

@@ -96,6 +96,7 @@ import {
 import type { CompletionPoster } from "@pi-crew/tools";
 import type { ExtensionConfigReloadOutcome } from "@pi-crew/service";
 import { syncConfiguredCronJobs } from "./cron-jobs.js";
+import { type ServiceWorkConsumer } from "./service-work-consumer.js";
 export class Crew {
   readonly #config: CrewConfig;
   readonly #gatewayConfig: GatewayConfig;
@@ -126,6 +127,7 @@ export class Crew {
   readonly #cronScheduler: CronScheduler | null;
   readonly #counterService: CounterService;
   readonly #backgroundReviewUnsubscribers: (() => void)[];
+  readonly #serviceWorkConsumer: ServiceWorkConsumer;
   #started = false;
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
@@ -408,6 +410,17 @@ export class Crew {
         sessions: config.sessions,
       },
     });
+
+    this.#serviceWorkConsumer = new ServiceWorkConsumer(
+      this.#logger,
+      this.#eventBus,
+      this.#channelProvider,
+      {
+        channelId: config.backgroundReview.serviceWorkChannel,
+        enabled: config.backgroundReview.enabled,
+        agentIdentity: "pi-crew",
+      },
+    );
   }
 
   async start(): Promise<void> {
@@ -449,6 +462,9 @@ export class Crew {
 
     this.#started = true;
     this.#logger.info("Crew started");
+
+    // Start service-work consumer AFTER channel provider is connected
+    this.#serviceWorkConsumer.start();
   }
 
   async stop(reason: string): Promise<void> {
@@ -464,6 +480,7 @@ export class Crew {
     await this.#extensionActivator.deactivateAll();
 
     this.#cronScheduler?.stop();
+    this.#serviceWorkConsumer.stop();
     this.#breadcrumbManager.dispose();
     this.#auditLogger.dispose();
     await this.#mcpClient.disconnect();
@@ -690,11 +707,36 @@ export class Crew {
       });
     });
 
-    // Step 2: check trigger thresholds
+    // Step 2: resolve profile-level overrides. Load the profile to check
+    // for per-profile backgroundReview config; fall back to service-level defaults.
+    let memoryNudgeInterval = config.backgroundReview.defaultMemoryNudgeInterval;
+    let skillNudgeInterval = config.backgroundReview.defaultSkillNudgeInterval;
+    let enabledOverride: boolean | undefined;
+    try {
+      const profile = loadProfile(profileId, resolveCrewInstallLayout(config).profilesRoot);
+      if (profile.backgroundReview !== undefined) {
+        if (profile.backgroundReview.enabled !== undefined) {
+          enabledOverride = profile.backgroundReview.enabled;
+        }
+        if (profile.backgroundReview.memoryNudgeInterval !== undefined) {
+          memoryNudgeInterval = profile.backgroundReview.memoryNudgeInterval;
+        }
+        if (profile.backgroundReview.skillNudgeInterval !== undefined) {
+          skillNudgeInterval = profile.backgroundReview.skillNudgeInterval;
+        }
+      }
+    } catch {
+      // Profile not found — continue with service-level defaults
+    }
+
+    // Profile-level enabled=false overrides the service-level enabled gate
+    if (enabledOverride === false) return;
+
+    // Step 3: check trigger thresholds
     void this.#counterService
       .checkTrigger(profileId, payload.sessionId, {
-        memoryNudgeInterval: config.backgroundReview.defaultMemoryNudgeInterval,
-        skillNudgeInterval: config.backgroundReview.defaultSkillNudgeInterval,
+        memoryNudgeInterval,
+        skillNudgeInterval,
       })
       .then((trigger) => {
         if (trigger === null) return;

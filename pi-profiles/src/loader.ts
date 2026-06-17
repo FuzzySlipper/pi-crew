@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { ConfigurationError } from "@pi-crew/core";
-import type { Profile, ModelConfig, ToolPolicy, RuntimeConfig, McpConfig } from "./profile.js";
+import type { Profile, ModelConfig, ToolPolicy, RuntimeConfig, McpConfig, BackgroundReviewConfig } from "./profile.js";
 import { resolveProfileSkills } from "./skill-loading.js";
 
 // ── ProfileSource interface ─────────────────────────────────────
@@ -356,6 +356,7 @@ function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: st
   const runtimeConfig: RuntimeConfig | undefined = parseRuntimeConfig(doc, definition.id);
   const mcpConfig: McpConfig | undefined = parseMcpConfig(doc, definition.id);
   const toolPolicy: ToolPolicy | undefined = parseToolPolicy(doc, definition.id);
+  const backgroundReview = parseBackgroundReviewConfig(doc, definition.id);
 
   return {
     id: definition.id,
@@ -367,6 +368,7 @@ function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: st
     runtimeConfig,
     mcpConfig,
     toolPolicy,
+    backgroundReview,
   };
 }
 
@@ -484,4 +486,48 @@ function parseToolPolicy(doc: Record<string, unknown>, profileId: string): ToolP
     throw new ConfigurationError(`Profile "${profileId}" field "toolPolicy" must be an object`);
   }
   return raw;
+}
+
+function parseBackgroundReviewConfig(
+  doc: Record<string, unknown>,
+  profileId: string,
+): BackgroundReviewConfig | undefined {
+  const raw = doc["backgroundReview"];
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  if (!isPlainRecord(raw)) {
+    throw new ConfigurationError(`Profile "${profileId}" field "backgroundReview" must be an object`);
+  }
+  const enabled = raw["enabled"];
+  if (enabled !== undefined && typeof enabled !== "boolean") {
+    throw new ConfigurationError(`Profile "${profileId}" field "backgroundReview.enabled" must be a boolean`);
+  }
+  const memoryNudgeInterval = raw["memoryNudgeInterval"];
+  if (memoryNudgeInterval !== undefined && (!Number.isInteger(memoryNudgeInterval) || (memoryNudgeInterval as number) < 1)) {
+    throw new ConfigurationError(`Profile "${profileId}" field "backgroundReview.memoryNudgeInterval" must be a positive integer`);
+  }
+  const skillNudgeInterval = raw["skillNudgeInterval"];
+  if (skillNudgeInterval !== undefined && (!Number.isInteger(skillNudgeInterval) || (skillNudgeInterval as number) < 1)) {
+    throw new ConfigurationError(`Profile "${profileId}" field "backgroundReview.skillNudgeInterval" must be a positive integer`);
+  }
+  const maxTokens = raw["maxTokens"];
+  if (maxTokens !== undefined && (!Number.isInteger(maxTokens) || (maxTokens as number) < 1)) {
+    throw new ConfigurationError(`Profile "${profileId}" field "backgroundReview.maxTokens" must be a positive integer`);
+  }
+  const reviewModelRaw = raw["reviewModel"];
+  let reviewModel: ModelConfig | undefined;
+  if (reviewModelRaw !== undefined && reviewModelRaw !== null) {
+    if (!isPlainRecord(reviewModelRaw)) {
+      throw new ConfigurationError(`Profile "${profileId}" field "backgroundReview.reviewModel" must be an object`);
+    }
+    reviewModel = reviewModelRaw as unknown as ModelConfig;
+  }
+  return {
+    ...(enabled === undefined ? {} : { enabled }),
+    ...(memoryNudgeInterval === undefined ? {} : { memoryNudgeInterval }),
+    ...(skillNudgeInterval === undefined ? {} : { skillNudgeInterval }),
+    ...(maxTokens === undefined ? {} : { maxTokens }),
+    ...(reviewModel === undefined ? {} : { reviewModel }),
+  };
 }
