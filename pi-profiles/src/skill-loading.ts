@@ -1,7 +1,7 @@
 /** Filesystem skill resolution for pi-crew profiles. */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { ConfigurationError, parseSkillFrontmatter } from "@pi-crew/core";
 import type { Skill } from "./profile.js";
 
@@ -90,6 +90,12 @@ function parseFilesystemSkill(skillPath: string, sourceRank: number, provenance:
   const content = readFileSync(skillPath, "utf-8");
   try {
     const parsed = parseSkillFrontmatter(content);
+    // Best-effort last_used timestamp for curator auto-transition accuracy
+    try {
+      writeFileSync(join(dirname(skillPath), ".last_used"), new Date().toISOString(), "utf-8");
+    } catch {
+      // Non-critical — curator falls back to directory mtime
+    }
     return {
       sourceRank,
       provenance,
