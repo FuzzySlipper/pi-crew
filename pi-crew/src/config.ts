@@ -264,6 +264,23 @@ const BackgroundReviewConfigSchema = z.object({
 
 export type BackgroundReviewConfig = z.infer<typeof BackgroundReviewConfigSchema>;
 
+// ── Curator config ───────────────────────────────────────────────
+
+const CuratorConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  cronSchedule: z.string().default('0 0 */7 * *'),
+  staleAfterDays: z.number().int().positive().default(30),
+  archiveAfterDays: z.number().int().positive().default(90),
+  snapshotRetentionDays: z.number().int().positive().default(30),
+  minAgeDays: z.number().int().positive().default(1),
+  dryRun: z.boolean().default(true),
+  maxTokens: z.number().int().positive().default(5000),
+  auxiliaryModel: z.string().optional(),
+  auxiliaryProvider: z.string().optional(),
+}).default({});
+
+export type CuratorConfig = z.infer<typeof CuratorConfigSchema>;
+
 export const CrewConfigSchema = z.object({
   install: InstallConfigSchema.default({}),
   profiles: ProfilesConfigSchema,
@@ -287,7 +304,8 @@ export const CrewConfigSchema = z.object({
   cron: CronConfigSchema,
   delegation: DelegationConfigSchema,
   backgroundReview: BackgroundReviewConfigSchema,
-});
+  curator: CuratorConfigSchema.default({}),
+}));
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;
 export type FullAgentConfig = z.infer<typeof FullAgentConfigSchema>;

@@ -49,7 +49,10 @@ import {
   ScriptCronJobExecutor,
   type CronJobRepository,
 } from "@pi-crew/service";
-import { loadCrewConfig, CrewConfigSchema, resolveCrewInstallLayout, type CrewConfig } from "./config.js";
+import {
+  loadCrewConfig, CrewConfigSchema, resolveCrewInstallLayout, type CrewConfig,
+  type CuratorConfig,
+} from "./config.js";
 export {
   CrewConfigSchema,
   loadCrewConfig,
@@ -98,6 +101,7 @@ import type { CompletionPoster } from "@pi-crew/tools";
 import type { ExtensionConfigReloadOutcome } from "@pi-crew/service";
 import { syncConfiguredCronJobs } from "./cron-jobs.js";
 import { ServiceWorkConsumer, type ServiceWorkConsumer } from "./service-work-consumer.js";
+import { DefaultCuratorService } from "./curator-service.js";
 export class Crew {
   readonly #config: CrewConfig;
   readonly #gatewayConfig: GatewayConfig;
@@ -434,6 +438,28 @@ export class Crew {
         agentIdentity: "pi-crew",
       },
     );
+
+    // ── Curator maintenance ───────────────────────────────────────
+    if (config.curator.enabled) {
+      const curator = new DefaultCuratorService(config.curator, this.#logger);
+      this.#cronRepository.upsert({
+        id: "curator-maintenance",
+        projectId: "pi-crew",
+        schedule: config.curator.cronSchedule,
+        shape: "script_only",
+        script: "",
+        cwd: null,
+        deliveryChannelId: null,
+        enabled: true,
+        timezone: "UTC",
+      }, new Date()).catch((error: unknown) => {
+        this.#logger.warn("Failed to register curator cron job", { error: String(error) });
+      });
+      this.#logger.info("Curator maintenance cron job registered", {
+        schedule: config.curator.cronSchedule,
+        dryRun: config.curator.dryRun,
+      });
+    }
   }
 
   async start(): Promise<void> {

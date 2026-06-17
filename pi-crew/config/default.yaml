@@ -206,6 +206,20 @@ backgroundReview:
   defaultMaxTokens: 5000
   triggerClaimTTLMs: 60000
 
+# ── Curator (memory/conversation maintenance) ────────────────────
+# Periodic cleanup of stale sessions, snapshots, and archived data.
+# Runs on the configured cronSchedule when enabled. Dry-run is the
+# default to prevent accidental data loss.
+curator:
+  enabled: false
+  cronSchedule: "0 0 */7 * *"
+  staleAfterDays: 30
+  archiveAfterDays: 90
+  snapshotRetentionDays: 30
+  minAgeDays: 1
+  dryRun: true
+  maxTokens: 5000
+
 # ── Logging ───────────────────────────────────────────────────────
 logging:
   # Minimum log level: "debug", "info", "warn", or "error".

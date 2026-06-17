@@ -351,3 +351,35 @@ export { SqliteCronJobRepository, CronRepositoryError } from "./cron/sqlite-cron
 export { ScriptCronJobExecutor, CronExecutionError } from "./cron/script-cron-job-executor.js";
 export { CronScheduler, CronSchedulerError } from "./cron/cron-scheduler.js";
 export type { CronJobDraft, CronJobExecutionResult, CronJobExecutor, CronJobRecord, CronJobRepository, CronJobShape, CronRunCompletion, CronRunRecord, CronRunStatus } from "./cron/types.js";
+export { DefaultCuratorService } from "./curator/curator-service.js";
+export type {
+  CuratorService,
+  CuratorConfig,
+  CuratorRunResult,
+  CuratorStatus,
+  ArchivedSkill,
+  AutoTransition,
+  CuratorMutation,
+  IdleCheckResult,
+  SkillProvenance,
+} from "./curator/types.js";
+export {
+  applyAutoTransitions,
+} from "./curator/auto-transitions.js";
+export {
+  snapshot,
+  rollback,
+  listSnapshots,
+  pruneSnapshots,
+} from "./curator/snapshot.js";
+export {
+  archiveSkill,
+  listArchived,
+  restoreSkill,
+  pinSkill,
+  unpinSkill,
+  listPinned,
+} from "./curator/archive.js";
+export {
+  checkIdle,
+} from "./curator/idle-detection.js";

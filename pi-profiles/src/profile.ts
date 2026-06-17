@@ -33,6 +33,9 @@ export interface Skill {
 
   /** Filesystem path for loaded SKILL.md content. */
   sourcePath?: string;
+
+  /** Optional provenance classification for curator safety. */
+  provenance?: "bundled" | "profile" | "agent" | "pinned";
 }
 
 // ── ModelConfig ─────────────────────────────────────────────────

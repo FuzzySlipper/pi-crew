@@ -20,6 +20,7 @@ export interface ResolveProfileSkillsInput {
 interface FilesystemSkill {
   readonly skill: Skill;
   readonly sourceRank: number;
+  readonly provenance: "bundled" | "profile";
 }
 
 export function resolveProfileSkills(input: ResolveProfileSkillsInput): Skill[] {
@@ -58,9 +59,9 @@ function selectNamedSkills(input: ResolveProfileSkillsInput, names: readonly str
 
 function loadAvailableSkills(input: ResolveProfileSkillsInput): Map<string, FilesystemSkill> {
   const skills = new Map<string, FilesystemSkill>();
-  loadSkillDir(input.globalSkillsDir, 0, skills);
+  loadSkillDir(input.globalSkillsDir, 0, "bundled", skills);
   if (input.profileSkillsDir !== undefined) {
-    loadSkillDir(input.profileSkillsDir, 1, skills);
+    loadSkillDir(input.profileSkillsDir, 1, "profile", skills);
   }
   return skills;
 }
@@ -68,6 +69,7 @@ function loadAvailableSkills(input: ResolveProfileSkillsInput): Map<string, File
 function loadSkillDir(
   skillsDir: string,
   sourceRank: number,
+  provenance: "bundled" | "profile",
   skills: Map<string, FilesystemSkill>,
 ): void {
   if (!existsSync(skillsDir)) return;
@@ -76,7 +78,7 @@ function loadSkillDir(
     if (!entry.isDirectory()) continue;
     const skillPath = join(skillsDir, entry.name, SKILL_FILE);
     if (!existsSync(skillPath)) continue;
-    const loaded = parseFilesystemSkill(skillPath, sourceRank);
+    const loaded = parseFilesystemSkill(skillPath, sourceRank, provenance);
     const current = skills.get(loaded.skill.name);
     if (current === undefined || loaded.sourceRank >= current.sourceRank) {
       skills.set(loaded.skill.name, loaded);
@@ -84,18 +86,20 @@ function loadSkillDir(
   }
 }
 
-function parseFilesystemSkill(skillPath: string, sourceRank: number): FilesystemSkill {
+function parseFilesystemSkill(skillPath: string, sourceRank: number, provenance: "bundled" | "profile"): FilesystemSkill {
   const content = readFileSync(skillPath, "utf-8");
   try {
     const parsed = parseSkillFrontmatter(content);
     return {
       sourceRank,
+      provenance,
       skill: {
         name: parsed.frontmatter.name,
         description: parsed.frontmatter.description,
         version: parsed.frontmatter.version ?? "0.1.0",
         content: boundSkillBody(parsed.body),
         sourcePath: skillPath,
+        provenance,
       },
     };
   } catch (cause) {
@@ -124,5 +128,5 @@ function parseInlineSkill(item: unknown, profileId: string, index: number): Skil
       `Profile "${profileId}" skill[${String(index)}] is missing required field "name"`,
     );
   }
-  return { name, description, version };
+  return { name, description, version, provenance: "agent" };
 }
