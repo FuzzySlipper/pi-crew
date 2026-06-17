@@ -259,6 +259,16 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
     policyGate: "runtime.tools.allow/profile toolPolicy must request helper or counter_reset or backgroundReview.enabled",
     inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
   },
+  {
+    name: "dense_profile_memory",
+    category: "memory",
+    modelCallable: true,
+    implementedIn: "pi-tools/src/dense-profile-memory-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "available when DenseProfileMemoryStore exists (profile memoryConfig not disabled)",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
   ...[
     "browser_navigate",
     "browser_snapshot",

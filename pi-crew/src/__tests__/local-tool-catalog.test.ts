@@ -88,6 +88,7 @@ describe("local tool catalog", () => {
         ...localModelCallableToolNames("session"),
         ...localModelCallableToolNames("web"),
         ...localModelCallableToolNames("browser"),
+        "dense_profile_memory",
       ]),
     );
   });

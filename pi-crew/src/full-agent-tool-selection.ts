@@ -4,6 +4,7 @@ import type { CounterService, SessionSearchRepository } from "@pi-crew/service";
 import type { MCPClient } from "@pi-crew/mcp";
 import type { ToolPolicy } from "@pi-crew/profiles";
 import { SessionToolFilter } from "@pi-crew/tools";
+import type { DenseProfileMemoryStore } from "@pi-crew/memory";
 import type { CrewConfig } from "./config.js";
 import { createFullAgentMcpAgentTool } from "./full-agent-mcp-tool.js";
 import { createRuntimeLocalTools, runtimeLocalToolNames } from "./runtime-local-tools.js";
@@ -23,6 +24,7 @@ export interface SelectFullAgentToolsInput {
   readonly defaultProjectId?: string;
   readonly memory?: CrewConfig["memory"];
   readonly counterService?: CounterService;
+  readonly denseMemoryStore?: DenseProfileMemoryStore;
 }
 
 export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentTool[] {
@@ -33,6 +35,7 @@ export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentToo
     sessionSearchRepository: input.sessionSearchRepository,
     denMemory: memoryConfig(input),
     counterService: input.counterService,
+    denseMemoryStore: input.denseMemoryStore,
   });
   const localToolNameSet = new Set<string>(runtimeLocalToolNames);
   const beforePolicy = selectToolsBeforeSessionPolicy({

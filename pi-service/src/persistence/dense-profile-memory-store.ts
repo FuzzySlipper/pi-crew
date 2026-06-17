@@ -60,6 +60,15 @@ export class SqliteDenseProfileMemoryStore implements DenseProfileMemoryStore {
   // ── Read ──────────────────────────────────────────────────────
 
   async read(profileId: string, target: DenseMemoryTarget): Promise<DenseMemoryContent> {
+    return this.#readInternal(profileId, target);
+  }
+
+  /** Synchronous read for session-creation hydration. */
+  readSync(profileId: string, target: DenseMemoryTarget): DenseMemoryContent {
+    return this.#readInternal(profileId, target);
+  }
+
+  #readInternal(profileId: string, target: DenseMemoryTarget): DenseMemoryContent {
     const row = this.#db
       .prepare(
         "SELECT content, cap_bytes, write_token FROM profile_dense_memory WHERE profile_id = ? AND target = ?",

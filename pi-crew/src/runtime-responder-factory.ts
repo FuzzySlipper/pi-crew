@@ -15,6 +15,7 @@ import {
   type SessionSearchRepository,
   type RuntimeConfig,
   type CounterService,
+  SqliteDenseProfileMemoryStore,
 } from "@pi-crew/service";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
 
@@ -39,6 +40,7 @@ export function buildRuntimeResponderFactory(
   channelReadback?: DenChannelReadbackRuntimeConfig,
   sessionSearchRepository?: SessionSearchRepository,
   counterService?: CounterService,
+  denseMemoryStore?: SqliteDenseProfileMemoryStore,
 ): AgentResponderFactory {
   if (isCrewConfig(runtime)) {
     const agents = runtime.fullAgents.filter((candidate) => candidate.enabled);
@@ -64,6 +66,7 @@ export function buildRuntimeResponderFactory(
         streamRetry: runtime.streamRetry,
         memory: runtime.memory,
         counterService,
+        denseMemoryStore,
       });
     }
     return buildRuntimeResponderFactory(runtime.runtime, eventBus);

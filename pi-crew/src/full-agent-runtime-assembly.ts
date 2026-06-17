@@ -9,7 +9,8 @@ import {
   type ExecutionPolicy,
   type Logger,
 } from "@pi-crew/core";
-import { assembleProfilePrompt, loadProfile, type Profile } from "@pi-crew/profiles";
+import { assembleProfilePrompt, assembleSystemPrompt, loadProfile, type Profile } from "@pi-crew/profiles";
+import type { DenseMemoryContext } from "@pi-crew/profiles";
 import {
   FullAgentResponder,
   FullAgentResponderFactory,
@@ -31,6 +32,7 @@ import {
   createFullAgentPolicy,
   SessionToolFilter,
 } from "@pi-crew/tools";
+import type { DenseProfileMemoryStore } from "@pi-crew/memory";
 import type { CrewConfig } from "./config.js";
 import { createFullAgentContextPolicyResolver } from "./den-router-metadata-client.js";
 import { createDenChannelReadbackTool } from "./den-channel-readback-tool.js";
@@ -65,6 +67,7 @@ export interface ResolveFullAgentRuntimeInput {
   readonly sessionSearchRepository?: SessionSearchRepository;
   readonly memory?: CrewConfig["memory"];
   readonly counterService?: CounterService;
+  readonly denseMemoryStore?: DenseProfileMemoryStore;
 }
 export interface FullAgentDelegationRuntimeConfig {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
@@ -83,6 +86,7 @@ export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRun
   readonly crewContext: CrewConfig["context"];
   readonly streamRetry?: StreamRetryConfig;
   readonly counterService?: CounterService;
+  readonly denseMemoryStore?: DenseProfileMemoryStore;
 }
 export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["fullAgents"][number][];
@@ -100,6 +104,7 @@ export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly crewContext: CrewConfig["context"];
   readonly streamRetry?: StreamRetryConfig;
   readonly counterService?: CounterService;
+  readonly denseMemoryStore?: DenseProfileMemoryStore;
 }
 class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
   constructor(
@@ -227,13 +232,44 @@ export function resolveFullAgentRuntime(
     defaultProjectId: input.defaultDenProjectId,
     memory: input.memory,
     counterService: input.counterService,
+    denseMemoryStore: input.denseMemoryStore,
   });
   const selectedNames = new Set(tools.map((tool) => tool.name));
+
+  // Hydrate system prompt with dense profile memory context
+  let denseMemory: DenseMemoryContext | undefined;
+  if (
+    input.denseMemoryStore !== undefined &&
+    profile.memoryConfig?.enabled !== false
+  ) {
+    try {
+      const memoryContent = input.denseMemoryStore.readSync(profile.id, "memory");
+      const userContent = input.denseMemoryStore.readSync(profile.id, "user");
+      if (memoryContent.entryCount > 0 || userContent.entryCount > 0) {
+        denseMemory = {
+          memoryContent: memoryContent.content,
+          userContent: userContent.content,
+          memoryCapBytes: memoryContent.capBytes,
+          userCapBytes: userContent.capBytes,
+        };
+      }
+    } catch {
+      // Memory read failure — continue without hydration
+    }
+  }
+
+  let systemPrompt: string;
+  if (denseMemory !== undefined) {
+    systemPrompt = assembleSystemPrompt({ profile, denseMemory });
+  } else {
+    systemPrompt = assembleProfilePrompt(profile);
+  }
+
   return {
     profile,
     model,
     agentModel: createAgentModel(model),
-    systemPrompt: assembleProfilePrompt(profile),
+    systemPrompt,
     tools,
     executionPolicy,
     inventory: buildEffectiveToolInventory({

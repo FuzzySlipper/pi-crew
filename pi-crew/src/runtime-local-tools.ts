@@ -1,8 +1,10 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { CounterService, SessionSearchRepository } from "@pi-crew/service";
+import type { DenseProfileMemoryStore } from "@pi-crew/memory";
 import { createBrowserTools } from "./browser-tools.js";
 import { createCounterResetTool } from "./counter-reset-tool.js";
 import { createDenMemoryTools, type DenMemoryToolConfig } from "./den-memory-tools.js";
+import { createLocalDenseProfileMemoryTool } from "./dense-profile-memory-tool-local.js";
 import { createLocalCodeTools } from "./local-code-tools.js";
 import { localModelCallableToolNames } from "./local-tool-catalog.js";
 import { createTodoTool } from "./todo-tool.js";
@@ -16,6 +18,7 @@ export interface RuntimeLocalToolConfig {
   readonly sessionSearchRepository?: SessionSearchRepository;
   readonly denMemory?: DenMemoryToolConfig;
   readonly counterService?: CounterService;
+  readonly denseMemoryStore?: DenseProfileMemoryStore;
 }
 
 export const runtimeLocalToolNames = localModelCallableToolNames();
@@ -38,6 +41,12 @@ export function createRuntimeLocalTools(config: RuntimeLocalToolConfig): AgentTo
   if (counterTool !== undefined) {
     tools.push(counterTool);
   }
+
+  const denseMemoryTool = createLocalDenseProfileMemoryTool({
+    denseMemoryStore: config.denseMemoryStore,
+    profileId: config.profileId,
+  });
+  tools.push(denseMemoryTool);
 
   return tools;
 }

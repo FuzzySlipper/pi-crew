@@ -115,8 +115,11 @@ export interface DenseMemoryWriteResult {
  * consumed by the tool layer (pi-tools).
  */
 export interface DenseProfileMemoryStore {
-  /** Read full content for a profile+target. */
+  /** Read dense profile memory content for a profile+target. */
   read(profileId: string, target: DenseMemoryTarget): Promise<DenseMemoryContent>;
+
+  /** Synchronous read for session-creation hydration. Only available on SQLite-backed stores. */
+  readSync?(profileId: string, target: DenseMemoryTarget): DenseMemoryContent;
 
   /**
    * Write (add/replace/remove) with cap enforcement and drift detection.

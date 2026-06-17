@@ -155,8 +155,8 @@ Checklist for adding a runtime-local model-callable tool:
 
 Current runtime-local model-callable catalog:
 
-| Tool                  | Category   | Surfaces                    | Policy gate                                                                                  | Implemented in                                     |
-| --------------------- | ---------- | --------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Tool | Category | Surfaces | Policy gate | Implemented in |
+| ---- | -------- | -------- | ----------- | -------------- |
 | `spawn_subagent` | delegation | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or spawn_subagent | `pi-service/src/workers/delegated-spawn-tool.ts` |
 | `fan_out_subagents` | delegation | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or fan_out_subagents | `pi-service/src/workers/delegated-fan-out-tool.ts` |
 | `scout_codebase` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or scout_codebase | `pi-service/src/workers/delegated-helper-tools.ts` |
@@ -178,6 +178,7 @@ Current runtime-local model-callable catalog:
 | `den_memory_store` | memory | full-agent | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_store | `pi-crew/src/den-memory-tools.ts` |
 | `den_memory_propose` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_propose | `pi-crew/src/den-memory-tools.ts` |
 | `counter_reset` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request helper or counter_reset or backgroundReview.enabled | `pi-crew/src/counter-reset-tool.ts` |
+| `dense_profile_memory` | memory | full-agent | available when DenseProfileMemoryStore exists (profile memoryConfig not disabled) | `pi-tools/src/dense-profile-memory-tool.ts` |
 | `browser_navigate` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_snapshot` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_click` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |

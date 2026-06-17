@@ -37,6 +37,7 @@ import {
   MessageRepositoryTurnHistory,
   DefaultCounterService,
   SqliteCounterRepository,
+  SqliteDenseProfileMemoryStore,
   type GatewayConfig,
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
@@ -126,6 +127,7 @@ export class Crew {
   readonly #cronRepository: CronJobRepository;
   readonly #cronScheduler: CronScheduler | null;
   readonly #counterService: CounterService;
+  readonly #denseMemoryStore: SqliteDenseProfileMemoryStore;
   readonly #backgroundReviewUnsubscribers: (() => void)[];
   readonly #serviceWorkConsumer: ServiceWorkConsumer;
   #started = false;
@@ -163,6 +165,11 @@ export class Crew {
     // ── Background review counter service ─────────────────────────
     this.#counterService = new DefaultCounterService(
       new SqliteCounterRepository(this.#runtimeDb.handle),
+    );
+    this.#denseMemoryStore = new SqliteDenseProfileMemoryStore(
+      this.#runtimeDb.handle,
+      this.#logger,
+      resolveCrewInstallLayout(config).profilesRoot,
     );
     this.#backgroundReviewUnsubscribers = [];
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
@@ -224,6 +231,7 @@ export class Crew {
       { lifecycle: fullAgentDelegationLifecycle.port },
       { baseUrl: config.den.channelsUrl, token: config.den.channelsToken }, messageRepository,
       this.#counterService,
+      this.#denseMemoryStore,
     );
     const responderFactory = new SessionKindAwareResponderFactory(fullAgentFactory);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
