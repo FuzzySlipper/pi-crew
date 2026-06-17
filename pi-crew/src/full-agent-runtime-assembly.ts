@@ -24,6 +24,7 @@ import {
   type SessionSearchRepository,
   type StreamRetryConfig,
   type DelegatedSpawnLifecyclePort,
+  type CounterService,
 } from "@pi-crew/service";
 import {
   type FullAgentPolicyInput,
@@ -63,6 +64,7 @@ export interface ResolveFullAgentRuntimeInput {
   readonly defaultDenProjectId?: string;
   readonly sessionSearchRepository?: SessionSearchRepository;
   readonly memory?: CrewConfig["memory"];
+  readonly counterService?: CounterService;
 }
 export interface FullAgentDelegationRuntimeConfig {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
@@ -80,6 +82,7 @@ export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRun
   readonly defaultDenProjectId?: string;
   readonly crewContext: CrewConfig["context"];
   readonly streamRetry?: StreamRetryConfig;
+  readonly counterService?: CounterService;
 }
 export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["fullAgents"][number][];
@@ -96,6 +99,7 @@ export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly defaultDenProjectId?: string;
   readonly crewContext: CrewConfig["context"];
   readonly streamRetry?: StreamRetryConfig;
+  readonly counterService?: CounterService;
 }
 class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
   constructor(
@@ -222,6 +226,7 @@ export function resolveFullAgentRuntime(
     sessionSearchRepository: input.sessionSearchRepository,
     defaultProjectId: input.defaultDenProjectId,
     memory: input.memory,
+    counterService: input.counterService,
   });
   const selectedNames = new Set(tools.map((tool) => tool.name));
   return {

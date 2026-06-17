@@ -177,6 +177,7 @@ Current runtime-local model-callable catalog:
 | `den_memory_search` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_search | `pi-crew/src/den-memory-tools.ts` |
 | `den_memory_store` | memory | full-agent | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_store | `pi-crew/src/den-memory-tools.ts` |
 | `den_memory_propose` | memory | full-agent, worker | memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_propose | `pi-crew/src/den-memory-tools.ts` |
+| `counter_reset` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request helper or counter_reset or backgroundReview.enabled | `pi-crew/src/counter-reset-tool.ts` |
 | `browser_navigate` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_snapshot` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_click` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |

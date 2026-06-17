@@ -249,6 +249,16 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
     policyGate: "memory.enabled plus runtime.tools.allow/profile toolPolicy must request memory or den_memory_propose",
     inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
   },
+  {
+    name: "counter_reset",
+    category: "helper",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/counter-reset-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request helper or counter_reset or backgroundReview.enabled",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
   ...[
     "browser_navigate",
     "browser_snapshot",

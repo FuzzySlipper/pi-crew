@@ -1,6 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { SessionSearchRepository } from "@pi-crew/service";
+import type { CounterService, SessionSearchRepository } from "@pi-crew/service";
 import { createBrowserTools } from "./browser-tools.js";
+import { createCounterResetTool } from "./counter-reset-tool.js";
 import { createDenMemoryTools, type DenMemoryToolConfig } from "./den-memory-tools.js";
 import { createLocalCodeTools } from "./local-code-tools.js";
 import { localModelCallableToolNames } from "./local-tool-catalog.js";
@@ -14,12 +15,13 @@ export interface RuntimeLocalToolConfig {
   readonly rootPath?: string;
   readonly sessionSearchRepository?: SessionSearchRepository;
   readonly denMemory?: DenMemoryToolConfig;
+  readonly counterService?: CounterService;
 }
 
 export const runtimeLocalToolNames = localModelCallableToolNames();
 
 export function createRuntimeLocalTools(config: RuntimeLocalToolConfig): AgentTool[] {
-  return [
+  const tools: AgentTool[] = [
     ...createLocalCodeTools({ rootPath: config.rootPath }),
     createTodoTool({ sessionId: config.sessionId }),
     ...sessionSearchTools(config),
@@ -27,6 +29,17 @@ export function createRuntimeLocalTools(config: RuntimeLocalToolConfig): AgentTo
     ...createWebTools(),
     ...createBrowserTools({ sessionId: config.sessionId, profileId: config.profileId }),
   ];
+
+  const counterTool = createCounterResetTool({
+    counterService: config.counterService,
+    sessionId: config.sessionId,
+    profileId: config.profileId,
+  });
+  if (counterTool !== undefined) {
+    tools.push(counterTool);
+  }
+
+  return tools;
 }
 
 function denMemoryTools(config: RuntimeLocalToolConfig): AgentTool[] {

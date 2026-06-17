@@ -107,7 +107,7 @@ describe("runtime persistence", () => {
   it("opens SQLite in WAL mode and creates only runtime tables", () => {
     const health = db.health();
     expect(health.walEnabled).toBe(true);
-    expect(health.schemaVersion).toBe(10);
+    expect(health.schemaVersion).toBe(12);
     const rows = db.handle
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all() as Array<{ name: string }>;

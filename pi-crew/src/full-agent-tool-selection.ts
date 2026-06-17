@@ -1,6 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ExecutionPolicy } from "@pi-crew/core";
-import type { SessionSearchRepository } from "@pi-crew/service";
+import type { CounterService, SessionSearchRepository } from "@pi-crew/service";
 import type { MCPClient } from "@pi-crew/mcp";
 import type { ToolPolicy } from "@pi-crew/profiles";
 import { SessionToolFilter } from "@pi-crew/tools";
@@ -22,6 +22,7 @@ export interface SelectFullAgentToolsInput {
   readonly sessionSearchRepository?: SessionSearchRepository;
   readonly defaultProjectId?: string;
   readonly memory?: CrewConfig["memory"];
+  readonly counterService?: CounterService;
 }
 
 export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentTool[] {
@@ -31,6 +32,7 @@ export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentToo
     profileId: input.profileId,
     sessionSearchRepository: input.sessionSearchRepository,
     denMemory: memoryConfig(input),
+    counterService: input.counterService,
   });
   const localToolNameSet = new Set<string>(runtimeLocalToolNames);
   const beforePolicy = selectToolsBeforeSessionPolicy({

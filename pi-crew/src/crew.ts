@@ -35,11 +35,14 @@ import {
   SqliteSessionRepository,
   SqliteMessageRepository,
   MessageRepositoryTurnHistory,
+  DefaultCounterService,
+  SqliteCounterRepository,
   type GatewayConfig,
   type ServiceRegistry,
   type WorkerRoleMappingConfig,
   type WorkerRuntimeConfig,
   type AgentWorkerExecutor,
+  type CounterService,
   CronScheduler,
   SqliteCronJobRepository,
   ScriptCronJobExecutor,
@@ -121,6 +124,8 @@ export class Crew {
   readonly #instancePool: InstancePoolImpl;
   readonly #cronRepository: CronJobRepository;
   readonly #cronScheduler: CronScheduler | null;
+  readonly #counterService: CounterService;
+  readonly #backgroundReviewUnsubscribers: (() => void)[];
   #started = false;
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
@@ -152,6 +157,12 @@ export class Crew {
     );
     this.#runtimeDb = new RuntimeDb(config.database, this.#logger);
     const sessionStore = new SqliteSessionRepository(this.#runtimeDb.handle, this.#logger);
+
+    // ── Background review counter service ─────────────────────────
+    this.#counterService = new DefaultCounterService(
+      new SqliteCounterRepository(this.#runtimeDb.handle),
+    );
+    this.#backgroundReviewUnsubscribers = [];
     this.#auditRepository = new SqliteAuditRepository(this.#runtimeDb.handle);
     const sqliteAgentWorkBreadcrumbRepository = new SqliteAgentWorkBreadcrumbRepository(this.#runtimeDb.handle);
     this.#agentWorkBreadcrumbRepository = new PublishingAgentWorkBreadcrumbRepository({
@@ -210,6 +221,7 @@ export class Crew {
       new MessageRepositoryTurnHistory(messageRepository, { eventBus: this.#eventBus }),
       { lifecycle: fullAgentDelegationLifecycle.port },
       { baseUrl: config.den.channelsUrl, token: config.den.channelsToken }, messageRepository,
+      this.#counterService,
     );
     const responderFactory = new SessionKindAwareResponderFactory(fullAgentFactory);
     const instanceFactory = new InstanceFactoryImpl(this.#logger, responderFactory);
@@ -369,6 +381,25 @@ export class Crew {
 
     this.#toolPolicyEnforcer = new ToolPolicyEnforcer(this.#eventBus, this.#logger);
 
+    if (config.backgroundReview.enabled) {
+      this.#logger.info("Background review counter tracking enabled", {
+        memoryNudgeInterval: config.backgroundReview.defaultMemoryNudgeInterval,
+        skillNudgeInterval: config.backgroundReview.defaultSkillNudgeInterval,
+      });
+    }
+    this.#backgroundReviewUnsubscribers = [
+      this.#eventBus.on("turn.completed", (payload) => {
+        if (!config.backgroundReview.enabled) return;
+        if (payload.profileId === undefined) return;
+        void this.#counterService.incrementTurn(payload.profileId, payload.sessionId);
+      }),
+      this.#eventBus.on("tool.called", (payload) => {
+        if (!config.backgroundReview.enabled) return;
+        if (payload.profileId === undefined) return;
+        void this.#counterService.incrementIteration(payload.profileId, payload.sessionId);
+      }),
+    ];
+
     this.#logger.info("Crew composition root assembled", {
       config: {
         denCoreUrl: config.den.coreUrl,
@@ -427,6 +458,9 @@ export class Crew {
     }
 
     this.#logger.info("Crew stopping", { reason });
+    for (const unsubscribe of this.#backgroundReviewUnsubscribers) {
+      unsubscribe();
+    }
     await this.#extensionActivator.deactivateAll();
 
     this.#cronScheduler?.stop();

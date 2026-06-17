@@ -187,6 +187,14 @@ export interface Profile {
 
   /** Optional dense memory configuration. */
   memoryConfig?: MemoryConfig;
+
+  /** Optional background review configuration for auto-triggered skill/memory nudge passes. */
+  backgroundReview?: {
+    /** Turn interval for memory review nudges. Overrides crew-level defaultMemoryNudgeInterval. */
+    memoryNudgeInterval?: number;
+    /** Tool-iteration interval for skill review nudges. Overrides crew-level defaultSkillNudgeInterval. */
+    skillNudgeInterval?: number;
+  };
 }
 
 // ── MemoryConfig ────────────────────────────────────────────────

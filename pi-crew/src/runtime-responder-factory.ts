@@ -14,6 +14,7 @@ import {
   type FullAgentTurnHistory,
   type SessionSearchRepository,
   type RuntimeConfig,
+  type CounterService,
 } from "@pi-crew/service";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
 
@@ -37,6 +38,7 @@ export function buildRuntimeResponderFactory(
   delegation?: FullAgentDelegationRuntimeConfig,
   channelReadback?: DenChannelReadbackRuntimeConfig,
   sessionSearchRepository?: SessionSearchRepository,
+  counterService?: CounterService,
 ): AgentResponderFactory {
   if (isCrewConfig(runtime)) {
     const agents = runtime.fullAgents.filter((candidate) => candidate.enabled);
@@ -61,6 +63,7 @@ export function buildRuntimeResponderFactory(
         crewContext: runtime.context,
         streamRetry: runtime.streamRetry,
         memory: runtime.memory,
+        counterService,
       });
     }
     return buildRuntimeResponderFactory(runtime.runtime, eventBus);

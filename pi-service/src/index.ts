@@ -117,6 +117,7 @@ export {
   SqlitePendingChildRepository,
   SqliteAgentWorkBreadcrumbRepository,
   SqliteAuditRepository,
+  MessageRepositoryTurnHistory,
   type SqliteSessionStore,
   type SessionRow,
   type MessageRow,
