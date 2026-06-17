@@ -97,7 +97,7 @@ import {
 import type { CompletionPoster } from "@pi-crew/tools";
 import type { ExtensionConfigReloadOutcome } from "@pi-crew/service";
 import { syncConfiguredCronJobs } from "./cron-jobs.js";
-import { type ServiceWorkConsumer } from "./service-work-consumer.js";
+import { ServiceWorkConsumer, type ServiceWorkConsumer } from "./service-work-consumer.js";
 export class Crew {
   readonly #config: CrewConfig;
   readonly #gatewayConfig: GatewayConfig;
@@ -408,6 +408,10 @@ export class Crew {
         if (payload.profileId === undefined) return;
         void this.#counterService.incrementIteration(payload.profileId, payload.sessionId);
       }),
+      this.#eventBus.on("service_work.trigger_claimed", (payload) => {
+        if (!config.backgroundReview.enabled) return;
+        void this.#handleTriggerClaimed(payload);
+      }),
     ];
 
     this.#logger.info("Crew composition root assembled", {
@@ -425,6 +429,7 @@ export class Crew {
       this.#channelProvider,
       {
         channelId: config.backgroundReview.serviceWorkChannel,
+        baseUrl: config.backgroundReview.serviceWorkUrl,
         enabled: config.backgroundReview.enabled,
         agentIdentity: "pi-crew",
       },
@@ -786,6 +791,38 @@ export class Crew {
       .catch((error: unknown) => {
         this.#logger.warn("Background review checkTrigger failed", {
           profileId,
+          sessionId: payload.sessionId,
+          error: String(error),
+        });
+      });
+  }
+
+  /**
+   * Handle a background review trigger claimed by the ServiceWorkConsumer.
+   * Resets counters to prevent re-triggering and logs the lifecycle event.
+   */
+  #handleTriggerClaimed(
+    payload: {
+      readonly profileId: string;
+      readonly sessionId: string;
+      readonly triggerType: string;
+      readonly reviewId: string;
+    },
+  ): void {
+    void this.#counterService
+      .resetCounter(payload.profileId, payload.sessionId, payload.triggerType as "memory" | "skill" | "combined")
+      .then(() => {
+        this.#logger.info("Background review counter reset after trigger claim", {
+          reviewId: payload.reviewId,
+          profileId: payload.profileId,
+          sessionId: payload.sessionId,
+          triggerType: payload.triggerType,
+        });
+      })
+      .catch((error: unknown) => {
+        this.#logger.warn("Background review counter reset failed", {
+          reviewId: payload.reviewId,
+          profileId: payload.profileId,
           sessionId: payload.sessionId,
           error: String(error),
         });

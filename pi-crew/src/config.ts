@@ -257,6 +257,7 @@ const BackgroundReviewConfigSchema = z.object({
   defaultSkillNudgeInterval: z.number().int().positive().default(10),
   maxConcurrentReviews: z.number().int().positive().default(3),
   serviceWorkChannel: z.string().min(1).default("service-work"),
+  serviceWorkUrl: z.string().url().optional(),
   defaultMaxTokens: z.number().int().positive().default(5000),
   triggerClaimTTLMs: z.number().int().positive().default(60_000),
 }).default({});
