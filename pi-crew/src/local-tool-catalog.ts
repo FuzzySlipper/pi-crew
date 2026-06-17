@@ -269,6 +269,16 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
     policyGate: "available when DenseProfileMemoryStore exists (profile memoryConfig not disabled)",
     inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
   },
+  {
+    name: "curator_execute",
+    category: "helper",
+    modelCallable: true,
+    implementedIn: "pi-crew/src/curator-execute-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request helper or curator_execute",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
   ...[
     "browser_navigate",
     "browser_snapshot",

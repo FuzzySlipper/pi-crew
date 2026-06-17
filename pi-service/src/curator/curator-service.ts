@@ -10,12 +10,16 @@ import type {
   ArchivedSkill,
   AutoTransition,
   CuratorMutation,
+  SkillCandidate,
+  GenerateReportParams,
 } from "./types.js";
 import { applyAutoTransitions } from "./auto-transitions.js";
 import { snapshot, rollback, listSnapshots, pruneSnapshots } from "./snapshot.js";
 import { archiveSkill, listArchived, restoreSkill, pinSkill, unpinSkill, listPinned } from "./archive.js";
 import { readCuratorState, writeCuratorState, markRunCompleted, updatePinnedSkills } from "./state.js";
 import { checkIdle } from "./idle-detection.js";
+import { buildCandidateList as buildCandidateListFromPrompt } from "./prompt-builder.js";
+import { generateReport } from "./report.js";
 
 export class DefaultCuratorService implements CuratorService {
   readonly #skillsRoot: string;
@@ -154,5 +158,83 @@ export class DefaultCuratorService implements CuratorService {
     state.paused = false;
     writeCuratorState(this.#skillsRoot, state);
     this.#logger.info("Curator resumed");
+  }
+
+  // ── Candidate list ────────────────────────────────────────────
+
+  /**
+   * Build a ranked candidate list of skills for curator review/consolidation.
+   * Delegates to prompt-builder's buildCandidateList().
+   */
+  buildCandidateList(now: Date): SkillCandidate[] {
+    return buildCandidateListFromPrompt(this.#skillsRoot, now, this.#config, this.#logger);
+  }
+
+  // ── Mutation execution ────────────────────────────────────────
+
+  /**
+   * Execute a curator mutation (consolidate, archive, prune, pin, unpin).
+   * Maps the action string to the appropriate existing archive/pin/unpin methods.
+   */
+  async executeCuratorMutation(
+    params: { action: string; from?: string; into?: string; absorbedInto?: string },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { action, from, into, absorbedInto } = params;
+
+    try {
+      switch (action) {
+        case "consolidate": {
+          // Archive the source skill and create an umbrella skill with the target name
+          if (!from) return { success: false, error: 'Missing "from" for consolidate' };
+          if (!into) return { success: false, error: 'Missing "into" for consolidate' };
+          archiveSkill(this.#skillsRoot, from, this.#logger);
+          // Create umbrella (stub: log the intent; actual umbrella creation TBD)
+          this.#logger.info(`Consolidate: archived "${from}", umbrella "${into}"`);
+          return { success: true };
+        }
+
+        case "archive": {
+          if (!from) return { success: false, error: 'Missing "from" for archive' };
+          archiveSkill(this.#skillsRoot, from, this.#logger);
+          return { success: true };
+        }
+
+        case "prune": {
+          if (!from) return { success: false, error: 'Missing "from" for prune' };
+          archiveSkill(this.#skillsRoot, from, this.#logger);
+          if (absorbedInto) {
+            this.#logger.info(`Prune: archived "${from}" absorbed into "${absorbedInto}"`);
+          }
+          return { success: true };
+        }
+
+        case "pin": {
+          if (!from) return { success: false, error: 'Missing "from" for pin' };
+          pinSkill(this.#skillsRoot, from, this.#logger);
+          return { success: true };
+        }
+
+        case "unpin": {
+          if (!from) return { success: false, error: 'Missing "from" for unpin' };
+          unpinSkill(this.#skillsRoot, from, this.#logger);
+          return { success: true };
+        }
+
+        default:
+          return { success: false, error: `Unknown curator action: "${action}"` };
+      }
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  }
+
+  // ── Report generation ─────────────────────────────────────────
+
+  /**
+   * Generate a human-readable curator report.
+   * Delegates to report.ts generateReport().
+   */
+  async generateCuratorReport(params: GenerateReportParams): Promise<string> {
+    return generateReport(params, this.#logger);
   }
 }

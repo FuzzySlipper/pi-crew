@@ -81,6 +81,27 @@ export interface CuratorService {
   resume(): Promise<void>;
 }
 
+export interface SkillCandidate {
+  name: string;
+  description: string;
+  content: string;
+  supportFiles: string[];
+  provenance: string;
+  daysSinceLastUpdate: number;
+  contentChars: number;
+}
+
+export interface GenerateReportParams {
+  runId: string;
+  date: string;
+  durationMs: number;
+  autoTransitions: AutoTransition[];
+  mutations: CuratorMutation[];
+  errors: string[];
+  skillsRoot: string;
+  estimatedTokens: number;
+}
+
 export const DEFAULT_CURATOR_CONFIG: CuratorConfig = {
   enabled: false,
   cronSchedule: "0 0 */7 * *",
