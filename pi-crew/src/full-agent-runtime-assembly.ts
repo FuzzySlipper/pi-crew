@@ -232,19 +232,22 @@ export function resolveFullAgentRuntime(
     defaultProjectId: input.defaultDenProjectId,
     memory: input.memory,
     counterService: input.counterService,
+    denseMemoryEnabled: profile.memoryConfig?.enabled !== false,
     denseMemoryStore: input.denseMemoryStore,
   });
   const selectedNames = new Set(tools.map((tool) => tool.name));
 
   // Hydrate system prompt with dense profile memory context
   let denseMemory: DenseMemoryContext | undefined;
+  const readSync = input.denseMemoryStore?.readSync;
   if (
     input.denseMemoryStore !== undefined &&
-    profile.memoryConfig?.enabled !== false
+    profile.memoryConfig?.enabled !== false &&
+    readSync !== undefined
   ) {
     try {
-      const memoryContent = input.denseMemoryStore.readSync(profile.id, "memory");
-      const userContent = input.denseMemoryStore.readSync(profile.id, "user");
+      const memoryContent = readSync(profile.id, "memory");
+      const userContent = readSync(profile.id, "user");
       if (memoryContent.entryCount > 0 || userContent.entryCount > 0) {
         denseMemory = {
           memoryContent: memoryContent.content,

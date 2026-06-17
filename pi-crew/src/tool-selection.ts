@@ -94,7 +94,7 @@ const TOOL_SET_MEMBERS: Readonly<Record<string, ReadonlySet<string>>> = {
     "browser_back",
     "browser_press",
   ]),
-  memory: new Set(["den_memory_recall", "den_memory_read", "den_memory_search", "den_memory_store", "den_memory_propose"]),
+  memory: new Set(["den_memory_recall", "den_memory_read", "den_memory_search", "den_memory_store", "den_memory_propose", "dense_profile_memory"]),
   delegation: new Set(["spawn_subagent", "fan_out_subagents", "scout_codebase", "summarize_files", "find_relevant_paths"]),
 };
 

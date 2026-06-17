@@ -9,7 +9,7 @@
 
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { createDenseProfileMemoryTool as createTool } from "@pi-crew/tools";
-import type { DenseProfileMemoryStore } from "@pi-crew/memory";
+import type { DenseProfileMemoryStore, DenseMemoryTarget, DenseMemoryContent } from "@pi-crew/memory";
 
 export interface CreateLocalDenseProfileMemoryToolInput {
   readonly denseMemoryStore?: DenseProfileMemoryStore;
@@ -20,19 +20,36 @@ export function createLocalDenseProfileMemoryTool(
   input: CreateLocalDenseProfileMemoryToolInput,
 ): AgentTool {
   return createTool({
-    store: input.denseMemoryStore ?? {
-      read: async () => ({
-        profileId: input.profileId, target: "memory" as const, content: "",
-        capBytes: 2200, usedBytes: 0, writeToken: 0, entryCount: 0,
-      }),
-      readSync: () => ({
-        profileId: input.profileId, target: "memory" as const, content: "",
-        capBytes: 2200, usedBytes: 0, writeToken: 0, entryCount: 0,
-      }),
-      write: async () => ({ success: false, capBytes: 0, usedBytes: 0, newToken: 0, entryCount: 0, driftError: "Dense profile memory store not available" }),
-      exportToFilesystem: async () => {},
-      importFromFilesystem: async () => {},
-    } as unknown as DenseProfileMemoryStore,
+    store: input.denseMemoryStore ?? createFallbackStore(input.profileId),
     resolveProfileId: () => input.profileId,
   }) as unknown as AgentTool;
+}
+
+function createFallbackStore(profileId: string): DenseProfileMemoryStore {
+  const emptyContent = (target: DenseMemoryTarget): DenseMemoryContent => ({
+    profileId,
+    target,
+    content: "",
+    capBytes: 2200,
+    usedBytes: 0,
+    writeToken: 0,
+    entryCount: 0,
+  });
+
+  return {
+    read: async (_profileId: string, target: DenseMemoryTarget) =>
+      emptyContent(target),
+    readSync: (_profileId: string, target: DenseMemoryTarget) =>
+      emptyContent(target),
+    write: async () => ({
+      success: false,
+      capBytes: 2200,
+      usedBytes: 0,
+      newToken: 0,
+      entryCount: 0,
+      driftError: "Dense profile memory store not available. Enable memory in the profile or pass a configured store.",
+    }),
+    exportToFilesystem: async () => {},
+    importFromFilesystem: async () => {},
+  };
 }
