@@ -464,7 +464,7 @@ function createAgentModel(config: FullAgentRuntimeModelConfig): Model<Api> {
     api: config.api ?? "openai-completions",
     provider: config.provider,
     baseUrl: config.modelBaseUrl ?? "",
-    reasoning: false,
+    reasoning: (config.api ?? "openai-completions") === "openai-responses",
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128_000,

@@ -160,6 +160,8 @@ export {
   type AfterToolCallPayload,
   type AfterToolCallResultSnapshot,
   type AfterToolCallModifier,
+  type AfterResponsePayload,
+  type OnToolDispatchPayload,
   type BeforeAgentStartPayload,
   type BeforeAgentStartModifier,
   type AfterAgentStartPayload,

@@ -184,4 +184,29 @@ export interface Profile {
 
   /** Optional tool access policy. */
   toolPolicy?: ToolPolicy;
+
+  /** Optional dense memory configuration. */
+  memoryConfig?: MemoryConfig;
+}
+
+// ── MemoryConfig ────────────────────────────────────────────────
+
+/** Configuration for per-profile dense memory (Hermes MEMORY.md / USER.md compat). */
+export interface MemoryConfig {
+  /** Whether dense memory is enabled for this profile. Default: true. */
+  enabled?: boolean;
+
+  /** Optional custom tool description override. */
+  toolDescription?: string;
+
+  /** Byte caps for each target. */
+  caps?: {
+    /** Max bytes for the `memory` target. Default: 2200. */
+    memory?: number;
+    /** Max bytes for the `user` target. Default: 1375. */
+    user?: number;
+  };
+
+  /** Storage backend preference. Default: hybrid. */
+  storage?: "db" | "filesystem" | "hybrid";
 }

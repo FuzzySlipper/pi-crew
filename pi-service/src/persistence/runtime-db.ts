@@ -37,6 +37,8 @@ const MIGRATIONS: Migration[] = [
   { version: 8, name: "008_session_fts", sql: "" },
   { version: 9, name: "009_cron_jobs", sql: "" },
   { version: 10, name: "010_session_response_timeout", sql: "" },
+  { version: 11, name: "011_profile_dense_memory", sql: "" },
+  { version: 12, name: "012_background_review", sql: "" },
 ];
 
 // ── RuntimeDb ─────────────────────────────────────────────────────

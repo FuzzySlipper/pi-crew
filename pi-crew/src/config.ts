@@ -249,6 +249,20 @@ const DelegationConfigSchema = z
   })
   .default({});
 
+// ── Background review config ─────────────────────────────────────
+
+const BackgroundReviewConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  defaultMemoryNudgeInterval: z.number().int().positive().default(10),
+  defaultSkillNudgeInterval: z.number().int().positive().default(10),
+  maxConcurrentReviews: z.number().int().positive().default(3),
+  serviceWorkChannel: z.string().min(1).default("service-work"),
+  defaultMaxTokens: z.number().int().positive().default(5000),
+  triggerClaimTTLMs: z.number().int().positive().default(60_000),
+}).default({});
+
+export type BackgroundReviewConfig = z.infer<typeof BackgroundReviewConfigSchema>;
+
 export const CrewConfigSchema = z.object({
   install: InstallConfigSchema.default({}),
   profiles: ProfilesConfigSchema,
@@ -271,6 +285,7 @@ export const CrewConfigSchema = z.object({
   }),
   cron: CronConfigSchema,
   delegation: DelegationConfigSchema,
+  backgroundReview: BackgroundReviewConfigSchema,
 });
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;

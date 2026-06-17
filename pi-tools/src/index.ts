@@ -140,3 +140,12 @@ export {
   createAssignmentManagerPolicy,
   isAssignmentManagerTool,
 } from "./assignment-manager-policy.js";
+
+// ── Dense profile memory tool ──────────────────────────────────
+
+export {
+  DENSE_PROFILE_MEMORY_TOOL_DESCRIPTION,
+  createDenseProfileMemoryTool,
+  type DenseProfileMemoryToolParams,
+  type DenseProfileMemoryToolOptions,
+} from "./dense-profile-memory-tool.js";

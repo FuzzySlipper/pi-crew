@@ -143,6 +143,20 @@ export interface AgentContextInjectModifier {
   readonly env?: Readonly<Record<string, string>>;
 }
 
+// ── Background review hook payloads ───────────────────────────────
+
+export interface AfterResponsePayload extends HookDenCorrelation {
+  readonly sessionId: string;
+  readonly profileId: string;
+  readonly interrupted: boolean;
+}
+
+export interface OnToolDispatchPayload extends HookDenCorrelation {
+  readonly sessionId: string;
+  readonly toolName: string;
+  readonly toolCallId: string;
+}
+
 // ── Catalog types ──────────────────────────────────────────────
 
 interface HookContract<K extends HookKind, P, R> {
@@ -166,6 +180,8 @@ export interface HookCatalog {
   readonly before_completion_post: HookContract<"modifier", BeforeCompletionPostPayload, BeforeCompletionPostModifier>;
   readonly before_drain_activate: HookContract<"gate", BeforeDrainActivatePayload, GateResult>;
   readonly agent_context_inject: HookContract<"modifier", AgentContextInjectPayload, AgentContextInjectModifier>;
+  readonly after_response: HookContract<"observer", AfterResponsePayload, ObserverResult>;
+  readonly on_tool_dispatch: HookContract<"observer", OnToolDispatchPayload, ObserverResult>;
 }
 
 export type HookName = keyof HookCatalog;
@@ -203,6 +219,8 @@ const HOOK_KINDS: { readonly [H in HookName]: HookCatalog[H]["kind"] } = {
   before_completion_post: "modifier",
   before_drain_activate: "gate",
   agent_context_inject: "modifier",
+  after_response: "observer",
+  on_tool_dispatch: "observer",
 };
 
 interface StoredRegistration {

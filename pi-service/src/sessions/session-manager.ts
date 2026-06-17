@@ -299,6 +299,14 @@ export class SessionManagerImpl implements SessionManager {
     instance: AgentInstance,
   ): Promise<void> {
     this.emitPresence(record, "routed", "busy", "active");
+
+    // Check for slash commands before forwarding to the agent.
+    const commandHandled = await this.handleSlashCommand(channel, message, record);
+    if (commandHandled) {
+      this.emitPresence(record, "routed", "active", "active");
+      return;
+    }
+
     const timeoutMs = this.responseTimeoutMs(record);
     const startedAt = Date.now();
     const operation = instance.processMessage(message);
@@ -348,6 +356,112 @@ export class SessionManagerImpl implements SessionManager {
         ),
       );
       this.emitPresence(record, "routed", "active", "active");
+    }
+  }
+
+  /**
+   * Handle a Den Channel slash command (/new, /help, /status) without
+   * forwarding to the agent. Returns true when the command was recognized
+   * and handled; false to continue with normal agent routing.
+   */
+  private async handleSlashCommand(
+    channel: ChannelProvider,
+    message: ChannelMessage,
+    record: SessionRecord,
+  ): Promise<boolean> {
+    if (message.content.kind !== "text") return false;
+    const cmdText = message.content.text;
+    if (cmdText.length === 0 || cmdText.charAt(0) !== "/") return false;
+
+    const parts = cmdText.split(" ");
+    const command = parts[0] ?? "";
+    const send = (body: string) =>
+      channel.sendMessage(message.channelId, withReplyIdentity({ kind: "text", text: body }, message));
+
+    switch (command) {
+      case "/help": {
+        await send(
+          "**Session slash commands:**\n" +
+          "- `/new` — reset this session (clear context, fresh start)\n" +
+          "- `/status` — show session diagnostics\n" +
+          "- `/help` — this message\n\n" +
+          "These commands are handled by the session manager before reaching the agent.",
+        );
+        return true;
+      }
+
+      case "/status": {
+        const elapsed = record.createdAt
+          ? `${Math.round((Date.now() - new Date(record.createdAt).getTime()) / 1000)}s`
+          : "unknown";
+        await send(
+          "**Session status**\n" +
+          `- Session ID: \`${record.id}\`\n` +
+          `- Profile: \`${record.profileId}\`\n` +
+          `- Instance: \`${record.instanceId ?? "none"}\`\n` +
+          `- State: \`${record.state}\`\n` +
+          `- Kind: \`${record.kind}\`\n` +
+          `- Age: ${elapsed}\n` +
+          `- Messages: ${record.messageCount}\n` +
+          `- Channels: ${record.channelBindings.length}`,
+        );
+        return true;
+      }
+
+      case "/new": {
+        if (record.kind !== "full") {
+          await send("`/new` is only available for full-agent sessions.");
+          return true;
+        }
+        if (record.instanceId !== null) {
+          this.pool.release(record.instanceId).catch((err: unknown) => {
+            this.logger.warn("Failed to release old instance on /new", {
+              sessionId: record.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+        }
+        const nextInstance = await this.pool.acquire(
+          record.profileId,
+          record.workerBinding?.role,
+          record.effectiveRuntime ?? undefined,
+          record.id,
+          record.kind,
+        );
+        const resetAt = new Date().toISOString();
+        await this.store.save({
+          ...record,
+          instanceId: nextInstance.id,
+          state: "active",
+          messageCount: 0,
+          lastActiveAt: resetAt,
+        });
+        this.eventBus.emit({
+          event: "session.reset",
+          payload: {
+            sessionId: record.id,
+            oldInstanceId: record.instanceId,
+            newInstanceId: nextInstance.id,
+            requestedBy: message.sender?.id ?? "channel",
+            reason: "slash_command_new",
+            resetAt,
+            archivedMessageCount: record.messageCount ?? 0,
+          },
+        });
+        this.logger.info("Session reset via /new", {
+          sessionId: record.id,
+          oldInstanceId: record.instanceId,
+          newInstanceId: nextInstance.id,
+        });
+        await send(
+          "🔄 **Session reset.** Old context cleared — continuing with a fresh start.\n" +
+          `(Released \`${record.instanceId ?? "none"}\`, acquired \`${nextInstance.id}\`)`,
+        );
+        return true;
+      }
+
+      default:
+        return false;
     }
   }
 

@@ -13,11 +13,19 @@ export { SqliteAuditRepository } from "./audit-repository.js";
 export { SqliteAgentWorkBreadcrumbRepository } from "./agent-work-breadcrumb-repository.js";
 export { StartupHydrator, type HydrationResult } from "./startup-hydration.js";
 
+export { SqliteDenseProfileMemoryStore } from "./dense-profile-memory-store.js";
+
+export { DefaultCounterService, SqliteCounterRepository, type CounterService } from "../counters/counter-service.js";
+
 export {
   type SessionRow,
   type MessageRow,
   type AuditRow,
   type RuntimeKVRow,
+  type CounterRow,
+  type CounterTriggerResult,
+  type CounterThresholds,
+  type TriggerType,
   type MessageInput,
   type AuditEventInput,
   type Migration,

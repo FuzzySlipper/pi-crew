@@ -1,9 +1,8 @@
-// pi-memory — Den Memories adapter for pi-crew.
+// pi-memory — Den Memories adapter and dense profile memory for pi-crew.
 //
 // DESIGN: Den Memories owns the ontology, graph traversal, recall packets,
-// curation lifecycle, and persistence. Rationale: pi-crew and Hermes must stay
-// thin runtime adapters over the same memory substrate, not fork long-term
-// memory semantics locally.
+// curation lifecycle, and persistence.  Dense profile memory is the
+// local per-profile pocket notebook (Hermes MEMORY.md / USER.md compat).
 
 export type DenMemoryRuntime = "hermes" | "pi_crew" | "den_core" | "manual" | "import";
 export type DenMemorySessionKind = "durable_agent" | "worker_assignment" | "assistant_delegate" | "diagnostic" | "import";
@@ -401,3 +400,24 @@ function errorResult(toolName: DenMemoryToolName, error: unknown): DenMemoryTool
   if (error instanceof DenMemoryClientError) return { ok: false, error: error.message, code: error.code, status: error.status, toolName };
   return { ok: false, error: error instanceof Error ? error.message : String(error), code: "unexpected_error", toolName };
 }
+
+// ── Dense profile memory re-exports ────────────────────────────
+
+export type {
+  DenseMemoryTarget,
+  DenseMemoryAction,
+  DenseMemoryContent,
+  DenseMemoryWriteParams,
+  DenseMemoryWriteResult,
+  DenseProfileMemoryStore,
+} from "./dense-profile-memory-types.js";
+
+export {
+  DEFAULT_MEMORY_CAP_BYTES,
+  DEFAULT_USER_CAP_BYTES,
+  parseEntries,
+  buildContent,
+  byteLength,
+  findEntryBySubstring,
+  trimToCap,
+} from "./dense-profile-memory-types.js";

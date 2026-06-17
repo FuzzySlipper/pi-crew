@@ -75,6 +75,28 @@ export interface RuntimeKVRow {
   updated_at: string;
 }
 
+/** Row shape for the `review_counters` table. */
+export interface CounterRow {
+  profile_id: string;
+  session_id: string;
+  turns_since_memory: number;
+  iters_since_skill: number;
+  updated_at: string;
+}
+
+export type TriggerType = "memory" | "skill" | "combined";
+
+export interface CounterThresholds {
+  memoryNudgeInterval: number;
+  skillNudgeInterval: number;
+}
+
+export interface CounterTriggerResult {
+  readonly type: TriggerType;
+  readonly turnsSinceMemory: number;
+  readonly itersSinceSkill: number;
+}
+
 // ── Message input ─────────────────────────────────────────────────
 
 /** Input for appending a message. */

@@ -12,6 +12,7 @@ export {
   type RuntimeConfig,
   type McpConfig,
   type ToolPolicy,
+  type MemoryConfig,
 } from "./profile.js";
 
 // ── Loader ────────────────────────────────────────────────────
@@ -27,6 +28,8 @@ export {
   type BlackboardHeadings,
   type RuntimeContext,
   type PromptAssemblyOptions,
+  type DenseMemoryContext,
   assembleSystemPrompt,
   assembleProfilePrompt,
+  denseMemoryContextBlock,
 } from "./system-prompt.js";

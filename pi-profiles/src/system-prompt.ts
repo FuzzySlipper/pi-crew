@@ -12,6 +12,20 @@
 
 import type { Profile } from "./profile.js";
 
+// ── Dense memory context ───────────────────────────────────────
+
+/** Dense profile memory context for system prompt injection. */
+export interface DenseMemoryContext {
+  /** Full memory.md content for the current profile (or undefined if empty/disabled). */
+  memoryContent?: string;
+  /** Full user.md content for the current profile (or undefined if empty/disabled). */
+  userContent?: string;
+  /** Memory target cap in bytes. */
+  memoryCapBytes?: number;
+  /** User target cap in bytes. */
+  userCapBytes?: number;
+}
+
 // ── Blackboard input ────────────────────────────────────────────
 
 /**
@@ -59,6 +73,9 @@ export interface PromptAssemblyOptions {
 
   /** Optional runtime context. */
   runtime?: RuntimeContext;
+
+  /** Optional dense profile memory context for system prompt injection. */
+  denseMemory?: DenseMemoryContext;
 }
 
 // ── Assembler ───────────────────────────────────────────────────
@@ -149,6 +166,14 @@ export function assembleSystemPrompt(options: PromptAssemblyOptions): string {
     sections.push(["## Tool Policy", ...policyLines].join("\n"));
   }
 
+  // ── 6. Dense profile memory context ──────────────────────────
+  if (profile.memoryConfig === undefined || profile.memoryConfig.enabled !== false) {
+    const block = denseMemoryContextBlock(options.denseMemory);
+    if (block !== undefined) {
+      sections.push(block);
+    }
+  }
+
   return sections.join("\n\n");
 }
 
@@ -160,4 +185,60 @@ export function assembleSystemPrompt(options: PromptAssemblyOptions): string {
  */
 export function assembleProfilePrompt(profile: Profile): string {
   return assembleSystemPrompt({ profile });
+}
+
+// ── Dense memory context block ──────────────────────────────────
+
+/**
+ * Build the `<memory-context>` block for system prompt injection.
+ *
+ * Returns undefined when there is no content or context is undefined.
+ * The block wraps content in `<memory-context>` tags with per-target
+ * headers showing usage/cap, mirroring the style Hermes uses.
+ */
+export function denseMemoryContextBlock(context?: DenseMemoryContext): string | undefined {
+  if (context === undefined) return undefined;
+
+  const lines: string[] = [];
+
+  const hasMemory =
+    context.memoryContent !== undefined && context.memoryContent.trim().length > 0;
+  const hasUser =
+    context.userContent !== undefined && context.userContent.trim().length > 0;
+
+  if (!hasMemory && !hasUser) return undefined;
+
+  lines.push("<memory-context>");
+
+  if (hasMemory) {
+    const cap = context.memoryCapBytes ?? 2200;
+    const used = context.memoryContent!.length;
+    lines.push(`[MEMORY.md — used ${used} / ${cap} bytes]`);
+    for (const entry of context.memoryContent!.split("\n")) {
+      const trimmed = entry.trim();
+      if (trimmed.length > 0) {
+        lines.push(`• ${trimmed}`);
+      }
+    }
+  }
+
+  if (hasMemory && hasUser) {
+    lines.push(""); // blank line between sections
+  }
+
+  if (hasUser) {
+    const cap = context.userCapBytes ?? 1375;
+    const used = context.userContent!.length;
+    lines.push(`[USER.md — used ${used} / ${cap} bytes]`);
+    for (const entry of context.userContent!.split("\n")) {
+      const trimmed = entry.trim();
+      if (trimmed.length > 0) {
+        lines.push(`• ${trimmed}`);
+      }
+    }
+  }
+
+  lines.push("</memory-context>");
+
+  return lines.join("\n");
 }
