@@ -71,7 +71,7 @@ export function buildEffectiveToolInventory(input: {
   return {
     agentId: input.agent.agentId,
     profileId: input.profile.id,
-    sessionId: input.agent.session.sessionId,
+    sessionId: input.agent.session?.sessionId ?? "sess-" + input.agent.agentId,
     mcpEndpoint: input.mcpEndpoint,
     mcpToolProfile: input.profile.mcpConfig?.toolProfile,
     mcpServers: input.mcpServers ?? [],

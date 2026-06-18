@@ -193,6 +193,30 @@ export interface Profile {
 
   /** Optional background review configuration for auto-triggered skill/memory nudge passes. */
   backgroundReview?: BackgroundReviewConfig;
+
+  /** Human-readable display name. Falls back to `name` at agent config level. */
+  displayName?: string;
+
+  /** Default member identity for agents using this profile. */
+  memberIdentity?: string;
+
+  /** Default profile identity for agents using this profile. */
+  profileIdentity?: string;
+
+  /** Default member role for agents using this profile. */
+  memberRole?: string;
+
+  /** Default session-level configuration for agents using this profile. */
+  sessionDefaults?: {
+    ownerId?: string;
+    maxHistoryMessages?: number;
+    turnTimeoutMs?: number | null;
+  };
+
+  /** Default channel-level configuration for agents using this profile. */
+  channelDefaults?: {
+    wakePolicy?: "subscription" | "direct_polling";
+  };
 }
 
 // ── BackgroundReviewConfig ───────────────────────────────────────

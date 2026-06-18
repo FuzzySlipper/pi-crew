@@ -235,9 +235,9 @@ export function resolveFullAgentRuntime(
     mcpClient: surface.client,
     policy: executionPolicy,
     sessionToolFilter: input.sessionToolFilter,
-    sessionId: input.agent.session.sessionId,
+    sessionId: input.agent.session?.sessionId ?? "sess-" + input.agent.agentId,
     profileId: input.agent.profileId,
-    defaultSender: input.agent.profileIdentity,
+    defaultSender: input.agent.profileIdentity ?? input.agent.profileId,
     sessionSearchRepository: input.sessionSearchRepository,
     defaultProjectId: input.defaultDenProjectId,
     memory: input.memory,
@@ -371,7 +371,7 @@ function addDelegationTool(
   delegation: FullAgentDelegationRuntimeConfig | undefined,
 ): readonly AgentTool[] {
   if (delegation === undefined || !agentAllowsDelegation(agent, runtime)) return runtime.tools;
-  const parentSessionId = context.sessionId ?? agent.session.sessionId;
+  const parentSessionId = context.sessionId ?? agent.session?.sessionId ?? "sess-" + agent.agentId;
   const parentRuntime = parentRuntimeFor(agent, runtime);
   const parentPolicy = parentPolicyForDelegation(runtime);
   const constraints = delegation.parentDelegationConstraints ?? { maxSpawnDepth: 1 };
@@ -542,7 +542,7 @@ function buildFullAgentExecutionPolicy(
 ): ExecutionPolicy {
   const resolved = resolveToolPolicyToToolNames(profile.toolPolicy);
   const input: FullAgentPolicyInput = {
-    policyId: `conv-${agent.agentId}-${agent.session.sessionId}`,
+    policyId: `conv-${agent.agentId}-${agent.session?.sessionId ?? "sess-" + agent.agentId}`,
     rootPath: "/",
     allowedPaths: ["/"],
     allowedTools: [...resolved.allowedTools],

@@ -92,6 +92,8 @@ import {
   configureFullSessionManager,
   configuredFullAgentMemberIdentities,
   configuredFullAgentAdditionalProjectIds,
+  resolveAgentFields,
+  type ResolvedAgentFields,
 } from "./full-agent-sessions.js";
 import {
   auditEntryToRecord,
@@ -144,7 +146,8 @@ export class Crew {
   #started = false;
   constructor(config: CrewConfig, logger?: Logger, eventBus?: EventBus) {
     this.#config = config;
-    loadProfile(config.sessions.fallbackProfileId, resolveCrewInstallLayout(config).profilesRoot);
+    const profilesRoot = resolveCrewInstallLayout(config).profilesRoot;
+    loadProfile(config.sessions.fallbackProfileId, profilesRoot);
     this.#workerRoleMapping = config.workers;
     this.#logger = logger ?? new FakeLogger();
     this.#eventBus = eventBus ?? new FakeEventBus();
@@ -197,8 +200,8 @@ export class Crew {
       config.den,
       this.#logger,
       cursorStore,
-      configuredFullAgentMemberIdentities(config),
-      configuredFullAgentAdditionalProjectIds(config, config.den.channelsProjectId),
+      configuredFullAgentMemberIdentities(config, profilesRoot),
+      configuredFullAgentAdditionalProjectIds(config, profilesRoot, config.den.channelsProjectId),
     );
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",
@@ -273,7 +276,7 @@ export class Crew {
       config.sessions.fallbackProfileId,
       createFallbackChannelBinding(config),
     );
-    configureFullSessionManager(this.#sessionManager, config);
+    configureFullSessionManager(this.#sessionManager, config, profilesRoot);
     const sessionResetService = new FullSessionResetService({
       sessionStore,
       instancePool: this.#instancePool,
@@ -365,11 +368,18 @@ export class Crew {
         new ParentLifecycleBreadcrumbExtension({
           repository: this.#agentWorkBreadcrumbRepository,
           logger: this.#logger,
-          bindings: config.fullAgents.filter((agent) => agent.enabled).map((agent) => ({
-            sessionId: agent.session.sessionId, channelId: agent.channels[0]?.channelId ?? config.den.channelsSubscriptionChannelId,
-            projectId: agent.channels[0]?.projectId ?? config.den.channelsProjectId, agentIdentity: agent.memberIdentity, profileId: agent.profileId,
-            provider: agent.runtime.provider, model: agent.runtime.model,
-          })),
+          bindings: config.fullAgents.filter((agent) => agent.enabled).map((agent) => {
+            const resolved = resolveAgentFields(agent, profilesRoot);
+            return {
+              sessionId: resolved.sessionId,
+              channelId: agent.channels[0]?.channelId ?? config.den.channelsSubscriptionChannelId,
+              projectId: agent.channels[0]?.projectId ?? config.den.channelsProjectId,
+              agentIdentity: resolved.memberIdentity,
+              profileId: agent.profileId,
+              provider: agent.runtime.provider,
+              model: agent.runtime.model,
+            } as const;
+          }),
         }),
       ],
       context: createServiceExtensionContext({
@@ -385,7 +395,7 @@ export class Crew {
       if (this.#steerFollowUpBridge.route(message)) return Promise.resolve();
       const agents = this.#config.fullAgents
         .filter((a) => a.enabled)
-        .map((a) => ({ memberIdentity: a.memberIdentity }));
+        .map((a) => ({ memberIdentity: resolveAgentFields(a, profilesRoot).memberIdentity }));
       const routed = routeMentionedAgent(message, agents);
       return this.#sessionManager.routeMessage(this.#channelProvider, routed);
     });

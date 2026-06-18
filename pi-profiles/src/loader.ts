@@ -358,6 +358,31 @@ function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: st
   const toolPolicy: ToolPolicy | undefined = parseToolPolicy(doc, definition.id);
   const backgroundReview = parseBackgroundReviewConfig(doc, definition.id);
 
+  const displayName = optionalString(doc, "displayName", definition.id, "displayName");
+  const memberIdentity = optionalString(doc, "memberIdentity", definition.id, "memberIdentity");
+  const profileIdentity = optionalString(doc, "profileIdentity", definition.id, "profileIdentity");
+  const memberRole = optionalString(doc, "memberRole", definition.id, "memberRole");
+
+  const rawSessionDefaults = doc["sessionDefaults"];
+  const sessionDefaults =
+    rawSessionDefaults !== undefined && rawSessionDefaults !== null && isPlainRecord(rawSessionDefaults)
+      ? {
+          ...(rawSessionDefaults["ownerId"] !== undefined ? { ownerId: String(rawSessionDefaults["ownerId"]) } : {}),
+          ...(rawSessionDefaults["maxHistoryMessages"] !== undefined ? { maxHistoryMessages: Number(rawSessionDefaults["maxHistoryMessages"]) } : {}),
+          ...(rawSessionDefaults["turnTimeoutMs"] !== undefined ? { turnTimeoutMs: rawSessionDefaults["turnTimeoutMs"] as number | null } : {}),
+        }
+      : undefined;
+
+  const rawChannelDefaults = doc["channelDefaults"];
+  const channelDefaults =
+    rawChannelDefaults !== undefined && rawChannelDefaults !== null && isPlainRecord(rawChannelDefaults)
+      ? {
+          ...(rawChannelDefaults["wakePolicy"] !== undefined
+            ? { wakePolicy: rawChannelDefaults["wakePolicy"] as "subscription" | "direct_polling" }
+            : {}),
+        }
+      : undefined;
+
   return {
     id: definition.id,
     name,
@@ -369,6 +394,12 @@ function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: st
     mcpConfig,
     toolPolicy,
     backgroundReview,
+    ...(displayName === undefined ? {} : { displayName }),
+    ...(memberIdentity === undefined ? {} : { memberIdentity }),
+    ...(profileIdentity === undefined ? {} : { profileIdentity }),
+    ...(memberRole === undefined ? {} : { memberRole }),
+    ...(sessionDefaults === undefined ? {} : { sessionDefaults }),
+    ...(channelDefaults === undefined ? {} : { channelDefaults }),
   };
 }
 

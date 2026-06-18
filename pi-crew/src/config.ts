@@ -170,17 +170,17 @@ const WorkerPoolConfigSchema = z
   .default({});
 
 const FullAgentSessionConfigSchema = z.object({
-  ownerId: z.string().min(1),
-  sessionId: z.string().min(1),
+  ownerId: z.string().min(1).optional(),
+  sessionId: z.string().min(1).optional(),
   idleTimeoutMs: z.number().int().positive().optional(),
-  maxHistoryMessages: z.number().int().positive(),
+  maxHistoryMessages: z.number().int().positive().optional(),
 });
 
 const FullAgentChannelConfigSchema = z.object({
   providerId: z.string().min(1),
   projectId: z.string().min(1).optional(),
   channelId: z.string().min(1),
-  subscriptionIdentity: z.string().min(1),
+  subscriptionIdentity: z.string().min(1).optional(),
   wakePolicy: z.enum(["subscription", "direct_polling"]).default("subscription"),
 });
 
@@ -211,14 +211,14 @@ const FullAgentConfigSchema = z.object({
   agentId: z.string().min(1),
   enabled: z.boolean().default(true),
   profileId: z.string().min(1),
-  profileIdentity: z.string().min(1),
-  memberIdentity: z.string().min(1),
+  profileIdentity: z.string().min(1).optional(),
+  memberIdentity: z.string().min(1).optional(),
   memberRole: z.string().min(1).optional(),
   displayName: z.string().min(1).optional(),
-  session: FullAgentSessionConfigSchema,
+  session: FullAgentSessionConfigSchema.optional(),
   channels: z.array(FullAgentChannelConfigSchema).min(1),
   runtime: FullAgentRuntimeConfigSchema,
-  lifecycle: FullAgentLifecycleConfigSchema,
+  lifecycle: FullAgentLifecycleConfigSchema.optional(),
 });
 
 const CronJobShapeSchema = z.enum(["script_only", "data_collection"]);
