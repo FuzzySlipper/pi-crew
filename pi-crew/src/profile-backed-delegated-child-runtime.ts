@@ -8,6 +8,7 @@ import {
 } from "@pi-crew/service";
 import type { ToolRegistry as McpToolRegistry } from "@pi-crew/mcp";
 import { delegatedChildLocalToolNames } from "./delegated-child-tool-provider.js";
+import { toolMatchesSelectedSet } from "./tool-set-registry.js";
 
 export interface ProfileBackedDelegatedChildRuntimeDeps {
   readonly profilesRoot: string;
@@ -97,35 +98,6 @@ function selectProfileToolNames(
   return registryToolNames.filter(
     (toolName) => !denied.some((entry) => toolMatchesSelectedSet(toolName, entry)),
   );
-}
-
-function toolMatchesSelectedSet(toolName: string, toolSet: string): boolean {
-  const normalized = toolName.toLowerCase();
-  const normalizedSet = toolSet.toLowerCase();
-  switch (normalizedSet) {
-    case "all":
-      return true;
-    case "den":
-      return (
-        normalized !== "all" &&
-        !["read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"].includes(normalized) &&
-        !normalized.startsWith("git_") &&
-        !normalized.startsWith("den_memory_") &&
-        !normalized.startsWith("browser_") &&
-        !normalized.startsWith("web_")
-      );
-    case "filesystem":
-      return ["read_file", "write_file", "search_files"].includes(normalized);
-    case "filesystem_readonly":
-      return ["read_file", "search_files"].includes(normalized);
-    case "terminal":
-      return normalized === "terminal";
-    case "git":
-    case "git_diff_log":
-      return normalized.startsWith("git_") || normalized === "git";
-    default:
-      return normalized === normalizedSet || normalized.startsWith(`${normalizedSet}_`);
-  }
 }
 
 function resolveApiKey(

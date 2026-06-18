@@ -45,8 +45,8 @@ import { buildEffectiveToolInventory, type EffectiveToolInventory } from "./tool
 import {
   requestedToolSets,
   toolAllowedByProfilePolicy,
-  toolMatchesSelectedSet,
 } from "./tool-selection.js";
+import { toolMatchesSelectedSet } from "./tool-set-registry.js";
 export interface FullAgentRuntimeModelConfig { readonly provider: string; readonly modelName: string; readonly modelBaseUrl?: string; readonly api?: "openai-completions" | "openai-responses"; readonly apiKey?: string; readonly temperature?: number; readonly maxTokens?: number; }
 export interface ResolvedFullAgentRuntime {
   readonly profile: Profile;

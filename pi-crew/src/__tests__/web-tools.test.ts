@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assertSafePublicUrl, createWebSearchProvider, createWebTools } from "../web-tools.js";
-import { toolRequestedBySets } from "../tool-selection.js";
+import { toolRequestedBySets } from "../tool-set-registry.js";
 
 describe("web tools", () => {
   it("selects SearXNG provider from env and normalizes results", async () => {
