@@ -276,8 +276,16 @@ const BackgroundReviewConfigSchema = z.object({
     memoryPromptSlug: z.string().default("background-review-memory-prompt"),
     skillPromptSlug: z.string().default("background-review-skill-prompt"),
     denMcpUrl: z.string().default("http://192.168.1.10:5199/mcp"),
+    denRouterUrl: z.string().url().optional(),
+    requestTimeoutMs: z.number().int().positive().default(120_000),
+    promptFetchTimeoutMs: z.number().int().positive().default(10_000),
+    promptProjectId: z.string().min(1).default("pi-crew"),
   }).default({}),
-}).default({});
+}).default({}).superRefine((value, ctx) => {
+  if (value.enabled && value.mode === "llm" && value.llm.denRouterUrl === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "backgroundReview.llm.denRouterUrl is required when mode is llm and enabled", path: ["llm", "denRouterUrl"] });
+  }
+});
 
 export type BackgroundReviewConfig = z.infer<typeof BackgroundReviewConfigSchema>;
 

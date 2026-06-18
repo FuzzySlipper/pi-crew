@@ -82,6 +82,7 @@ import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
 import { BackgroundReviewRunner } from "./background-review-runner.js";
 import { DefaultMcpSurfaceManager, type McpSurfaceManager } from "./mcp-surface-manager.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
+import { routeMentionedAgent } from "./mention-router.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
 import {
   createDeferredDelegationLifecyclePort,
@@ -379,7 +380,11 @@ export class Crew {
     new SessionPresenceBridge(this.#eventBus, this.#channelProvider, this.#logger);
     this.#channelProvider.onMessage((message) => {
       if (this.#steerFollowUpBridge.route(message)) return Promise.resolve();
-      return this.#sessionManager.routeMessage(this.#channelProvider, message);
+      const agents = this.#config.fullAgents
+        .filter((a) => a.enabled)
+        .map((a) => ({ memberIdentity: a.memberIdentity }));
+      const routed = routeMentionedAgent(message, agents);
+      return this.#sessionManager.routeMessage(this.#channelProvider, routed);
     });
 
     // ── Additional channel providers (e.g. Telegram) ──────────────

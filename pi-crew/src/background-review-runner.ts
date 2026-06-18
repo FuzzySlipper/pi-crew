@@ -34,6 +34,10 @@ export interface BackgroundReviewRunnerConfig {
       readonly memoryPromptSlug: string;
       readonly skillPromptSlug: string;
       readonly denMcpUrl: string;
+      readonly denRouterUrl?: string;
+      readonly requestTimeoutMs: number;
+      readonly promptFetchTimeoutMs: number;
+      readonly promptProjectId: string;
     };
   };
   readonly runtime?: {
@@ -48,7 +52,7 @@ export interface BackgroundReviewRunnerOptions {
   readonly channelProvider: ChannelProvider;
   readonly denseMemoryStore: DenseProfileMemoryStore;
   readonly config: BackgroundReviewRunnerConfig;
-  readonly denRouterUrl?: string;
+  readonly denRouterUrl: string;
 }
 
 interface ReviewPayload {
@@ -86,7 +90,7 @@ export class BackgroundReviewRunner {
     this.#channelProvider = options.channelProvider;
     this.#denseMemoryStore = options.denseMemoryStore;
     this.#config = options.config;
-    this.#denRouterUrl = options.denRouterUrl ?? "http://127.0.0.1:18082/v1";
+    this.#denRouterUrl = options.denRouterUrl;
   }
 
   // ── Public entry point ─────────────────────────────────────
@@ -202,7 +206,7 @@ export class BackgroundReviewRunner {
           jsonrpc: "2.0", id: 1, method: "initialize",
           params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "pi-crew-runner", version: "1.0.0" } },
         }),
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(this.#config.backgroundReview.llm.promptFetchTimeoutMs),
       });
 
       // Extract Mcp-Session-Id from response headers
@@ -225,9 +229,9 @@ export class BackgroundReviewRunner {
         },
         body: JSON.stringify({
           jsonrpc: "2.0", id: 2, method: "tools/call",
-          params: { name: "get_document", arguments: { project_id: "pi-crew", slug, verbose: true } },
+          params: { name: "get_document", arguments: { project_id: this.#config.backgroundReview.llm.promptProjectId, slug, verbose: true } },
         }),
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(this.#config.backgroundReview.llm.promptFetchTimeoutMs),
       });
 
       const rawText = await docResponse.text();
@@ -308,7 +312,7 @@ ${systemPrompt}`;
           max_tokens: maxTokens,
           temperature: 0.3,
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(this.#config.backgroundReview.llm.requestTimeoutMs),
       });
 
       if (!response.ok) {
