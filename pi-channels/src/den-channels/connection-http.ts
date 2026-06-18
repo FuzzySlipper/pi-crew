@@ -418,11 +418,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
           cursor: item.id,
           error: errorMessage(err),
         });
-        // DESIGN: Cursor advance failure is non-fatal. The local cursor persists
-        // correctly and re-delivery is acceptable for an advisory bookmark.
-        // Rationale: Den backend may not expose a cursor upsert endpoint, and
-        // losing a cursor position just produces duplicate event processing on
-        // restart — not data loss or missed events.
+        if (!this.#config.allowLegacyDirectPolling) throw err;
       }
     }
     await this.#persistCursor();
