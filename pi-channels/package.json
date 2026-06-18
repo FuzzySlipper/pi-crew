@@ -12,7 +12,11 @@
     "./den-channels/connection-websocket": "./src/den-channels/connection-websocket.ts",
     "./den-channels/connection-simulated": "./src/den-channels/connection-simulated.ts",
     "./den-channels/connection-compound": "./src/den-channels/connection-compound.ts",
-    "./den-channels/connection-http": "./src/den-channels/connection-http.ts"
+    "./den-channels/connection-http": "./src/den-channels/connection-http.ts",
+    "./telegram/telegram-channel-provider": "./src/telegram/telegram-channel-provider.ts",
+    "./telegram/telegram-connection": "./src/telegram/telegram-connection.ts",
+    "./telegram/telegram-types": "./src/telegram/telegram-types.ts",
+    "./telegram/telegram-message-format": "./src/telegram/telegram-message-format.ts"
   },
   "dependencies": {
     "@pi-crew/core": "*"

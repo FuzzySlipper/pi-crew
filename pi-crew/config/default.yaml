@@ -193,6 +193,22 @@ fullAgents:
       onStartup: "rehydrate_or_create"
       onShutdownStatus: "offline"
 
+
+# ── Telegram channel provider (example) ──────────────────────────
+# Add a Telegram channel to a fullAgent's channels array to receive
+# messages from a Telegram bot. All messages route to the same agent
+# session regardless of originating chat.
+#
+#   channels:
+#     - providerId: "telegram"
+#       config:
+#         tokenEnv: "TELEGRAM_BOT_TOKEN"
+#         pollingIntervalMs: 1000
+#         allowedChats: ["-1001234567890"]   # optional allowlist
+#
+# The bot token must be set in the TELEGRAM_BOT_TOKEN environment
+# variable. Long-polling mode — no webhook endpoint required.
+
 # ── Background review system ─────────────────────────────────────
 # Post-response lifecycle hooks increment turn/iteration counters.
 # When thresholds are reached, a trigger is posted to the configured
