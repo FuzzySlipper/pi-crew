@@ -8,6 +8,7 @@
  * @module pi-crew/background-review-runner
  */
 
+import { ConfigurationError } from "@pi-crew/core";
 import type { Logger, EventBus } from "@pi-crew/core";
 import type { ChannelProvider } from "@pi-crew/core";
 import type { DenseProfileMemoryStore } from "@pi-crew/memory";
@@ -52,7 +53,7 @@ export interface BackgroundReviewRunnerOptions {
   readonly channelProvider: ChannelProvider;
   readonly denseMemoryStore: DenseProfileMemoryStore;
   readonly config: BackgroundReviewRunnerConfig;
-  readonly denRouterUrl: string;
+  readonly denRouterUrl?: string;
 }
 
 interface ReviewPayload {
@@ -90,7 +91,10 @@ export class BackgroundReviewRunner {
     this.#channelProvider = options.channelProvider;
     this.#denseMemoryStore = options.denseMemoryStore;
     this.#config = options.config;
-    this.#denRouterUrl = options.denRouterUrl;
+    if (options.config.backgroundReview.mode === "llm" && !options.denRouterUrl) {
+      throw new ConfigurationError("backgroundReview.llm.denRouterUrl is required when mode is llm");
+    }
+    this.#denRouterUrl = options.denRouterUrl ?? "";
   }
 
   // ── Public entry point ─────────────────────────────────────

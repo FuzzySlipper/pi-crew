@@ -222,6 +222,13 @@ backgroundReview:
   serviceWorkChannel: "7276"
   defaultMaxTokens: 5000
   triggerClaimTTLMs: 60000
+  # LLM mode config — denRouterUrl is required when mode: "llm"
+  # mode: "static"
+  # llm:
+  #   denRouterUrl: "http://192.168.1.10:18082/v1"
+  #   requestTimeoutMs: 120000
+  #   promptFetchTimeoutMs: 10000
+  #   promptProjectId: "pi-crew"
 
 # ── Curator (memory/conversation maintenance) ────────────────────
 # Periodic cleanup of stale sessions, snapshots, and archived data.
