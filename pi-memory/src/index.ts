@@ -205,7 +205,7 @@ export class PiCrewDenMemoryAdapter {
   }
 
   promptHeading(): string {
-    return "Den Memories: explicit/manual tools only by default; recall returns bounded packets, and candidate writes do not promote curated memory.";
+    return "Den Memories: den_memory_store auto-promotes (full agents); den_memory_propose is candidate-only (workers/staging). den_memory_recall is the preferred read path.";
   }
 
   toolDefinitions(): readonly DenMemoryToolDefinition[] {

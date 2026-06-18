@@ -154,10 +154,11 @@ describe("pi-memory Den Memories adapter", () => {
     expect(result.error).toContain("service unavailable");
   });
 
-  it("prompt heading is policy-only and contains no memory body", () => {
+  it("prompt heading describes store vs propose semantics", () => {
     const adapter = adapterWithFetch(makeFetch(() => jsonResponse({ ok: true })));
     const heading = adapter.promptHeading();
-    expect(heading).toContain("explicit/manual tools");
+    expect(heading).toContain("den_memory_store auto-promotes");
+    expect(heading).toContain("den_memory_propose is candidate-only");
     expect(heading).not.toContain("included_nodes");
     expect(heading).not.toContain("packet_md");
   });
