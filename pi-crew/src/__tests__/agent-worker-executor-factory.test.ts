@@ -60,14 +60,13 @@ function makeClient(): MCPClient {
 }
 
 describe("createCrewAgentWorkerToolProvider", () => {
-  it("keeps static control tools and matches all mcp_den-prefixed MCP tools (tool profile controls exposure, not pi-crew)", () => {
+  it("keeps static control tools and matches all non-local MCP tools (Den tool profile controls exposure, not pi-crew)", () => {
     const registry = new ToolRegistry(new FakeLogger());
     registry.setMcpTools([
       mcpTool("mcp_den_get_task"),
       mcpTool("mcp_den_delete_document"),
       mcpTool("mcp_den_upsert_pool_member"),
       mcpTool("mcp_den_query_librarian"),
-      mcpTool("all_dangerous"),
     ]);
     const provider = createCrewAgentWorkerToolProvider({
       mcpClient: makeClient(),
@@ -83,7 +82,6 @@ describe("createCrewAgentWorkerToolProvider", () => {
     expect(toolNames).toContain("mcp_den_query_librarian");
     expect(toolNames).toContain("mcp_den_delete_document");
     expect(toolNames).toContain("mcp_den_upsert_pool_member");
-    expect(toolNames).not.toContain("all_dangerous");
 
     const allToolNames = provider(makeInput(["all"])).map((tool) => tool.name);
     expect(allToolNames).toEqual(["post_structured_completion", "context_status"]);

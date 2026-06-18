@@ -231,7 +231,18 @@ function matchesToolSet(toolName: string, toolSet: string): boolean {
     case "all":
       return false;
     case "den":
-      return toolName.toLowerCase().startsWith("mcp_den_");
+      return (
+        toolName !== "all" &&
+        !toolName.includes("file") &&
+        !toolName.includes("filesystem") &&
+        !toolName.includes("terminal") &&
+        !toolName.includes("shell") &&
+        !toolName.includes("process") &&
+        !toolName.includes("git") &&
+        !toolName.startsWith("den_memory_") &&
+        !toolName.startsWith("browser_") &&
+        !toolName.startsWith("web_")
+      );
     case "filesystem":
       return toolName.includes("file") || toolName.includes("filesystem");
     case "filesystem_readonly":

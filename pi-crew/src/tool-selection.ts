@@ -1,6 +1,7 @@
 /** Shared tool selection helpers for fullAgent and inventory surfaces. */
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ToolPolicy } from "@pi-crew/profiles";
+import { localModelCallableToolNames } from "./local-tool-catalog.js";
 
 export interface ToolSelectionEntry {
   readonly name: string;
@@ -70,7 +71,7 @@ export function toolMatchesSelectedSet(toolName: string, toolSet: string): boole
   const normalized = toolName.toLowerCase();
   const normalizedSet = toolSet.toLowerCase();
   if (normalizedSet === "all") return true;
-  if (normalizedSet === "den") return normalized.startsWith("mcp_den_");
+  if (normalizedSet === "den") return !ALL_LOCAL_TOOL_NAMES.has(normalized);
   if (TOOL_SET_MEMBERS[normalizedSet]?.has(normalized) === true) return true;
   return normalized === normalizedSet || normalized.startsWith(`${normalizedSet}_`);
 }
@@ -97,3 +98,8 @@ const TOOL_SET_MEMBERS: Readonly<Record<string, ReadonlySet<string>>> = {
   memory: new Set(["den_memory_recall", "den_memory_read", "den_memory_search", "den_memory_store", "den_memory_propose", "dense_profile_memory"]),
   delegation: new Set(["spawn_subagent", "fan_out_subagents", "scout_codebase", "summarize_files", "find_relevant_paths"]),
 };
+
+const ALL_LOCAL_TOOL_NAMES = new Set<string>([
+  ...new Set(Object.values(TOOL_SET_MEMBERS).flatMap((s) => [...s])),
+  ...localModelCallableToolNames(),
+]);

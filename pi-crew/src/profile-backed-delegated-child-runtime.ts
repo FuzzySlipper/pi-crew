@@ -106,7 +106,14 @@ function toolMatchesSelectedSet(toolName: string, toolSet: string): boolean {
     case "all":
       return true;
     case "den":
-      return normalized.startsWith("mcp_den_");
+      return (
+        normalized !== "all" &&
+        !["read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"].includes(normalized) &&
+        !normalized.startsWith("git_") &&
+        !normalized.startsWith("den_memory_") &&
+        !normalized.startsWith("browser_") &&
+        !normalized.startsWith("web_")
+      );
     case "filesystem":
       return ["read_file", "write_file", "search_files"].includes(normalized);
     case "filesystem_readonly":

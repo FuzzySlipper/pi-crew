@@ -81,7 +81,7 @@ describe("MCP profile surfaces", () => {
 });
 
 describe("tool selection naming", () => {
-  it("includes all mcp_den-prefixed tools in the den set (tool profile controls write access, not pi-crew)", () => {
+  it("includes all non-local tools in the den set (Den MCP tool profile controls exposure, not pi-crew)", () => {
     const registry = new ToolRegistry(new FakeLogger());
     registry.setMcpTools([
       { name: "mcp_den_get_task", description: "read", inputSchema: { type: "object" } },
