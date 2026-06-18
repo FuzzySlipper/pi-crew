@@ -2,6 +2,7 @@ import type { Logger, EventBus, ChannelProvider, AgentWorkBreadcrumbRepository }
 import { ConfigurationError, FakeEventBus, FakeLogger, InMemoryHookRegistry } from "@pi-crew/core";
 import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
 import type { DenChannelsAdapterConfig } from "@pi-crew/channels/den-channels/den-channels-adapter";
+import { createAdditionalChannelProviders } from "./channel-provider-factory.js";
 import {
   loadConfig,
   Gateway,
@@ -117,6 +118,7 @@ export class Crew {
   readonly #agentWorkBreadcrumbRepository: AgentWorkBreadcrumbRepository;
   readonly #workerRoleMapping: WorkerRoleMappingConfig;
   readonly #channelProvider: ChannelProvider;
+  readonly #additionalProviders: ChannelProvider[];
   readonly #mcpClient: MCPClient;
   readonly #mcpToolRegistry: McpToolRegistry;
   readonly #mcpSurfaceManager: McpSurfaceManager;
@@ -380,6 +382,20 @@ export class Crew {
       return this.#sessionManager.routeMessage(this.#channelProvider, message);
     });
 
+    // ── Additional channel providers (e.g. Telegram) ──────────────
+    // DESIGN: Additional providers are created after session manager is ready.
+    // Rationale: onMessage handlers need the session manager for routing.
+    this.#additionalProviders = createAdditionalChannelProviders(
+      this.#config.channelProviders,
+      { logger: this.#logger, eventBus: this.#eventBus },
+    );
+    for (const provider of this.#additionalProviders) {
+      provider.onMessage((message) => {
+        if (this.#steerFollowUpBridge.route(message)) return Promise.resolve();
+        return this.#sessionManager.routeMessage(provider, message);
+      });
+    }
+
     this.#breadcrumbManager = new BreadcrumbManager(
       this.#eventBus,
       this.#channelProvider,
@@ -531,6 +547,9 @@ export class Crew {
     await this.#extensionActivator.activateAll();
 
     await this.#channelProvider.connect();
+    for (const provider of this.#additionalProviders) {
+      await provider.connect();
+    }
 
     try {
       const mcpConfig: ServerConfig = {
@@ -588,6 +607,9 @@ export class Crew {
     await this.#mcpClient.disconnect();
     await this.#mcpSurfaceManager.disconnectAll();
     await this.#channelProvider.disconnect();
+    for (const provider of this.#additionalProviders) {
+      await provider.disconnect();
+    }
     await this.#adminServer?.stop();
     await this.#gateway.stop(reason);
     this.#runtimeDb.close();

@@ -194,20 +194,21 @@ fullAgents:
       onShutdownStatus: "offline"
 
 
-# ── Telegram channel provider (example) ──────────────────────────
-# Add a Telegram channel to a fullAgent's channels array to receive
-# messages from a Telegram bot. All messages route to the same agent
-# session regardless of originating chat.
+# ── Additional channel providers (example) ───────────────────────
+# Beyond the default Den Channels adapter, additional providers can
+# be configured to bridge other platforms (e.g. Telegram).
+# Each provider is instantiated at startup and wired into the
+# session manager for message routing.
 #
-#   channels:
-#     - providerId: "telegram"
-#       config:
-#         tokenEnv: "TELEGRAM_BOT_TOKEN"
-#         pollingIntervalMs: 1000
-#         allowedChats: ["-1001234567890"]   # optional allowlist
+# channelProviders:
+#   - providerId: "telegram"
+#     name: "My Bot"                          # optional display name
+#     tokenEnv: "TELEGRAM_BOT_TOKEN"          # env var with bot token
+#     pollingIntervalMs: 1000                 # long-poll interval
+#     allowedChats: ["-1001234567890"]        # optional chat allowlist
 #
-# The bot token must be set in the TELEGRAM_BOT_TOKEN environment
-# variable. Long-polling mode — no webhook endpoint required.
+# The bot token must be set in the referenced environment variable.
+# Long-polling mode — no webhook endpoint required.
 
 # ── Background review system ─────────────────────────────────────
 # Post-response lifecycle hooks increment turn/iteration counters.

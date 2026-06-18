@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import { ConfigurationError } from "@pi-crew/core";
 import type { ConfigErrorMessage } from "./degraded-health-server.js";
+import { ChannelProvidersConfigSchema } from "./channel-provider-factory.js";
 import {
   GatewayConfigSchema,
   WorkerRoleMappingConfigSchema,
@@ -318,6 +319,7 @@ export const CrewConfigSchema = z.object({
   delegation: DelegationConfigSchema,
   backgroundReview: BackgroundReviewConfigSchema,
   curator: CuratorConfigSchema.default({}),
+  channelProviders: ChannelProvidersConfigSchema,
 });
 
 export type CrewConfig = z.infer<typeof CrewConfigSchema>;
