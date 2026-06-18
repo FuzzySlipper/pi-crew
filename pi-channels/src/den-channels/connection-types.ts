@@ -279,6 +279,10 @@ export interface DenHttpConnectionConfig {
   /** Additional configured fullAgent member identities accepted by this runtime. */
   readonly memberIdentities?: readonly string[];
 
+  /** Channel IDs where configured full agents listen for messages.
+   * Events from these channels are accepted even without targetMemberIdentity. */
+  readonly channelIds?: readonly string[];
+
   /** Authentication token for the Den Channels Gateway. */
   readonly token: string;
 

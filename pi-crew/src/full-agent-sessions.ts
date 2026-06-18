@@ -126,3 +126,12 @@ export function configuredFullAgentAdditionalProjectIds(config: CrewConfig, prof
       .filter((pid): pid is string => pid !== undefined && pid !== primaryProjectId),
   )];
 }
+
+/** All unique channel IDs across all enabled full agents. */
+export function configuredFullAgentChannelIds(config: CrewConfig, profilesRoot: string): readonly string[] {
+  return [...new Set(
+    config.fullAgents
+      .filter((agent) => agent.enabled)
+      .flatMap((agent) => resolveAgentFields(agent, profilesRoot).channels.map((ch) => ch.channelId)),
+  )];
+}

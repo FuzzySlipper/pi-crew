@@ -92,6 +92,7 @@ import {
   configureFullSessionManager,
   configuredFullAgentMemberIdentities,
   configuredFullAgentAdditionalProjectIds,
+  configuredFullAgentChannelIds,
   resolveAgentFields,
   type ResolvedAgentFields,
 } from "./full-agent-sessions.js";
@@ -202,6 +203,7 @@ export class Crew {
       cursorStore,
       configuredFullAgentMemberIdentities(config, profilesRoot),
       configuredFullAgentAdditionalProjectIds(config, profilesRoot, config.den.channelsProjectId),
+      configuredFullAgentChannelIds(config, profilesRoot),
     );
     this.#channelProvider = new DenChannelsAdapter(denConnection, this.#logger, {
       name: "Den Channels Gateway",

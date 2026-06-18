@@ -260,7 +260,10 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         this.#lastCursor,
         this.#config.pollLimit ?? DEFAULT_POLL_LIMIT,
         this.#pollState.controller.signal,
-        this.#activeSubscription?.channelId,
+        // When agent channels extend beyond the subscription channel, poll by
+        // projectId so events from non-subscribed agent channels are included.
+        // #shouldProcessEvent handles filtering by member identity + channel.
+        this.#hasMultiChannelAgents() ? undefined : this.#activeSubscription?.channelId,
       );
       this.#logger.debug("Poll returned events", { count: items.length });
 
@@ -336,11 +339,21 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     const isWake = sourceKind === "wake_event";
     const isGatewayIngress = sourceKind === "gateway_delivery" && isIngressIntent(item.intent);
     if (!isWake && !isGatewayIngress) return false;
+
+    // Accept events targeting known member identities (subscription channel delivery)
     const target = targetMemberIdentity(item);
-    return (
-      target !== null &&
-      [this.#config.memberIdentity, ...(this.#config.memberIdentities ?? [])].includes(target)
-    );
+    if (target !== null && [this.#config.memberIdentity, ...(this.#config.memberIdentities ?? [])].includes(target)) {
+      return true;
+    }
+
+    // Accept wake events from channels where configured full agents listen
+    // (non-subscription channels like 7276, 7288 where events lack targetMemberIdentity)
+    const channelIds = this.#config.channelIds;
+    if (channelIds !== undefined && channelIds.length > 0 && isWake) {
+      if (channelIds.includes(String(item.channelId))) return true;
+    }
+
+    return false;
   }
   #mapEventToMessage(item: DirectAgentEventItem): DenInboundMessage {
     return {
@@ -445,6 +458,16 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         // Listener errors must not crash the connection.
       }
     }
+  }
+
+  /** True when configured agent channels extend beyond the subscription channel,
+   * meaning poll should use projectId-scoping rather than single-channel filter. */
+  #hasMultiChannelAgents(): boolean {
+    const channelIds = this.#config.channelIds;
+    if (channelIds === undefined || channelIds.length === 0) return false;
+    const subChannelId = this.#config.subscription?.channelId;
+    if (subChannelId === undefined) return true; // no single subscription channel
+    return channelIds.length > 1 || (channelIds.length === 1 && channelIds[0] !== subChannelId);
   }
 }
 
