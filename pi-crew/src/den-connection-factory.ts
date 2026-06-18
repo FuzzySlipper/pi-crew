@@ -37,7 +37,6 @@ export function buildDenConnection(
   cursorStore: CursorStore,
   memberIdentities: readonly string[] = [],
   additionalProjectIds: readonly string[] = [],
-  channelIds: readonly string[] = [],
 ): DenConnection {
   if (den.channelsUrl.length === 0) {
     logger.info("No channelsUrl configured — using simulated connection");
@@ -49,7 +48,7 @@ export function buildDenConnection(
     return buildWebSocketConnection(den, logger);
   }
   if (url.protocol === "http:" || url.protocol === "https:") {
-    return buildHttpConnection(den, logger, cursorStore, memberIdentities, additionalProjectIds, channelIds);
+    return buildHttpConnection(den, logger, cursorStore, memberIdentities, additionalProjectIds);
   }
 
   throw new ConfigurationError(
@@ -110,7 +109,6 @@ function buildHttpConnection(
   cursorStore: CursorStore,
   memberIdentities: readonly string[],
   additionalProjectIds: readonly string[],
-  channelIds: readonly string[],
 ): DenConnection {
   validateHttpConfig(den);
   logger.info("Creating live Den HTTP direct-agent connection", {
@@ -128,7 +126,6 @@ function buildHttpConnection(
     baseUrl: den.channelsUrl,
     memberIdentity: den.channelsMemberIdentity,
     memberIdentities,
-    channelIds,
     token: den.channelsToken,
     pollIntervalMs: den.channelsPollIntervalMs,
     pollLimit: den.channelsPollLimit,
