@@ -155,14 +155,10 @@ function buildHttpConnection(
   const additional: DenConnection[] = [];
   for (const projectId of additionalProjectIds) {
     if (projectId === den.channelsProjectId) continue; // already have primary
-    // DESIGN: Additional connections poll secondary projects by projectId.
-    // Subscription is owned by the primary connection; additional connections
-    // use legacy polling to avoid registering subscriptions on wrong projects.
     const conn = new DenHttpDirectAgentConnection(
       {
         ...baseConfig,
         projectId,
-        allowLegacyDirectPolling: true,
         cursorPersistenceKey: `den_channels_cursor_${projectId}`,
       } satisfies DenHttpConnectionConfig & { readonly memberIdentities: readonly string[] },
       logger,
