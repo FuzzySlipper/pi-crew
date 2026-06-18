@@ -217,7 +217,7 @@ function classifySession(
     return "workflow_disagreement";
   }
   if (events.some((event) => event.event === "worker.stuck")) return "pi_crew_local";
-  if (session.kind === "worker" && denAssignment === null) return "unknown";
+  if (session.kind === "worker" && denAssignment === null) return "healthy";
   // DESIGN: Full-agent sessions with recent turn errors or degraded presence
   // are classified as pi_crew_local so operators can see them in diagnostics.
   // Rationale: these are local runtime issues that need operator attention.

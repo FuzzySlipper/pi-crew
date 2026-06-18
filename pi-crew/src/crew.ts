@@ -311,7 +311,21 @@ export class Crew {
               sender: config.agent.identity,
               logger: this.#logger,
             }),
-            validateConfig: validateGatewayConfig,
+            validateConfig: (raw: unknown) => {
+              // CrewConfig extends GatewayConfig — validate against the crew
+              // schema so den-web can send the full config.yaml body.
+              const crew = validateCrewConfig(raw);
+              if (!crew.valid) return crew;
+              try {
+                loadConfig(raw);
+                return { valid: true, errors: [] };
+              } catch (error: unknown) {
+                return {
+                  valid: false,
+                  errors: [error instanceof Error ? error.message : String(error)],
+                };
+              }
+            },
             reloadConfig: (candidateConfig: unknown) =>
               this.#crewReloadConfig(candidateConfig),
           }),
