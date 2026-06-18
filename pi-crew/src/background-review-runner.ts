@@ -33,6 +33,7 @@ export interface BackgroundReviewRunnerConfig {
       readonly maxTokens?: number;
       readonly memoryPromptSlug: string;
       readonly skillPromptSlug: string;
+      readonly denMcpUrl: string;
     };
   };
   readonly runtime?: {
@@ -186,6 +187,74 @@ export class BackgroundReviewRunner {
 
   // ── LLM review strategy ────────────────────────────────────
 
+  /**
+   * Load review prompt content from a Den document via MCP JSON-RPC.
+   * Falls back to the supplied constant on any error.
+   */
+  async #loadPromptFromDenDoc(slug: string, fallback: string): Promise<string> {
+    const mcpUrl = this.#config.backgroundReview.llm.denMcpUrl;
+    try {
+      // Initialize a fresh MCP session
+      const initResponse = await fetch(mcpUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1, method: "initialize",
+          params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "pi-crew-runner", version: "1.0.0" } },
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      // Extract Mcp-Session-Id from response headers
+      const sessionId = initResponse.headers.get("Mcp-Session-Id");
+      if (!sessionId) {
+        this.#logger.warn("Den MCP session not created for prompt fetch", { slug });
+        return fallback;
+      }
+
+      // Read the full response to clear the stream
+      await initResponse.text();
+
+      // Call get_document tools/call
+      const docResponse = await fetch(mcpUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          "Mcp-Session-Id": sessionId,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 2, method: "tools/call",
+          params: { name: "get_document", arguments: { project_id: "pi-crew", slug, verbose: true } },
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      const rawText = await docResponse.text();
+
+      // Parse SSE — find the "data:" line and extract JSON
+      for (const line of rawText.split("\n")) {
+        if (line.startsWith("data: ")) {
+          const parsed = JSON.parse(line.slice(6));
+          const contentArray = parsed?.result?.content as Array<{ type: string; text: string }> | undefined;
+          if (contentArray?.[0]?.text) {
+            const doc = JSON.parse(contentArray[0].text) as { content?: string };
+            if (doc.content) {
+              this.#logger.info("Loaded review prompt from Den doc", { slug });
+              return doc.content;
+            }
+          }
+        }
+      }
+
+      this.#logger.warn("Den doc content not found in MCP response", { slug });
+      return fallback;
+    } catch (err) {
+      this.#logger.warn("Failed to load prompt from Den doc, using fallback", { slug, error: String(err) });
+      return fallback;
+    }
+  }
+
   async #spawnLLMReview(payload: ReviewPayload): Promise<string[]> {
     const findings: string[] = [];
 
@@ -203,10 +272,14 @@ export class BackgroundReviewRunner {
       return findings;
     }
 
-    // Build the review prompt
-    const systemPrompt = payload.triggerType === "memory" || payload.triggerType === "combined"
+    // Load the review prompt from Den docs (with hardcoded fallback)
+    const promptSlug = payload.triggerType === "memory" || payload.triggerType === "combined"
+      ? llmCfg.memoryPromptSlug
+      : llmCfg.skillPromptSlug;
+    const promptFallback = payload.triggerType === "memory" || payload.triggerType === "combined"
       ? MEMORY_REVIEW_PROMPT
       : SKILL_REVIEW_PROMPT;
+    const systemPrompt = await this.#loadPromptFromDenDoc(promptSlug, promptFallback);
 
     const userPrompt = `Agent profile: ${profileId}
 Review type: ${payload.triggerType}
@@ -219,7 +292,7 @@ ${memoryContent}
 
 ${systemPrompt}`;
 
-    // Call the LLM via the Den Router
+    // Call the LLM via the Den Router — reviewModel default is in schema now
     const maxTokens = llmCfg.maxTokens ?? this.#config.backgroundReview.defaultMaxTokens ?? 5000;
     const modelName = llmCfg.reviewModel ?? "qwen-max";
 

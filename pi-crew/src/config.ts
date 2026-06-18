@@ -256,7 +256,7 @@ const BackgroundReviewConfigSchema = z.object({
   defaultMemoryNudgeInterval: z.number().int().positive().default(10),
   defaultSkillNudgeInterval: z.number().int().positive().default(10),
   maxConcurrentReviews: z.number().int().positive().default(3),
-  serviceWorkChannel: z.string().min(1).default("service-work"),
+  serviceWorkChannel: z.string().min(1).default("7276"),
   serviceWorkUrl: z.string().url().optional(),
   defaultMaxTokens: z.number().int().positive().default(5000),
   triggerClaimTTLMs: z.number().int().positive().default(60_000),
@@ -267,10 +267,11 @@ const BackgroundReviewConfigSchema = z.object({
     patternChecks: z.array(z.string()).default(["TBD", "TODO", "FIXME"]),
   }).default({}),
   llm: z.object({
-    reviewModel: z.string().optional(),
+    reviewModel: z.string().default("qwen-max"),
     maxTokens: z.number().int().positive().optional(),
     memoryPromptSlug: z.string().default("background-review-memory-prompt"),
     skillPromptSlug: z.string().default("background-review-skill-prompt"),
+    denMcpUrl: z.string().default("http://192.168.1.10:5199/mcp"),
   }).default({}),
 }).default({});
 

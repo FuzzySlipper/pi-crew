@@ -202,7 +202,7 @@ backgroundReview:
   defaultMemoryNudgeInterval: 10
   defaultSkillNudgeInterval: 10
   maxConcurrentReviews: 3
-  serviceWorkChannel: "service-work"
+  serviceWorkChannel: "7276"
   defaultMaxTokens: 5000
   triggerClaimTTLMs: 60000
 
