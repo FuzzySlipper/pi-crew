@@ -77,7 +77,7 @@ export class MCPConnection {
     this.transport = this.createTransport();
 
     this.client = new Client(
-      { name: "pi-crew-mcp", version: "0.1.0" },
+      { name: this.config.clientName ?? "pi-crew-mcp", version: this.config.clientVersion ?? "0.1.0" },
       { capabilities: {} },
     );
 
@@ -225,7 +225,7 @@ export class MCPConnection {
       this.config.reconnectBaseDelay ?? DEFAULT_BASE_DELAY;
     const delay = baseDelay * Math.pow(2, this.reconnectAttempts);
     this.reconnectAttempts++;
-    return Math.min(delay, MAX_BACKOFF_DELAY);
+    return Math.min(delay, this.config.maxBackoffDelay ?? MAX_BACKOFF_DELAY);
   }
 
   private cancelReconnect(): void {

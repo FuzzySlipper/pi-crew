@@ -45,15 +45,6 @@ interface ErrorClassification {
   readonly retryAfterMs?: number;
 }
 
-export const DEFAULT_STREAM_RETRY_CONFIG: StreamRetryConfig = {
-  enabled: true,
-  maxAttempts: 3,
-  baseDelayMs: 500,
-  maxDelayMs: 5_000,
-  jitterRatio: 0.2,
-  retryableHttpStatuses: [408, 429, 502, 503, 504],
-};
-
 const RETRYABLE_NETWORK_CODES = new Set([
   "ECONNRESET",
   "ECONNREFUSED",
@@ -146,7 +137,7 @@ async function pumpWithRetries<TApi extends Api>(
 
 export function classifyStreamError(
   error: unknown,
-  retryableHttpStatuses: readonly number[] = DEFAULT_STREAM_RETRY_CONFIG.retryableHttpStatuses,
+  retryableHttpStatuses: readonly number[] = [408, 429, 502, 503, 504],
 ): ErrorClassification {
   const record = toRecord(error);
   const statusCode = readStatusCode(record);

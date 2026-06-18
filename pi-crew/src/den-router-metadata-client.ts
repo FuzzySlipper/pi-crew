@@ -94,6 +94,7 @@ export async function resolveFullAgentContextPolicy(
   if (config.provider === "den-router" && config.modelBaseUrl !== undefined) {
     const metadata = await new DenRouterMetadataClient({
       baseUrl: config.modelBaseUrl,
+      timeoutMs: config.crewContext.metadataLookupTimeoutMs,
       logger: config.logger,
       fetchFn: config.fetchFn,
     }).modelMetadata(config.modelName);

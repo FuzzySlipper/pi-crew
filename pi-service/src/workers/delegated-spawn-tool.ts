@@ -94,6 +94,8 @@ export function createDelegatedSpawnTool(options: {
   readonly parentRuntime: EffectiveDelegationRuntime;
   readonly allowedRuntimes?: readonly EffectiveDelegationRuntime[];
   readonly correlation?: DelegatedSpawnCorrelation;
+  /** Maximum safe excerpt characters for truncation. Defaults to 1600. */
+  readonly maxSafeExcerptChars?: number;
 }): AgentTool {
   return {
     label: "Spawn subagent",
@@ -119,7 +121,8 @@ export function createDelegatedSpawnTool(options: {
         },
       });
       if (!spawnResult.ok) return toolFailure(spawnResult.error);
-      const parentVisibleResult = toParentVisibleResult(spawnResult.value);
+      const maxChars = options.maxSafeExcerptChars ?? MAX_SAFE_EXCERPT_CHARS;
+      const parentVisibleResult = toParentVisibleResult(spawnResult.value, maxChars);
       return {
         content: [{ type: "text", text: formatParentVisibleResult(parentVisibleResult) }],
         details: { ok: true, result: parentVisibleResult },
@@ -176,14 +179,14 @@ function isRuntimeSelection(value: unknown): value is EffectiveDelegationRuntime
   );
 }
 
-function toParentVisibleResult(result: DelegatedResult): ParentVisibleDelegatedResult {
+function toParentVisibleResult(result: DelegatedResult, maxChars: number): ParentVisibleDelegatedResult {
   return {
     outcome: result.outcome,
     summary: result.summary,
     childSessionId: result.childSessionId,
     policyId: result.policyId,
     ...(result.effectiveRuntime === undefined ? {} : { effectiveRuntime: result.effectiveRuntime }),
-    ...(result.safeExcerpt === undefined ? {} : { safeExcerpt: truncate(result.safeExcerpt) }),
+    ...(result.safeExcerpt === undefined ? {} : { safeExcerpt: truncate(result.safeExcerpt, maxChars) }),
     ...(result.artifacts === undefined ? {} : { artifacts: result.artifacts }),
     ...(result.evidenceChecked === undefined ? {} : { evidenceChecked: result.evidenceChecked }),
     ...(result.failureCategory === undefined ? {} : { failureCategory: result.failureCategory }),
@@ -205,9 +208,9 @@ function formatParentVisibleResult(result: ParentVisibleDelegatedResult): string
   return `Delegated child result${trustWarning}\n${JSON.stringify(result, null, 2)}`;
 }
 
-function truncate(text: string): string {
-  if (text.length <= MAX_SAFE_EXCERPT_CHARS) return text;
-  return `${text.slice(0, MAX_SAFE_EXCERPT_CHARS)}… [truncated]`;
+function truncate(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}… [truncated]`;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

@@ -27,7 +27,7 @@ export type RouteHandler = (
 ) => boolean | void | Promise<boolean | void>;
 
 /** Check that Den is reachable before the gateway accepts work. */
-export type DenReachabilityCheck = (coreUrl: string) => Promise<void>;
+export type DenReachabilityCheck = (coreUrl: string, timeoutMs?: number) => Promise<void>;
 
 /**
  * Default Den startup check.
@@ -38,11 +38,12 @@ export type DenReachabilityCheck = (coreUrl: string) => Promise<void>;
  */
 export async function defaultDenReachabilityCheck(
   coreUrl: string,
+  timeoutMs: number = 5_000,
 ): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => {
     controller.abort();
-  }, 5_000);
+  }, timeoutMs);
 
   try {
     const response = await fetch(coreUrl, {
@@ -115,7 +116,7 @@ export class Gateway {
     });
 
     if (this.config.den.requiredAtStartup) {
-      await this.denReachabilityCheck(this.config.den.coreUrl);
+      await this.denReachabilityCheck(this.config.den.coreUrl, this.config.den.startupCheckTimeoutMs);
     }
 
     await this.startHealthServer();

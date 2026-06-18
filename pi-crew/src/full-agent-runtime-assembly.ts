@@ -74,6 +74,7 @@ export interface ResolveFullAgentRuntimeInput {
   readonly memory?: CrewConfig["memory"];
   readonly counterService?: CounterService;
   readonly denseMemoryStore?: DenseProfileMemoryStore;
+  readonly crewContext?: CrewConfig["context"];
 }
 export interface FullAgentDelegationRuntimeConfig {
   readonly lifecycle: DelegatedSpawnLifecyclePort;
@@ -281,7 +282,10 @@ export function resolveFullAgentRuntime(
   return {
     profile,
     model,
-    agentModel: createAgentModel(model),
+    agentModel: createAgentModel(model, {
+      defaultContextLength: input.crewContext?.defaultContextLength,
+      defaultMaxTokens: input.crewContext?.defaultMaxTokens,
+    }),
     systemPrompt,
     tools,
     executionPolicy,
@@ -308,10 +312,10 @@ function createResponder(
   runtime: ResolvedFullAgentRuntime,
   logger: Logger,
   eventBus: EventBus,
+  crewContext: CrewConfig["context"],
   history?: FullAgentTurnHistory,
   agentFactory?: FullAgentFactory,
   toolsProvider?: () => readonly AgentTool[],
-  crewContext?: CrewConfig["context"],
   streamRetry?: StreamRetryConfig,
 ): FullAgentResponder {
   return new FullAgentResponder({
@@ -331,11 +335,7 @@ function createResponder(
     toolsProvider,
     streamRetry,
     contextPolicyProvider: createFullAgentContextPolicyResolver({
-      crewContext: crewContext ?? {
-        defaultContextLength: 131072,
-        compactionThresholdPercent: 80,
-        minimumRecentMessages: 24,
-      },
+      crewContext,
       provider: runtime.model.provider,
       modelName: runtime.model.modelName,
       modelBaseUrl: runtime.model.modelBaseUrl,
@@ -486,7 +486,9 @@ function resolveModelConfig(
     maxTokens: profile.modelConfig?.maxTokens,
   };
 }
-function createAgentModel(config: FullAgentRuntimeModelConfig): Model<Api> {
+function createAgentModel(config: FullAgentRuntimeModelConfig, defaults?: { defaultContextLength?: number; defaultMaxTokens?: number }): Model<Api> {
+  const effectiveDefaultContextLength = defaults?.defaultContextLength ?? 131_072;
+  const effectiveDefaultMaxTokens = defaults?.defaultMaxTokens ?? 4096;
   if (isKnownProvider(config.provider)) {
     const registered = getModels(config.provider).find((model) => model.id === config.modelName);
     if (registered !== undefined) {
@@ -516,8 +518,8 @@ function createAgentModel(config: FullAgentRuntimeModelConfig): Model<Api> {
     reasoning: (config.api ?? "openai-completions") === "openai-responses",
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128_000,
-    maxTokens: config.maxTokens ?? 4096,
+    contextWindow: effectiveDefaultContextLength,
+    maxTokens: config.maxTokens ?? effectiveDefaultMaxTokens,
   };
 }
 function isKnownProvider(provider: string): provider is KnownProvider {

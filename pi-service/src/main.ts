@@ -21,7 +21,7 @@ import { RuntimeMetricsCollector, renderPrometheusMetrics } from "./diagnostics/
 import type { DiagnosticsOverview } from "./diagnostics/types.js";
 import { AgentFactoryImpl } from "./agents/agent-factory.js";
 import { InstanceFactoryImpl } from "./instances/instance-factory.js";
-import { DEFAULT_POOL_CONFIG, InstancePoolImpl } from "./instances/instance-pool.js";
+import { InstancePoolImpl } from "./instances/instance-pool.js";
 import { InMemorySessionStore } from "./sessions/session-store.js";
 import { SessionManagerImpl } from "./sessions/session-manager.js";
 import {
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   const sessionStore = new InMemorySessionStore();
   const instancePool = new InstancePoolImpl(
     new InstanceFactoryImpl(logger),
-    DEFAULT_POOL_CONFIG,
+    config.sessions,
     logger,
   );
   const agentFactory = new AgentFactoryImpl(instancePool, sessionStore, eventBus, logger);
@@ -117,6 +117,8 @@ async function main(): Promise<void> {
     eventBus,
     logger,
     "default",
+    null,
+    { turnTimeoutMs: config.sessions.conversationalTurnTimeoutMs },
   );
   const delegationBridge = new SessionManagerDelegationSessionBridge({
     sessionManager,
@@ -215,27 +217,32 @@ async function main(): Promise<void> {
 function loadRuntimeConfigFromEnvironment(): GatewayConfig {
   return loadConfig({
     database: {
-      path: process.env["PI_DB_PATH"] ?? "/var/lib/pi-crew/runtime.db",
+      path: process.env["PI_DB_PATH"],
       wal: true,
     },
     den: {
-      coreUrl: process.env["PI_DEN_CORE_URL"] ?? "http://den-srv:3030",
+      coreUrl: process.env["PI_DEN_CORE_URL"],
       requiredAtStartup: process.env["PI_DEN_REQUIRED_AT_STARTUP"]?.toLowerCase() !== "false",
     },
     health: {
-      port: Number(process.env["PI_HEALTH_PORT"] ?? 9236),
-      host: process.env["PI_HEALTH_HOST"] ?? "127.0.0.1",
+      port:
+        process.env["PI_HEALTH_PORT"] !== undefined
+          ? Number(process.env["PI_HEALTH_PORT"])
+          : undefined,
+      host: process.env["PI_HEALTH_HOST"],
     },
     admin: {
       enabled: process.env["PI_ADMIN_ENABLED"]?.toLowerCase() === "true",
-      port: Number(process.env["PI_ADMIN_PORT"] ?? 9237),
-      host: process.env["PI_ADMIN_HOST"] ?? "127.0.0.1",
-      bearerToken: process.env["PI_ADMIN_BEARER_TOKEN"] ?? "",
+      port:
+        process.env["PI_ADMIN_PORT"] !== undefined
+          ? Number(process.env["PI_ADMIN_PORT"])
+          : undefined,
+      host: process.env["PI_ADMIN_HOST"],
+      bearerToken: process.env["PI_ADMIN_BEARER_TOKEN"],
       allowLanBind: process.env["PI_ADMIN_ALLOW_LAN_BIND"]?.toLowerCase() === "true",
     },
     logging: {
-      level:
-        (process.env["PI_LOG_LEVEL"] as "debug" | "info" | "warn" | "error" | undefined) ?? "info",
+      level: process.env["PI_LOG_LEVEL"] as "debug" | "info" | "warn" | "error" | undefined,
       json: false,
     },
   });

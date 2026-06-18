@@ -13,6 +13,8 @@ const MAX_OUTPUT_CHARS = 32_000;
 export interface ScriptCronJobExecutorOptions {
   readonly scriptRoot: string;
   readonly timeoutMs?: number;
+  readonly maxOutputChars?: number;
+  readonly maxBuffer?: number;
   readonly channelProvider?: ChannelProvider;
   readonly logger?: Logger;
 }
@@ -20,12 +22,16 @@ export interface ScriptCronJobExecutorOptions {
 export class ScriptCronJobExecutor implements CronJobExecutor {
   readonly #scriptRoot: string;
   readonly #timeoutMs: number;
+  readonly #maxOutputChars: number;
+  readonly #maxBuffer: number;
   readonly #channelProvider: ChannelProvider | null;
   readonly #logger: Logger | null;
 
   constructor(options: ScriptCronJobExecutorOptions) {
     this.#scriptRoot = resolve(options.scriptRoot);
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.#maxOutputChars = options.maxOutputChars ?? MAX_OUTPUT_CHARS;
+    this.#maxBuffer = options.maxBuffer ?? 2_000_000;
     this.#channelProvider = options.channelProvider ?? null;
     this.#logger = options.logger ?? null;
   }
@@ -37,15 +43,21 @@ export class ScriptCronJobExecutor implements CronJobExecutor {
     return { ...result, errorMessage: appendErrorMessage(result.errorMessage, deliveryErrorMessage) };
   }
 
+  #truncate(value: string): string {
+    return value.length <= this.#maxOutputChars
+      ? value
+      : `${value.slice(0, this.#maxOutputChars)}\n[truncated]`;
+  }
+
   private async executeScript(job: CronJobRecord): Promise<CronJobExecutionResult> {
     const cwd = resolveInsideRoot(this.#scriptRoot, job.cwd ?? ".");
     try {
       const result = await execFileAsync("bash", ["-lc", job.script], {
         cwd,
         timeout: this.#timeoutMs,
-        maxBuffer: 2_000_000,
+        maxBuffer: this.#maxBuffer,
       });
-      return { status: "succeeded", stdout: truncate(result.stdout), stderr: truncate(result.stderr), exitCode: 0, errorMessage: null };
+      return { status: "succeeded", stdout: this.#truncate(result.stdout), stderr: this.#truncate(result.stderr), exitCode: 0, errorMessage: null };
     } catch (error: unknown) {
       return executionFailure(error);
     }
@@ -88,8 +100,8 @@ function executionFailure(error: unknown): CronJobExecutionResult {
     const record = error as Record<string, unknown>;
     return {
       status: "failed",
-      stdout: truncate(typeof record["stdout"] === "string" ? record["stdout"] : ""),
-      stderr: truncate(typeof record["stderr"] === "string" ? record["stderr"] : ""),
+      stdout: truncate(MAX_OUTPUT_CHARS, typeof record["stdout"] === "string" ? record["stdout"] : ""),
+      stderr: truncate(MAX_OUTPUT_CHARS, typeof record["stderr"] === "string" ? record["stderr"] : ""),
       exitCode: typeof record["code"] === "number" ? record["code"] : null,
       errorMessage: error instanceof Error ? error.message : "cron script failed",
     };
@@ -125,9 +137,8 @@ function resolveInsideRoot(rootPath: string, requested: string): string {
   return path;
 }
 
-function truncate(value: string): string {
-  return value.length <= MAX_OUTPUT_CHARS ? value : `${value.slice(0, MAX_OUTPUT_CHARS)}
-[truncated]`;
+function truncate(maxChars: number, value: string): string {
+  return value.length <= maxChars ? value : `${value.slice(0, maxChars)}\n[truncated]`;
 }
 
 export class CronExecutionError extends Error {

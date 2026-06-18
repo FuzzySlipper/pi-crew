@@ -16,12 +16,6 @@ import type {
   WorkerExecutor,
 } from "./worker-runtime.js";
 
-/** Default assignment duration timeout (30 minutes). */
-export const DEFAULT_ASSIGNMENT_TIMEOUT_MS = 30 * 60 * 1000;
-
-/** Default per-turn timeout (5 minutes). */
-export const DEFAULT_TURN_TIMEOUT_MS = 5 * 60 * 1000;
-
 export interface TimeoutExecutionOptions {
   readonly executor: WorkerExecutor;
   readonly context: WorkerExecutionContext;
@@ -43,10 +37,10 @@ export async function executeWithAssignmentTimeout(
 ): Promise<WorkerExecutionResult> {
   const assignmentTimeoutMs =
     options.roleConfig?.toolPolicyDefaults?.assignmentTimeoutMs ??
-    DEFAULT_ASSIGNMENT_TIMEOUT_MS;
+    30 * 60 * 1000;
   const turnTimeoutMs =
     options.roleConfig?.toolPolicyDefaults?.idleTimeoutMs ??
-    DEFAULT_TURN_TIMEOUT_MS;
+    5 * 60 * 1000;
   const abort = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 

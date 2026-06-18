@@ -294,6 +294,15 @@ export interface DenHttpConnectionConfig {
   /** V2 membership/subscription registration config for ordinary-channel polling. */
   readonly subscription?: DenHttpSubscriptionConfig;
 
+  /** Default fetch timeout for subscription registration and membership calls (ms). Default 15_000. */
+  readonly defaultFetchTimeoutMs?: number;
+
+  /** Fetch timeout for direct-agent event HTTP calls (ms). Default 15_000. */
+  readonly fetchTimeoutMs?: number;
+
+  /** Staleness window for lifecycle event stalenessDeadline (ms). Default 60_000. */
+  readonly lifecycleStalenessMs?: number;
+
   /** Explicit compatibility escape hatch for deployments without Channels v8 routes. */
   readonly allowLegacyDirectPolling?: boolean;
 }

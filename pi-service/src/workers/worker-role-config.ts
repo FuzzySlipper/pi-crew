@@ -139,11 +139,21 @@ export const WorkerRoleBindingSchema = z.object({
   config: WorkerRoleConfigSchema.optional(),
 });
 
+const DEFAULT_BINDINGS: WorkerRoleBinding[] = [
+  { role: "packet-auditor", profileId: "packet-auditor-worker" },
+  { role: "packet_auditor", profileId: "packet-auditor-worker" },
+  { role: "coder", profileId: "coder-worker" },
+  { role: "reviewer", profileId: "reviewer-worker" },
+  { role: "validator", profileId: "validator-worker" },
+  { role: "drift_checker", profileId: "drift-checker-worker" },
+];
+
 export const WorkerRoleMappingConfigSchema = z
   .object({
     bindings: z
       .array(WorkerRoleBindingSchema)
-      .min(1, "At least one worker role binding is required"),
+      .min(1, "At least one worker role binding is required")
+      .default(DEFAULT_BINDINGS),
   })
   .superRefine((value, context) => {
     const seen = new Set<string>();
@@ -201,7 +211,7 @@ export function loadWorkerRoleMapping(raw: unknown): WorkerRoleMappingConfig {
     throw new ConfigurationError(`Invalid worker role mapping configuration:\n${issues}`);
   }
 
-  return result.data;
+  return result.data as WorkerRoleMappingConfig;
 }
 
 /**

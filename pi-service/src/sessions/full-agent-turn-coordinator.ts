@@ -6,8 +6,6 @@ export interface FullAgentTurnCoordinatorOptions {
   readonly turnTimeoutMs?: number;
 }
 
-export const DEFAULT_CONVERSATIONAL_TURN_TIMEOUT_MS = 300_000;
-
 /**
  * Serializes fullAgent turns per durable session ID.
  */
@@ -16,7 +14,7 @@ export class FullAgentTurnCoordinator {
   private readonly queues = new Map<string, TurnQueueEntry<unknown>>();
 
   constructor(options: FullAgentTurnCoordinatorOptions = {}) {
-    this.turnTimeoutMs = options.turnTimeoutMs ?? DEFAULT_CONVERSATIONAL_TURN_TIMEOUT_MS;
+    this.turnTimeoutMs = options.turnTimeoutMs ?? 300_000;
   }
 
   run<T>(sessionId: string, task: () => Promise<T>): Promise<T> {

@@ -104,6 +104,7 @@ export class HttpDirectAgentClient {
   readonly #logger: Logger;
   readonly #fetchFn: typeof fetch;
   readonly #timeoutMs: number;
+  readonly #lifecycleStalenessMs: number;
 
   constructor(
     config: DenHttpConnectionConfig,
@@ -113,7 +114,8 @@ export class HttpDirectAgentClient {
     this.#config = config;
     this.#logger = logger;
     this.#fetchFn = options?.fetchFn ?? globalThis.fetch.bind(globalThis);
-    this.#timeoutMs = options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+    this.#timeoutMs = config.fetchTimeoutMs ?? options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+    this.#lifecycleStalenessMs = config.lifecycleStalenessMs ?? DEFAULT_LIFECYCLE_STALENESS_MS;
   }
 
   async listEvents(
@@ -195,7 +197,7 @@ export class HttpDirectAgentClient {
       lastActivityAt: lastActivityAt.toISOString(),
       stalenessDeadline: isTerminalLifecycleEvent(eventType)
         ? undefined
-        : new Date(lastActivityAt.getTime() + DEFAULT_LIFECYCLE_STALENESS_MS).toISOString(),
+        : new Date(lastActivityAt.getTime() + this.#lifecycleStalenessMs).toISOString(),
       summary: `pi-crew ${eventType} direct-agent event ${String(sourceRequestId)}`,
     };
 

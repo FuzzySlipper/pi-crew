@@ -77,6 +77,8 @@ const SessionsConfigSchema = z.object({
 
 const ContextConfigSchema = z.object({
   defaultContextLength: z.number().int().positive().default(131_072),
+  defaultMaxTokens: z.number().int().positive().default(4096),
+  metadataLookupTimeoutMs: z.number().int().positive().default(5_000),
   compactionThresholdPercent: z.number().int().min(1).max(100).default(80),
   minimumRecentMessages: z.number().int().positive().default(24),
 });
@@ -115,6 +117,11 @@ const MemoryConfigSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "enabled Den Memories config requires baseUrl", path: ["baseUrl"] });
   }
 });
+
+const AgentConfigSchema = z.object({
+  identity: z.string().min(1).default("pi-crew"),
+  projectId: z.string().min(1).default("pi-crew"),
+}).default({});
 
 const ToolPolicyDefaultsSchema = z.object({
   allowedTools: z.array(z.string()).default([]),
@@ -158,6 +165,7 @@ const WorkerPoolConfigSchema = z
   .object({
     members: z.array(WorkerPoolMemberConfigSchema).default([]),
     groups: z.array(WorkerPoolGroupConfigSchema).default([]),
+    denListPageSize: z.number().int().positive().default(200),
   })
   .default({});
 
@@ -249,6 +257,9 @@ const DelegationConfigSchema = z
     llmModelName: z.string().optional(),
     projection: DelegationProjectionConfigSchema.default({}),
     maxSpawnDepth: z.number().int().positive().default(1),
+    completionRetryMaxAttempts: z.number().int().positive().default(2),
+    completionRetryBaseDelayMs: z.number().int().positive().default(1_000),
+    completionRetryMaxDelayMs: z.number().int().positive().default(5_000),
   })
   .default({});
 
@@ -302,6 +313,7 @@ const CuratorConfigSchema = z.object({
   minAgeDays: z.number().int().positive().default(1),
   dryRun: z.boolean().default(true),
   maxTokens: z.number().int().positive().default(5000),
+  minTickMs: z.number().int().positive().default(60_000),
   auxiliaryModel: z.string().optional(),
   auxiliaryProvider: z.string().optional(),
 }).default({});
@@ -309,12 +321,15 @@ const CuratorConfigSchema = z.object({
 export type CuratorConfig = z.infer<typeof CuratorConfigSchema>;
 
 export const CrewConfigSchema = z.object({
+  agent: AgentConfigSchema,
   install: InstallConfigSchema.default({}),
   profiles: ProfilesConfigSchema,
   admin: GatewayConfigSchema.shape.admin,
   den: GatewayConfigSchema.shape.den,
   database: GatewayConfigSchema.shape.database.default({}),
   health: GatewayConfigSchema.shape.health.default({}),
+  healthCheckTimeoutMs: z.number().int().positive().default(3_000),
+  assignmentLoopPollIntervalMs: z.number().int().positive().default(2_000),
   logging: GatewayConfigSchema.shape.logging.default({}),
   runtime: GatewayConfigSchema.shape.runtime,
   mcp: McpConfigSchema.default({}),

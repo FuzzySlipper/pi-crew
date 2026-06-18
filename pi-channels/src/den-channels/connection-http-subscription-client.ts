@@ -66,7 +66,7 @@ export class HttpSubscriptionClient {
     this.#config = config;
     this.#logger = logger;
     this.#fetchFn = options?.fetchFn ?? globalThis.fetch.bind(globalThis);
-    this.#timeoutMs = options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+    this.#timeoutMs = config.defaultFetchTimeoutMs ?? options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
   }
 
   async register(signal: AbortSignal): Promise<SubscriptionRegistrationResult> {

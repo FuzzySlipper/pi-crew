@@ -34,14 +34,16 @@ export async function reconcileStaleGroupMembers(config: {
   readonly mcpClient: MCPClient;
   readonly members: readonly DenPoolMemberConfig[];
   readonly cleanupGroups: readonly DenPoolCleanupGroup[];
+  readonly listPageSize?: number;
 }): Promise<string[]> {
   const groups = mergedCleanupGroups(config.members, config.cleanupGroups);
   const quarantined: string[] = [];
+  const pageSize = config.listPageSize ?? 200;
 
   for (const group of groups) {
     const result = await config.mcpClient.callTool("list_pool_members", {
       profile_identity: group.profileIdentity,
-      limit: 200,
+      limit: pageSize,
       verbose: true,
     });
     if (!result.ok) {

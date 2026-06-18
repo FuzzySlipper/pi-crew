@@ -125,6 +125,10 @@ export class RuntimeDb {
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     db.pragma("busy_timeout = 5000");
+    // Use config-driven timeout if set
+    if (this.#config.busyTimeoutMs !== 5000) {
+      db.pragma(`busy_timeout = ${String(this.#config.busyTimeoutMs)}`);
+    }
 
     if (firstRun) {
       this.#logger.info("Created new runtime database", { path: this.#config.path });

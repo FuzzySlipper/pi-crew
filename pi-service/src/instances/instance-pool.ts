@@ -24,13 +24,6 @@ export interface InstancePoolConfig {
   readonly idleTimeoutMs: number;
 }
 
-/** Default pool configuration. */
-export const DEFAULT_POOL_CONFIG: InstancePoolConfig = {
-  maxPerProfile: 4,
-  maxTotal: 16,
-  idleTimeoutMs: 8 * 60 * 60 * 1000, // 8 hours
-};
-
 // ── InstancePool interface ──────────────────────────────────────
 
 /**

@@ -125,6 +125,15 @@ export interface ServerConfig {
 
   /** Base delay in ms for reconnect backoff (default 1_000). */
   readonly reconnectBaseDelay?: number;
+
+  /** Max backoff delay in ms for reconnect (default 30_000). */
+  readonly maxBackoffDelay?: number;
+
+  /** Client name reported to the MCP server (default "pi-crew-mcp"). */
+  readonly clientName?: string;
+
+  /** Client version reported to the MCP server (default "0.1.0"). */
+  readonly clientVersion?: string;
 }
 
 // ── Re-exports for convenience ────────────────────────────────────

@@ -21,26 +21,35 @@ export interface WebSearchProvider {
 export interface WebToolOptions {
   readonly fetchImpl?: typeof fetch;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly maxExtractChars?: number;
+  readonly searchDefaultLimit?: number;
+  readonly maxRedirects?: number;
+  readonly searxngUrl?: string;
+  readonly allowPrivateNet?: boolean;
 }
-
-const MAX_EXTRACT_CHARS = 24_000;
-const DEFAULT_SEARCH_LIMIT = 5;
-const MAX_REDIRECTS = 5;
 
 export function createWebTools(options: WebToolOptions = {}): AgentTool[] {
   const fetchImpl = options.fetchImpl ?? fetch;
   const env = options.env ?? process.env;
-  const provider = createWebSearchProvider({ fetchImpl, env });
-  return [webSearchTool(provider), webExtractTool(fetchImpl, env)];
+  const maxExtractChars = options.maxExtractChars ?? 24_000;
+  const searchDefaultLimit = options.searchDefaultLimit ?? 5;
+  const maxRedirects = options.maxRedirects ?? 5;
+  const searxngUrl =
+    options.searxngUrl !== undefined && options.searxngUrl.trim().length > 0
+      ? options.searxngUrl
+      : env.PI_CREW_SEARXNG_URL;
+  const allowPrivateNet =
+    options.allowPrivateNet ?? env.PI_CREW_ALLOW_PRIVATE_NET === "1";
+  const provider = createWebSearchProvider({ fetchImpl, searxngUrl });
+  return [webSearchTool(provider, searchDefaultLimit), webExtractTool(fetchImpl, maxExtractChars, maxRedirects, allowPrivateNet)];
 }
 
 export function createWebSearchProvider(input: {
   readonly fetchImpl: typeof fetch;
-  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly searxngUrl: string | undefined;
 }): WebSearchProvider {
-  const searxngUrl = input.env.PI_CREW_SEARXNG_URL;
-  if (searxngUrl !== undefined && searxngUrl.trim().length > 0) {
-    return new SearxngProvider(input.fetchImpl, searxngUrl);
+  if (input.searxngUrl !== undefined && input.searxngUrl.trim().length > 0) {
+    return new SearxngProvider(input.fetchImpl, input.searxngUrl);
   }
   return new DuckDuckGoHtmlProvider(input.fetchImpl);
 }
@@ -80,23 +89,28 @@ interface SearxngResult {
   readonly content?: string;
 }
 
-function webSearchTool(provider: WebSearchProvider): AgentTool {
+function webSearchTool(provider: WebSearchProvider, searchDefaultLimit: number): AgentTool {
   return {
     label: "Web search",
     name: "web_search",
     description: "Search the public web through the configured provider. Prefer for current facts and external docs. Returns title/url/snippet results; use web_extract for page text.",
     parameters: objectSchema({
       query: { type: "string", description: "Search query." },
-      max_results: { type: "integer", default: DEFAULT_SEARCH_LIMIT, minimum: 1, maximum: 10 },
+      max_results: { type: "integer", default: searchDefaultLimit, minimum: 1, maximum: 10 },
     }, ["query"]),
     execute: async (_toolCallId, params) => {
-      const results = await provider.search(stringParam(params, "query"), intParam(params, "max_results", DEFAULT_SEARCH_LIMIT));
+      const results = await provider.search(stringParam(params, "query"), intParam(params, "max_results", searchDefaultLimit));
       return textResult(JSON.stringify({ results }, null, 2), { ok: true, results });
     },
   };
 }
 
-function webExtractTool(fetchImpl: typeof fetch, env: Readonly<Record<string, string | undefined>>): AgentTool {
+function webExtractTool(
+  fetchImpl: typeof fetch,
+  maxExtractChars: number,
+  maxRedirects: number,
+  allowPrivateNet: boolean,
+): AgentTool {
   return {
     label: "Web extract",
     name: "web_extract",
@@ -110,7 +124,7 @@ function webExtractTool(fetchImpl: typeof fetch, env: Readonly<Record<string, st
       },
     }, ["urls"]),
     execute: async (_toolCallId, params) => {
-      const results = await Promise.all(urlArrayParam(params, "urls").slice(0, 5).map((url) => extractUrl(fetchImpl, env, url)));
+      const results = await Promise.all(urlArrayParam(params, "urls").slice(0, 5).map((url) => extractUrl(fetchImpl, url, maxExtractChars, maxRedirects, allowPrivateNet)));
       return textResult(JSON.stringify({ results }, null, 2), { ok: true, results });
     },
   };
@@ -118,16 +132,17 @@ function webExtractTool(fetchImpl: typeof fetch, env: Readonly<Record<string, st
 
 async function extractUrl(
   fetchImpl: typeof fetch,
-  env: Readonly<Record<string, string | undefined>>,
   rawUrl: string,
+  maxExtractChars: number,
+  maxRedirects: number,
+  allowPrivateNet: boolean,
 ): Promise<WebExtractResult> {
   try {
-    const allowPrivateNet = env.PI_CREW_ALLOW_PRIVATE_NET === "1";
-    const response = await fetchPublicUrl(fetchImpl, rawUrl, allowPrivateNet);
+    const response = await fetchPublicUrl(fetchImpl, rawUrl, allowPrivateNet, maxRedirects);
     if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
     const text = await response.text();
     const title = htmlTitle(text) ?? rawUrl;
-    const content = htmlToText(text).slice(0, MAX_EXTRACT_CHARS);
+    const content = htmlToText(text).slice(0, maxExtractChars);
     return { url: rawUrl, title, content };
   } catch (error) {
     return { url: rawUrl, title: rawUrl, content: "", error: errorMessage(error) };
@@ -148,9 +163,10 @@ async function fetchPublicUrl(
   fetchImpl: typeof fetch,
   rawUrl: string,
   allowPrivateNet: boolean,
+  maxRedirects: number,
 ): Promise<Response> {
   let current = rawUrl;
-  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+  for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
     assertSafePublicUrl(current, allowPrivateNet);
     const response = await fetchImpl(current, {
       headers: { "user-agent": "pi-crew-web-tool/1" },

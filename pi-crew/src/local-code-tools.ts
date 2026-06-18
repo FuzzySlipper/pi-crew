@@ -6,8 +6,6 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { localModelCallableToolNames } from "./local-tool-catalog.js";
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_TIMEOUT_MS = 30_000;
-const MAX_OUTPUT_CHARS = 8_000;
 
 export const localCodeToolNames = localModelCallableToolNames("local") as readonly [
   "read_file",
@@ -22,33 +20,51 @@ type LocalCodeToolName = (typeof localCodeToolNames)[number];
 
 export interface LocalCodeToolConfig {
   readonly rootPath?: string;
+  readonly defaultTimeoutMs?: number;
+  readonly maxOutputChars?: number;
+  readonly maxBufferBytes?: number;
 }
 
 export function createLocalCodeTools(config: LocalCodeToolConfig = {}): AgentTool[] {
   const rootPath = resolve(
     config.rootPath ?? process.env.PI_CREW_LOCAL_TOOL_ROOT ?? "/home/dev/pi-crew",
   );
-  return localCodeToolNames.map((name) => createLocalCodeTool(name, rootPath));
+  const defaultTimeoutMs = config.defaultTimeoutMs ?? 30_000;
+  const maxOutputChars = config.maxOutputChars ?? 8_000;
+  const maxBufferBytes = config.maxBufferBytes ?? 512_000;
+  return localCodeToolNames.map((name) =>
+    createLocalCodeTool(name, rootPath, defaultTimeoutMs, maxOutputChars, maxBufferBytes),
+  );
 }
 
-function createLocalCodeTool(name: LocalCodeToolName, rootPath: string): AgentTool {
+function createLocalCodeTool(
+  name: LocalCodeToolName,
+  rootPath: string,
+  defaultTimeoutMs: number,
+  maxOutputChars: number,
+  maxBufferBytes: number,
+): AgentTool {
+  const truncate = (text: string): string => {
+    if (text.length <= maxOutputChars) return text;
+    return `${text.slice(0, maxOutputChars)}… [truncated]`;
+  };
   switch (name) {
     case "read_file":
-      return readFileTool(rootPath);
+      return readFileTool(rootPath, truncate);
     case "write_file":
       return writeFileTool(rootPath);
     case "search_files":
       return searchFilesTool(rootPath);
     case "terminal":
-      return terminalTool(rootPath);
+      return terminalTool(rootPath, defaultTimeoutMs, maxBufferBytes, truncate);
     case "git_status":
-      return gitStatusTool(rootPath);
+      return gitStatusTool(rootPath, defaultTimeoutMs, truncate);
     case "git_diff":
-      return gitDiffTool(rootPath);
+      return gitDiffTool(rootPath, defaultTimeoutMs, truncate);
   }
 }
 
-function readFileTool(rootPath: string): AgentTool {
+function readFileTool(rootPath: string, truncate: (text: string) => string): AgentTool {
   return {
     label: "Read file",
     name: "read_file",
@@ -106,7 +122,12 @@ function searchFilesTool(rootPath: string): AgentTool {
   };
 }
 
-function terminalTool(rootPath: string): AgentTool {
+function terminalTool(
+  rootPath: string,
+  defaultTimeoutMs: number,
+  maxBufferBytes: number,
+  truncate: (text: string) => string,
+): AgentTool {
   return {
     label: "Run terminal command",
     name: "terminal",
@@ -115,20 +136,20 @@ function terminalTool(rootPath: string): AgentTool {
       {
         command: stringSchema("Shell command to run."),
         workdir: stringSchema("Optional workdir under the root."),
-        timeoutMs: { type: "integer", default: DEFAULT_TIMEOUT_MS },
+        timeoutMs: { type: "integer", default: defaultTimeoutMs },
       },
       ["command"],
     ),
     execute: async (_toolCallId, params) => {
       const cwd = resolveInsideRoot(rootPath, stringParam(params, "workdir", "."));
       const timeout = Math.min(
-        numberParam(params, "timeoutMs", DEFAULT_TIMEOUT_MS),
-        DEFAULT_TIMEOUT_MS,
+        numberParam(params, "timeoutMs", defaultTimeoutMs),
+        defaultTimeoutMs,
       );
       const result = await execFileAsync("bash", ["-lc", stringParam(params, "command")], {
         cwd,
         timeout,
-        maxBuffer: 512_000,
+        maxBuffer: maxBufferBytes,
       });
       const output = [result.stdout, result.stderr].filter((part) => part.length > 0).join("\n");
       return textResult(truncate(output), {
@@ -141,30 +162,45 @@ function terminalTool(rootPath: string): AgentTool {
   };
 }
 
-function gitStatusTool(rootPath: string): AgentTool {
+function gitStatusTool(
+  rootPath: string,
+  defaultTimeoutMs: number,
+  truncate: (text: string) => string,
+): AgentTool {
   return {
     label: "Git status",
     name: "git_status",
     description: "Run git status --short --branch inside the delegated workdir root.",
     parameters: objectSchema({ workdir: stringSchema("Optional workdir under the root.") }, []),
     execute: async (_toolCallId, params) =>
-      runGit(rootPath, params, ["status", "--short", "--branch"]),
+      runGit(rootPath, params, ["status", "--short", "--branch"], defaultTimeoutMs, truncate),
   };
 }
 
-function gitDiffTool(rootPath: string): AgentTool {
+function gitDiffTool(
+  rootPath: string,
+  defaultTimeoutMs: number,
+  truncate: (text: string) => string,
+): AgentTool {
   return {
     label: "Git diff",
     name: "git_diff",
     description: "Run git diff --stat inside the delegated workdir root.",
     parameters: objectSchema({ workdir: stringSchema("Optional workdir under the root.") }, []),
-    execute: async (_toolCallId, params) => runGit(rootPath, params, ["diff", "--stat"]),
+    execute: async (_toolCallId, params) =>
+      runGit(rootPath, params, ["diff", "--stat"], defaultTimeoutMs, truncate),
   };
 }
 
-async function runGit(rootPath: string, params: unknown, args: readonly string[]) {
+async function runGit(
+  rootPath: string,
+  params: unknown,
+  args: readonly string[],
+  defaultTimeoutMs: number,
+  truncate: (text: string) => string,
+) {
   const cwd = resolveInsideRoot(rootPath, stringParam(params, "workdir", "."));
-  const result = await execFileAsync("git", [...args], { cwd, timeout: DEFAULT_TIMEOUT_MS });
+  const result = await execFileAsync("git", [...args], { cwd, timeout: defaultTimeoutMs });
   const output = [result.stdout, result.stderr].filter((part) => part.length > 0).join("\n");
   return textResult(truncate(output), {
     ok: true,
@@ -244,7 +280,3 @@ function textResult(text: string, details: Record<string, unknown>) {
   return { content: [{ type: "text" as const, text }], details };
 }
 
-function truncate(text: string): string {
-  if (text.length <= MAX_OUTPUT_CHARS) return text;
-  return `${text.slice(0, MAX_OUTPUT_CHARS)}… [truncated]`;
-}

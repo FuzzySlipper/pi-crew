@@ -33,6 +33,7 @@ export interface DenPoolMemberReconcilerConfig {
   readonly assignedBy: string;
   readonly members: readonly DenPoolMemberConfig[];
   readonly cleanupGroups?: readonly DenPoolCleanupGroup[];
+  readonly listPageSize?: number;
 }
 
 export interface DegradedPoolMember {
@@ -165,6 +166,7 @@ class McpDenPoolMemberReconciler implements DenPoolMemberReconciler {
         mcpClient: this.#config.mcpClient,
         members: this.#config.members,
         cleanupGroups: this.#config.cleanupGroups ?? [],
+        listPageSize: this.#config.listPageSize,
       });
     } catch (error: unknown) {
       if (error instanceof DenPoolCleanupError) {

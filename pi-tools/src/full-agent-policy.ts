@@ -56,6 +56,9 @@ export interface FullAgentPolicyInput {
   readonly allowedPaths?: string[];
   readonly denyPaths?: string[];
 
+  /** Terminal working directory override. When set, used as rootPath for terminal operations. */
+  readonly terminalWorkdir?: string;
+
   // Tools — fullAgent always denies WORKER_ONLY_TOOLS
   readonly allowedTools?: string[];
   readonly deniedTools?: string[];
@@ -95,7 +98,7 @@ export function createFullAgentPolicy(
 
   return createExecutionPolicy({
     policyId: input.policyId,
-    rootPath: input.rootPath ?? CONVERSATIONAL_ROOT_PATH,
+    rootPath: input.terminalWorkdir ?? input.rootPath ?? CONVERSATIONAL_ROOT_PATH,
     allowedPaths: input.allowedPaths,
     denyPaths: input.denyPaths,
     allowedTools: input.allowedTools,

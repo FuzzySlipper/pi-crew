@@ -12,10 +12,11 @@ export {
   type HealthConfig,
   type LoggingConfig,
   type RuntimeConfig,
+  type WorkersConfig,
+  type DiagnosticsConfig,
 } from "./config.js";
 export { createServiceRegistry, type ServiceRegistry, type CreateRegistryOptions } from "./di.js";
 export {
-  DEFAULT_STREAM_RETRY_CONFIG,
   classifyStreamError,
   retryDelayMs,
   withRetryingStream,
@@ -101,7 +102,6 @@ export { type InstanceFactory, InstanceFactoryImpl } from "./instances/instance-
 export {
   type InstancePool,
   type InstancePoolConfig,
-  DEFAULT_POOL_CONFIG,
   InstancePoolImpl,
 } from "./instances/instance-pool.js";
 

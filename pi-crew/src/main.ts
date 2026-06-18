@@ -84,12 +84,12 @@ interface HealthResponse {
 /**
  * Perform a local health-check smoke request against the gateway.
  */
-async function healthSmoke(host: string, port: number): Promise<boolean> {
+async function healthSmoke(host: string, port: number, timeoutMs: number): Promise<boolean> {
   const url = `http://${host}:${String(port)}/`;
   try {
     const response = await fetch(url, {
       method: "GET",
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
       console.warn(`Health smoke returned HTTP ${String(response.status)} from ${url}`);
@@ -163,9 +163,10 @@ async function startCrew(
   const workerPoolMembers = resolveWorkerPoolMembers(crew.config);
   const reconcileResult = await createDenPoolMemberReconciler({
     mcpClient: crew.mcpClient,
-    assignedBy: "pi-crew",
+    assignedBy: config.agent.identity,
     members: workerPoolMembers,
     cleanupGroups: resolveWorkerPoolCleanupGroups(crew.config),
+    listPageSize: config.workerPool.denListPageSize,
   }).reconcile();
   if (reconcileResult.degraded.length > 0) {
     logger.warn("worker_pool.reconcile_degraded", { degraded: reconcileResult.degraded });
@@ -174,7 +175,7 @@ async function startCrew(
     crew,
     members: workerPoolMembers,
     logger,
-    pollIntervalMs: 2_000,
+    pollIntervalMs: config.assignmentLoopPollIntervalMs,
   });
   assignmentLoops.forEach((loop) => {
     loop.start();
@@ -185,7 +186,7 @@ async function startCrew(
 
   // Local foreground health smoke
   const { host, port } = crew.gateway.healthConfig;
-  const healthy = await healthSmoke(host, port);
+  const healthy = await healthSmoke(host, port, config.healthCheckTimeoutMs);
   if (!healthy) {
     console.warn("Health smoke did not confirm ok status — gateway may still be starting");
   }

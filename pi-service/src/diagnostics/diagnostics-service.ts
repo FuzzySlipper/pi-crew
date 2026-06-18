@@ -27,6 +27,10 @@ export interface DiagnosticsServiceDeps {
   readonly startedAt: string;
   readonly clock?: () => string;
   readonly version?: string;
+  /** Maximum recent events in diagnostics overview. Defaults to 50. */
+  readonly maxRecentEvents?: number;
+  /** Fallback version label when none is provided. Defaults to "development". */
+  readonly versionFallback?: string;
 }
 
 /** Builds read-only diagnostics from local runtime state plus Den readback. */
@@ -47,7 +51,7 @@ export class DiagnosticsService {
       this.#readSessions(),
     ]);
     const runtimeDb = this.#deps.runtimeHealthReader.health();
-    const recentEvents = this.#deps.eventJournal.recent(50);
+    const recentEvents = this.#deps.eventJournal.recent(this.#deps.maxRecentEvents ?? 50);
     const assignments = await this.#readDenAssignments(sessions);
     const projectedSessions = sessions.map((session) =>
       this.#projectSession(session, assignments, recentEvents),
@@ -81,7 +85,7 @@ export class DiagnosticsService {
     return {
       service: {
         status: classification.kind === "healthy" ? "ok" : "degraded",
-        version: this.#deps.version ?? "development",
+        version: this.#deps.version ?? (this.#deps.versionFallback ?? "development"),
         uptimeSeconds: uptimeSeconds(this.#deps.startedAt, this.#clock()),
         startedAt: this.#deps.startedAt,
         drainMode: projectedSessions.some((session) => session.drainState === "active")

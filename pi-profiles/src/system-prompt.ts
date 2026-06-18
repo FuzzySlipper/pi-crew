@@ -12,6 +12,11 @@
 
 import type { Profile } from "./profile.js";
 
+import {
+  DEFAULT_MEMORY_CAP_BYTES,
+  DEFAULT_USER_CAP_BYTES,
+} from "@pi-crew/pi-memory";
+
 // ── Dense memory context ───────────────────────────────────────
 
 /** Dense profile memory context for system prompt injection. */
@@ -211,7 +216,7 @@ export function denseMemoryContextBlock(context?: DenseMemoryContext): string | 
   lines.push("<memory-context>");
 
   if (hasMemory) {
-    const cap = context.memoryCapBytes ?? 2200;
+    const cap = context.memoryCapBytes ?? DEFAULT_MEMORY_CAP_BYTES;
     const used = context.memoryContent!.length;
     lines.push(`[MEMORY.md — used ${used} / ${cap} bytes]`);
     for (const entry of context.memoryContent!.split("\n")) {
@@ -227,7 +232,7 @@ export function denseMemoryContextBlock(context?: DenseMemoryContext): string | 
   }
 
   if (hasUser) {
-    const cap = context.userCapBytes ?? 1375;
+    const cap = context.userCapBytes ?? DEFAULT_USER_CAP_BYTES;
     const used = context.userContent!.length;
     lines.push(`[USER.md — used ${used} / ${cap} bytes]`);
     for (const entry of context.userContent!.split("\n")) {

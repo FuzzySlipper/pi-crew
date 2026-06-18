@@ -46,17 +46,20 @@ export class DefaultCuratorService implements CuratorService {
   readonly #schedule: string;
   readonly #logger: Logger;
   readonly #enabled: boolean;
+  readonly #minTickMs: number;
   #autoTimer: NodeJS.Timeout | null = null;
 
   constructor(
     config: CuratorConfig & { installRoot: string },
     logger: Logger,
+    minTickMs: number = 60_000,
   ) {
     const skillsRoot = join(config.installRoot, "profiles", "skills");
     this.#inner = new ServiceCuratorService(skillsRoot, config, logger);
     this.#schedule = config.cronSchedule;
     this.#logger = logger;
     this.#enabled = config.enabled;
+    this.#minTickMs = minTickMs;
   }
 
   // ── CuratorService implementation ───────────────────────────

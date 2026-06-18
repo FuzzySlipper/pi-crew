@@ -224,10 +224,13 @@ export class Crew {
     });
     this.#denCompletionPoster = createDenCompletionPoster({
       mcpClient: this.#mcpClient,
-      projectId: "pi-crew",
-      requestedBy: "pi-crew",
+      projectId: config.agent.projectId,
+      requestedBy: config.agent.identity,
       logger: this.#logger,
       completionDefaults: completionDefaultsFromEnv(process.env),
+      retryMaxAttempts: config.delegation.completionRetryMaxAttempts,
+      retryBaseDelayMs: config.delegation.completionRetryBaseDelayMs,
+      retryMaxDelayMs: config.delegation.completionRetryMaxDelayMs,
     });
     this.#agentRegistry = new AgentRuntimeRegistry();
     this.#steerFollowUpBridge = new SteerFollowUpBridge(this.#agentRegistry, this.#logger);
@@ -299,8 +302,8 @@ export class Crew {
             instancePool: this.#instancePool,
             evidencePoster: createDenAdminEvidencePoster({
               mcpClient: this.#mcpClient,
-              projectId: "pi-crew",
-              sender: "pi-crew",
+              projectId: config.agent.projectId,
+              sender: config.agent.identity,
               logger: this.#logger,
             }),
             validateConfig: validateGatewayConfig,
@@ -357,7 +360,7 @@ export class Crew {
           projectToolCalledEvents: config.delegation.projection.projectToolCalledEvents,
           breadcrumbRepository: this.#agentWorkBreadcrumbRepository,
           projectId: config.den.channelsProjectId,
-          parentAgentIdentity: "pi-crew",
+          parentAgentIdentity: config.agent.identity,
         }),
         new ParentLifecycleBreadcrumbExtension({
           repository: this.#agentWorkBreadcrumbRepository,
@@ -483,7 +486,7 @@ export class Crew {
         channelId: config.backgroundReview.serviceWorkChannel,
         claimTTLMs: config.backgroundReview.triggerClaimTTLMs,
         enabled: config.backgroundReview.enabled,
-        agentIdentity: "pi-crew",
+        agentIdentity: config.agent.identity,
         pollIntervalMs: config.backgroundReview.pollIntervalMs,
         pollLimit: config.backgroundReview.pollLimit,
         startupDelayMs: config.backgroundReview.startupDelayMs,
@@ -495,10 +498,11 @@ export class Crew {
       const curator = new DefaultCuratorService(
         { ...config.curator, installRoot: config.install.root },
         this.#logger,
+        config.curator.minTickMs,
       );
       this.#cronRepository.upsert({
         id: "curator-maintenance",
-        projectId: "pi-crew",
+        projectId: config.agent.projectId,
         schedule: config.curator.cronSchedule,
         shape: "script_only",
         script: "",

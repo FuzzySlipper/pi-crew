@@ -29,6 +29,10 @@ export interface DenCompletionPosterConfig {
   readonly logger?: Logger;
 
   readonly completionDefaults?: DenCompletionDefaults;
+
+  readonly retryMaxAttempts?: number;
+  readonly retryBaseDelayMs?: number;
+  readonly retryMaxDelayMs?: number;
 }
 
 export interface DenCompletionDefaults {
@@ -68,13 +72,16 @@ const PACKET_TYPE_BY_ROLE: Readonly<Record<string, string>> = {
  */
 export function createDenCompletionPoster(config: DenCompletionPosterConfig): CompletionPoster {
   const { mcpClient, projectId, requestedBy, logger, completionDefaults } = config;
+  const maxRetries = config.retryMaxAttempts ?? MAX_RETRIES;
+  const baseDelayMs = config.retryBaseDelayMs ?? BASE_DELAY_MS;
+  const maxDelayMs = config.retryMaxDelayMs ?? MAX_DELAY_MS;
 
   return async (packet: CompletionPacket): Promise<CompletionPostResult> => {
     const params = buildCompletionParams(packet, projectId, requestedBy, completionDefaults);
 
     let lastError: string | undefined;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const result = await mcpClient.callTool("post_worker_completion_packet", params);
 
@@ -113,8 +120,8 @@ export function createDenCompletionPoster(config: DenCompletionPosterConfig): Co
           attempt,
         });
 
-        if (attempt < MAX_RETRIES) {
-          const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
+        if (attempt < maxRetries) {
+          const delay = Math.min(baseDelayMs * Math.pow(2, attempt), maxDelayMs);
           await sleep(delay);
         }
       }
@@ -125,12 +132,12 @@ export function createDenCompletionPoster(config: DenCompletionPosterConfig): Co
       assignmentId: packet.assignmentId,
       runId: packet.runId,
       lastError,
-      maxRetries: MAX_RETRIES,
+      maxRetries,
     });
 
     return {
       accepted: false,
-      message: `Den unavailable after ${String(MAX_RETRIES + 1)} attempts: ${lastError ?? "unknown error"}`,
+      message: `Den unavailable after ${String(maxRetries + 1)} attempts: ${lastError ?? "unknown error"}`,
     };
   };
 }

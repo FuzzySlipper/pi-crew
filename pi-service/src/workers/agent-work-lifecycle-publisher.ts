@@ -73,6 +73,7 @@ export interface HttpAgentWorkLifecyclePublisherConfig {
   readonly token?: string | null;
   readonly fetchFn?: typeof fetch;
   readonly timeoutMs?: number;
+  readonly lifecyclePath?: string;
   readonly logger?: Logger;
 }
 
@@ -106,6 +107,7 @@ export class HttpAgentWorkLifecyclePublisher implements AgentWorkLifecyclePublis
   readonly #token: string | null;
   readonly #fetchFn: typeof fetch;
   readonly #timeoutMs: number;
+  readonly #lifecyclePath: string;
   readonly #logger: Logger | null;
 
   constructor(config: HttpAgentWorkLifecyclePublisherConfig) {
@@ -113,6 +115,7 @@ export class HttpAgentWorkLifecyclePublisher implements AgentWorkLifecyclePublis
     this.#token = config.token ?? null;
     this.#fetchFn = config.fetchFn ?? globalThis.fetch.bind(globalThis);
     this.#timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.#lifecyclePath = config.lifecyclePath ?? "/api/agent-work/lifecycle-events";
     this.#logger = config.logger ?? null;
   }
 
@@ -120,7 +123,7 @@ export class HttpAgentWorkLifecyclePublisher implements AgentWorkLifecyclePublis
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.#timeoutMs);
     try {
-      const response = await this.#fetchFn(`${this.#baseUrl}/api/agent-work/lifecycle-events`, {
+      const response = await this.#fetchFn(`${this.#baseUrl}${this.#lifecyclePath}`, {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify(toLifecyclePayload(breadcrumb)),

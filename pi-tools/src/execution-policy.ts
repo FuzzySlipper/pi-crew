@@ -63,6 +63,9 @@ export interface ExecutionPolicyInput {
   readonly maxIterations?: number;
   readonly maxTokensPerTurn?: number;
 
+  /** Terminal working directory override. When set, used as rootPath for terminal operations. */
+  readonly terminalWorkdir?: string;
+
   // Credentials
   readonly credentialScope?: CredentialAccessLevel;
 }
@@ -90,7 +93,7 @@ export interface WorkerPolicyInput extends Omit<ExecutionPolicyInput, "policyId"
  * applying sensible defaults for missing fields.
  */
 export function createExecutionPolicy(input: ExecutionPolicyInput): ExecutionPolicy {
-  const rootPath = input.rootPath ?? DEFAULT_ROOT_PATH;
+  const rootPath = input.terminalWorkdir ?? input.rootPath ?? DEFAULT_ROOT_PATH;
   return {
     policyId: input.policyId,
     rootPath,

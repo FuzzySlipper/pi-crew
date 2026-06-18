@@ -29,16 +29,16 @@ export type GroupOwnedPoolMemberSelector = (candidate: GroupOwnedPoolMemberCandi
 export function resolveWorkerPoolMembers(config: CrewConfig): readonly DenPoolMemberConfig[] {
   if (config.workerPool.groups.length === 0) return config.workerPool.members;
 
-  return config.workerPool.groups.flatMap((group) => expandWorkerPoolGroup(config, group));
+  return config.workerPool.groups.flatMap((group) => expandWorkerPoolGroup(group, config.agent.identity, config.install.root));
 }
 
 export function resolveWorkerPoolCleanupGroups(config: CrewConfig): readonly DenPoolCleanupGroup[] {
   return config.workerPool.groups.map((group) => ({
     profileIdentity: group.profileIdentity,
     groupId: group.groupId,
-    owner: ownerLabel(group),
+    owner: ownerLabel(group, config.agent.identity),
     desiredWorkerIdentities: new Set(
-      expandWorkerPoolGroup(config, group).map((member) => member.workerIdentity),
+      expandWorkerPoolGroup(group, config.agent.identity, config.install.root).map((member) => member.workerIdentity),
     ),
   }));
 }
@@ -54,8 +54,9 @@ export function buildGroupOwnedPoolMemberSelector(
 }
 
 function expandWorkerPoolGroup(
-  config: CrewConfig,
   group: WorkerPoolGroupConfig,
+  defaultOwner: string,
+  installRoot: string,
 ): readonly DenPoolMemberConfig[] {
   return Array.from({ length: group.desiredSize }, (_, zeroBasedIndex) => {
     const laneIndex = zeroBasedIndex + 1;
@@ -68,7 +69,7 @@ function expandWorkerPoolGroup(
       capabilities: [...group.capabilities],
       profileId: group.profileId,
       metadata: {
-        install_root: config.install.root,
+        install_root: installRoot,
         profile_id: group.profileId,
         execution_mode: "llmAgent",
         pool_group: group.groupId,
@@ -76,7 +77,7 @@ function expandWorkerPoolGroup(
         desired_size: group.desiredSize,
         lane_index: laneIndex,
         identity_template: group.identityTemplate,
-        owner: ownerLabel(group),
+        owner: ownerLabel(group, defaultOwner),
         labels: group.labels ?? {},
       },
     };
@@ -90,8 +91,8 @@ function displayName(group: WorkerPoolGroupConfig, laneIndex: number): string {
   return `${group.groupId} lane ${String(laneIndex)}`;
 }
 
-function ownerLabel(group: WorkerPoolGroupConfig): string {
-  return group.labels?.["owner"] ?? "pi-crew";
+function ownerLabel(group: WorkerPoolGroupConfig, defaultOwner: string = "pi-crew"): string {
+  return group.labels?.["owner"] ?? defaultOwner;
 }
 
 function parseMetadata(metadata: string | null | undefined): Record<string, unknown> | undefined {

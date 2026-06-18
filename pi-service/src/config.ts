@@ -19,6 +19,8 @@ const DatabaseConfigSchema = z.object({
   path: z.string().min(1, "database.path must not be empty").default("/var/lib/pi-crew/runtime.db"),
   /** Enable WAL mode for read concurrency. */
   wal: z.boolean().default(true),
+  /** SQLite busy timeout in milliseconds. */
+  busyTimeoutMs: z.number().int().positive().default(5000),
 });
 
 const ChannelsUrlSchema = z
@@ -42,7 +44,9 @@ const ChannelsUrlSchema = z
 
 const DenConfigSchema = z.object({
   /** REST API base URL for Den Core (e.g. "http://den-srv:3030"). */
-  coreUrl: z.string().url("den.coreUrl must be a valid URL"),
+  coreUrl: z.string().url("den.coreUrl must be a valid URL").default("http://den-srv:3030"),
+  /** Timeout in milliseconds for the Den startup reachability check. */
+  startupCheckTimeoutMs: z.number().int().positive().default(5_000),
   /**
    * Den Channels Gateway WebSocket URL for live channel participation
    * (e.g. "ws://den-k8plus:4201"). An empty or missing value disables
@@ -169,6 +173,28 @@ const RuntimeConfigSchema = z
     responseMode: RuntimeResponseModeSchema.default("echo"),
     /** Required settings for deterministic tool-backed smoke mode. */
     deterministicTool: DeterministicToolConfigSchema.default({}),
+    /** Stream retry configuration for model calls. */
+    streamRetry: z
+      .object({
+        enabled: z.boolean().default(true),
+        maxAttempts: z.number().int().positive().default(3),
+        baseDelayMs: z.number().int().nonnegative().default(500),
+        maxDelayMs: z.number().int().nonnegative().default(5_000),
+        jitterRatio: z.number().min(0).max(1).default(0.2),
+        retryableHttpStatuses: z.array(z.number().int()).default([408, 429, 502, 503, 504]),
+      })
+      .default({}),
+    /** Default model metadata for LLM-backed delegated children. */
+    modelDefaults: z
+      .object({
+        fallbackModelId: z.string().default("delegated-child"),
+        contextWindow: z.number().int().positive().default(131_072),
+        maxTokens: z.number().int().positive().default(2048),
+        thinkingFormat: z
+          .enum(["ant-ling", "openai", "deepseek", "openrouter", "zai", "together", "qwen", "qwen-chat-template", "string-thinking"])
+          .default("qwen"),
+      })
+      .default({}),
   })
   .default({})
   .superRefine((value, context) => {
@@ -185,6 +211,57 @@ const RuntimeConfigSchema = z
     }
   });
 
+/** Session-level configuration. */
+const SessionsConfigSchema = z
+  .object({
+    /** Conversational full-agent turn timeout in milliseconds. */
+    conversationalTurnTimeoutMs: z.number().int().positive().default(300_000),
+    /** Maximum instances allowed per profile. */
+    maxPerProfile: z.number().int().positive().default(4),
+    /** Maximum total instances across all profiles. */
+    maxTotal: z.number().int().positive().default(16),
+    /** Idle timeout in milliseconds before an instance is eligible for eviction. */
+    idleTimeoutMs: z.number().int().positive().default(8 * 60 * 60 * 1000),
+  })
+  .default({});
+
+/** Worker-level configuration. */
+const WorkersConfigSchema = z
+  .object({
+    /** Default assignment duration timeout in milliseconds (30 minutes). */
+    defaultAssignmentTimeoutMs: z.number().int().positive().default(30 * 60 * 1000),
+    /** Default per-turn timeout in milliseconds (5 minutes). */
+    defaultTurnTimeoutMs: z.number().int().positive().default(5 * 60 * 1000),
+    /** Limits for delegated helper tools. */
+    helperLimits: z
+      .object({
+        /** Maximum safe excerpt characters for truncation. */
+        maxSafeExcerptChars: z.number().int().positive().default(1_600),
+      })
+      .default({}),
+  })
+  .default({});
+
+/** Agent-work lifecycle publishing configuration. */
+const AgentWorkConfigSchema = z
+  .object({
+    /** Timeout in milliseconds for lifecycle event HTTP publishes. */
+    lifecyclePublishTimeoutMs: z.number().int().positive().default(5_000),
+    /** URL path for lifecycle event publishing. */
+    lifecyclePath: z.string().default("/api/agent-work/lifecycle-events"),
+  })
+  .default({});
+
+/** Diagnostics configuration. */
+const DiagnosticsConfigSchema = z
+  .object({
+    /** Maximum number of recent events to include in diagnostics projection. */
+    maxRecentEvents: z.number().int().positive().default(50),
+    /** Fallback version label when none is provided. */
+    versionFallback: z.string().default("development"),
+  })
+  .default({});
+
 export const GatewayConfigSchema = z.object({
   admin: AdminConfigSchema,
   database: DatabaseConfigSchema.default({}),
@@ -192,6 +269,10 @@ export const GatewayConfigSchema = z.object({
   health: HealthConfigSchema.default({}),
   logging: LoggingConfigSchema.default({}),
   runtime: RuntimeConfigSchema,
+  sessions: SessionsConfigSchema,
+  workers: WorkersConfigSchema,
+  agentWork: AgentWorkConfigSchema,
+  diagnostics: DiagnosticsConfigSchema,
 });
 
 // ── Inferred types ──────────────────────────────────────────────
@@ -216,6 +297,18 @@ export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 
 /** Runtime responder/provider sub-config. */
 export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;
+
+/** Sessions sub-config. */
+export type SessionsConfig = z.infer<typeof SessionsConfigSchema>;
+
+/** Workers sub-config. */
+export type WorkersConfig = z.infer<typeof WorkersConfigSchema>;
+
+/** Agent-work lifecycle publishing sub-config. */
+export type AgentWorkConfig = z.infer<typeof AgentWorkConfigSchema>;
+
+/** Diagnostics sub-config. */
+export type DiagnosticsConfig = z.infer<typeof DiagnosticsConfigSchema>;
 
 // ── Loader ──────────────────────────────────────────────────────
 
