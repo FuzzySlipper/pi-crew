@@ -143,10 +143,10 @@ class StaticFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
       { ...runtime, tools },
       this.logger,
       this.eventBus,
+      this.input.crewContext,
       this.input.history,
       this.input.agentFactory,
       toolsProvider,
-      this.input.crewContext,
       this.input.streamRetry,
     );
   }
@@ -180,10 +180,10 @@ class ProfileMappedFullAgentRuntimeBuilder implements FullAgentRuntimeBuilder {
       { ...runtime, tools },
       this.input.logger,
       this.input.eventBus,
+      this.input.crewContext,
       this.input.history,
       this.input.agentFactory,
       toolsProvider,
-      this.input.crewContext,
       this.input.streamRetry,
     );
   }

@@ -217,20 +217,29 @@ export class DenHttpDirectAgentConnection implements DenConnection {
           "Registered subscription was not discoverable in channel-subscriptions readback",
         );
       }
-      const cursors = await this.#subscriptionClient.listSubscriptionCursors(
-        this.#activeSubscription.subscriptionId,
-        this.#pollState.controller.signal,
-      );
-      const cursor = readSubscriptionMessageCursor(cursors);
-      if (cursor !== null) {
-        this.#lastCursor = cursor;
-        await this.#persistCursor();
+      // Cursor readback is advisory — WARN on failure, do not block startup.
+      // The Den backend may not expose the list-subscription-cursors endpoint.
+      try {
+        const cursors = await this.#subscriptionClient.listSubscriptionCursors(
+          this.#activeSubscription.subscriptionId,
+          this.#pollState.controller.signal,
+        );
+        const cursor = readSubscriptionMessageCursor(cursors);
+        if (cursor !== null) {
+          this.#lastCursor = cursor;
+          await this.#persistCursor();
+        }
+        this.#logger.info("Den HTTP subscription cursor ready", {
+          subscriptionId: this.#activeSubscription.subscriptionId,
+          channelId: this.#activeSubscription.channelId,
+          cursor: this.#lastCursor,
+        });
+      } catch (cursorErr: unknown) {
+        this.#logger.warn(
+          "Subscription cursor readback failed (advisory — continuing)",
+          { error: errorMessage(cursorErr) },
+        );
       }
-      this.#logger.info("Den HTTP subscription cursor ready", {
-        subscriptionId: this.#activeSubscription.subscriptionId,
-        channelId: this.#activeSubscription.channelId,
-        cursor: this.#lastCursor,
-      });
     } catch (err: unknown) {
       if (!this.#config.allowLegacyDirectPolling) throw err;
       this.#activeSubscription = null;
@@ -268,7 +277,15 @@ export class DenHttpDirectAgentConnection implements DenConnection {
         if (this.#shouldProcessEvent(item)) {
           await this.#handleEvent(item);
         }
-        await this.#advanceCursor(item);
+        // Cursor advance is advisory — WARN on failure, don't crash the poll.
+        try {
+          await this.#advanceCursor(item);
+        } catch (cursorErr: unknown) {
+          this.#logger.warn(
+            "Failed to advance subscription cursor (advisory — continuing)",
+            { cursor: item.id, error: errorMessage(cursorErr) },
+          );
+        }
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
