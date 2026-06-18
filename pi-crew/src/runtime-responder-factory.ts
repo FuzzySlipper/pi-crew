@@ -50,10 +50,11 @@ export function buildRuntimeResponderFactory(
           "FullAgent Agent runtime assembly requires logger and MCP surface manager",
         );
       }
-      const profilesRoot = resolveCrewInstallLayout(runtime).profilesRoot;
+      const { root: installRoot, profilesRoot } = resolveCrewInstallLayout(runtime);
       return buildFullAgentResponderFactoryForAgents({
         agents,
         profilesRoot,
+        installRoot,
         mcpSurfaceManager,
         logger,
         eventBus,

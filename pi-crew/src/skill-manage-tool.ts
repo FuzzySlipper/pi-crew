@@ -10,7 +10,7 @@
  */
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { parseSkillFrontmatter } from "@pi-crew/core";
 
@@ -311,7 +311,7 @@ async function handleWriteFile(
   }
 
   // Ensure parent directory exists
-  await mkdir(new URL(".", new URL(absPath, "file://")).pathname, { recursive: true });
+  await mkdir(dirname(absPath), { recursive: true });
   await writeFile(absPath, fileContent, "utf-8");
 
   return simpleResult(`Wrote "${filePath}" for skill "${name}"`, {

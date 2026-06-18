@@ -60,6 +60,7 @@ export interface ResolvedFullAgentRuntime {
 export interface ResolveFullAgentRuntimeInput {
   readonly agent: CrewConfig["fullAgents"][number];
   readonly profilesRoot?: string;
+  readonly installRoot?: string;
   readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -92,6 +93,7 @@ export interface BuildFullAgentResponderFactoryInput extends ResolveFullAgentRun
 export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["fullAgents"][number][];
   readonly profilesRoot?: string;
+  readonly installRoot?: string;
   readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
   readonly eventBus: EventBus;
@@ -219,7 +221,7 @@ export function resolveFullAgentRuntime(
   const surface = input.mcpSurfaceManager.surfaceForProfile(profile);
   const model = resolveModelConfig(input.agent, profile, input.env ?? process.env);
   const executionPolicy = buildFullAgentExecutionPolicy(input.agent, profile);
-  const skillsRoot = input.profilesRoot ? join(input.profilesRoot, "skills") : undefined;
+  const skillsRoot = input.installRoot ? join(input.installRoot, "skills") : undefined;
   const tools = selectFullAgentTools({
     allow: input.agent.runtime.tools.allow,
     profileToolPolicy: profile.toolPolicy,
