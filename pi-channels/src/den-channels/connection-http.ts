@@ -217,20 +217,28 @@ export class DenHttpDirectAgentConnection implements DenConnection {
           "Registered subscription was not discoverable in channel-subscriptions readback",
         );
       }
-      const cursors = await this.#subscriptionClient.listSubscriptionCursors(
-        this.#activeSubscription.subscriptionId,
-        this.#pollState.controller.signal,
-      );
-      const cursor = readSubscriptionMessageCursor(cursors);
-      if (cursor !== null) {
-        this.#lastCursor = cursor;
-        await this.#persistCursor();
+      // DESIGN: Cursor readback is optional — some Den backends don't
+      // support it. If it fails, fall through with the persisted cursor.
+      try {
+        const cursors = await this.#subscriptionClient.listSubscriptionCursors(
+          this.#activeSubscription.subscriptionId,
+          this.#pollState.controller.signal,
+        );
+        const cursor = readSubscriptionMessageCursor(cursors);
+        if (cursor !== null) {
+          this.#lastCursor = cursor;
+          await this.#persistCursor();
+        }
+        this.#logger.info("Den HTTP subscription cursor ready", {
+          subscriptionId: this.#activeSubscription.subscriptionId,
+          channelId: this.#activeSubscription.channelId,
+          cursor: this.#lastCursor,
+        });
+      } catch {
+        this.#logger.warn("Subscription cursor readback unavailable; continuing with persisted cursor", {
+          subscriptionId: this.#activeSubscription.subscriptionId,
+        });
       }
-      this.#logger.info("Den HTTP subscription cursor ready", {
-        subscriptionId: this.#activeSubscription.subscriptionId,
-        channelId: this.#activeSubscription.channelId,
-        cursor: this.#lastCursor,
-      });
     } catch (err: unknown) {
       if (!this.#config.allowLegacyDirectPolling) throw err;
       this.#activeSubscription = null;
