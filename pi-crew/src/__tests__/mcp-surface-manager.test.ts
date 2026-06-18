@@ -81,13 +81,13 @@ describe("MCP profile surfaces", () => {
 });
 
 describe("tool selection naming", () => {
-  it("keeps Den write tools out of the safe den category", () => {
+  it("includes all mcp_den-prefixed tools in the den set (tool profile controls write access, not pi-crew)", () => {
     const registry = new ToolRegistry(new FakeLogger());
     registry.setMcpTools([
-      { name: "get_task", description: "read", inputSchema: { type: "object" } },
-      { name: "send_message", description: "write", inputSchema: { type: "object" } },
-      { name: "update_task", description: "write", inputSchema: { type: "object" } },
+      { name: "mcp_den_get_task", description: "read", inputSchema: { type: "object" } },
+      { name: "mcp_den_send_message", description: "write", inputSchema: { type: "object" } },
+      { name: "mcp_den_update_task", description: "write", inputSchema: { type: "object" } },
     ]);
-    expect(selectToolsBeforeSessionPolicy({ tools: registry.listTools(), requestedSets: ["den"], profileToolPolicy: { mode: "allow_all" } }).map((tool) => tool.name)).toEqual(["get_task"]);
+    expect(selectToolsBeforeSessionPolicy({ tools: registry.listTools(), requestedSets: ["den"], profileToolPolicy: { mode: "allow_all" } }).map((tool) => tool.name).sort()).toEqual(["mcp_den_get_task", "mcp_den_send_message", "mcp_den_update_task"]);
   });
 });

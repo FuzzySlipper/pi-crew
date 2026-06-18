@@ -70,7 +70,7 @@ export function toolMatchesSelectedSet(toolName: string, toolSet: string): boole
   const normalized = toolName.toLowerCase();
   const normalizedSet = toolSet.toLowerCase();
   if (normalizedSet === "all") return true;
-  if (normalizedSet === "den") return SAFE_DEN_TOOL_NAMES.has(stripMcpPrefix(normalized));
+  if (normalizedSet === "den") return normalized.startsWith("mcp_den_");
   if (TOOL_SET_MEMBERS[normalizedSet]?.has(normalized) === true) return true;
   return normalized === normalizedSet || normalized.startsWith(`${normalizedSet}_`);
 }
@@ -97,24 +97,3 @@ const TOOL_SET_MEMBERS: Readonly<Record<string, ReadonlySet<string>>> = {
   memory: new Set(["den_memory_recall", "den_memory_read", "den_memory_search", "den_memory_store", "den_memory_propose", "dense_profile_memory"]),
   delegation: new Set(["spawn_subagent", "fan_out_subagents", "scout_codebase", "summarize_files", "find_relevant_paths"]),
 };
-
-export const SAFE_DEN_TOOL_NAMES = new Set([
-  "get_task",
-  "get_thread",
-  "get_messages",
-  "get_latest_task_packet",
-  "get_task_workflow_summary",
-  "get_document",
-  "search_documents",
-  "query_librarian",
-  "list_review_findings",
-  "list_review_rounds",
-  "den_channels_read_recent",
-  "channels_read_recent",
-]);
-
-function stripMcpPrefix(toolName: string): string {
-  if (toolName.startsWith("mcp_den_")) return toolName.slice("mcp_den_".length);
-  if (toolName.startsWith("den_")) return toolName.slice("den_".length);
-  return toolName;
-}

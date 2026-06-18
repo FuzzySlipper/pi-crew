@@ -210,7 +210,7 @@ describe("fullAgent delegation wiring", () => {
             model: "local-model",
             baseUrl: "http://127.0.0.1:11434/v1",
             systemPromptSource: "profile",
-            tools: { allow: ["den"] },
+            tools: { allow: ["den_channels_read_recent"] },
             toolPolicy: { mode: "profile" },
           },
           lifecycle: { turnTimeoutMs: 300000 },

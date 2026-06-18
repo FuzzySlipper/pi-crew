@@ -120,7 +120,7 @@ describe("createProfileBackedDelegatedChildRuntimeResolver", () => {
     writeFileSync(join(profilesRoot, "coder-worker", "soul.md"), "Coder prompt.");
 
     const registry = new ToolRegistry(new FakeLogger());
-    registry.setMcpTools([mcpTool("get_task"), mcpTool("search_documents")]);
+    registry.setMcpTools([mcpTool("mcp_den_get_task"), mcpTool("mcp_den_search_documents")]);
     const toolProvider = new CapturingToolProvider();
     const resolver = createProfileBackedDelegatedChildRuntimeResolver({
       profilesRoot,
@@ -141,8 +141,8 @@ describe("createProfileBackedDelegatedChildRuntimeResolver", () => {
     });
 
     expect(toolProvider.resolvedNames).toEqual([
-      "get_task",
-      "search_documents",
+      "mcp_den_get_task",
+      "mcp_den_search_documents",
       "read_file",
       "write_file",
       "search_files",
