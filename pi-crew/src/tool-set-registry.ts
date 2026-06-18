@@ -5,65 +5,55 @@
  * `toolMatchesSelectedSet` and `TOOL_SET_MEMBERS` so all call
  * sites agree on which tools belong to which sets.
  *
+ * The source of truth for set membership is the catalog
+ * (`local-tool-catalog.ts`). This registry derives its membership
+ * table from the catalog's `toolsets` field and adds the additional
+ * sets (`filesystem`, `filesystem_readonly`, `local`, `terminal`,
+ * `git`, `git_diff_log`, `skills`, `helper`) that the catalog's
+ * `category` enum doesn't cover.
+ *
  * @module pi-crew/tool-set-registry
  */
+
+import { buildToolSetRegistry } from "./local-tool-catalog.js";
 
 // ── Set membership table ────────────────────────────────────────
 
 /**
- * Defines which exact tool names belong to each named set.
+ * Build the combined set-membership table.
  *
- * A tool matches a set if:
- * 1. Its exact name is listed here, OR
- * 2. Its name matches the fallback rule (exact match or `setName_` prefix).
- *
- * The fallback rule handles MCP tools (`den_*`, `mcp_den_*`) and any
- * tool names that don't warrant an explicit entry in this table.
+ * Starts with the catalog-derived membership (each tool declares
+ * which sets it belongs to via `toolsets`) and adds the coarse-grained
+ * aggregator sets (`local`, `filesystem`, `filesystem_readonly`,
+ * `git_diff_log`) that group multiple catalog sets.
  */
-const TOOL_SET_MEMBERS: Readonly<Record<string, ReadonlySet<string>>> = {
-  filesystem: new Set(["read_file", "write_file", "search_files"]),
-  filesystem_readonly: new Set(["read_file", "search_files"]),
-  local: new Set(["read_file", "write_file", "search_files", "terminal", "git_status", "git_diff"]),
-  terminal: new Set(["terminal"]),
-  git: new Set(["git_status", "git_diff"]),
-  git_diff_log: new Set(["git_status", "git_diff"]),
-  planning: new Set(["todo"]),
-  session: new Set(["session_search"]),
-  web: new Set(["web_search", "web_extract"]),
-  browser: new Set([
-    "browser_navigate",
-    "browser_snapshot",
-    "browser_click",
-    "browser_type",
-    "browser_vision",
-    "browser_console",
-    "browser_scroll",
-    "browser_back",
-    "browser_press",
-  ]),
-  memory: new Set([
-    "den_memory_recall",
-    "den_memory_read",
-    "den_memory_search",
-    "den_memory_store",
-    "den_memory_propose",
-    "dense_profile_memory",
-  ]),
-  delegation: new Set([
-    "spawn_subagent",
-    "fan_out_subagents",
-    "scout_codebase",
-    "summarize_files",
-    "find_relevant_paths",
-  ]),
-  // skills set was missing from TOOL_SET_MEMBERS — tools were in the catalog
-  // with category "skills" but the set had no members, causing silent filtering.
-  skills: new Set(["skills_list", "skill_view", "skill_manage"]),
-  // helper tools — available via concrete name or the "helper" set
-  helper: new Set(["counter_reset", "curator_execute", "scout_codebase", "summarize_files", "find_relevant_paths"]),
-  // den_channels_read_recent is accessed via the channel-readback path
-  // and matched by the default rule (exact name match).
-};
+function buildCombinedSetRegistry(): Readonly<Record<string, ReadonlySet<string>>> {
+  const catalogSets = buildToolSetRegistry();
+
+  // Add aggregator sets that group catalog-level categories
+  const localTools = [
+    ...(catalogSets["filesystem"] ?? []),
+    ...(catalogSets["terminal"] ?? []),
+    ...(catalogSets["git"] ?? []),
+  ];
+  const fsTools = catalogSets["filesystem"] ?? [];
+  const gitTools = catalogSets["git"] ?? [];
+
+  return {
+    ...catalogSets,
+    local: new Set(localTools),
+    filesystem: new Set(fsTools),
+    filesystem_readonly: new Set([...fsTools].filter((t) => t === "read_file" || t === "search_files")),
+    git: new Set(gitTools),
+    git_diff_log: new Set(gitTools),
+    // helper and skills are already in catalogSets from their toolsets
+    // but ensure they exist
+    helper: new Set([...(catalogSets["helper"] ?? [])]),
+    skills: new Set([...(catalogSets["skills"] ?? [])]),
+  };
+}
+
+const TOOL_SET_MEMBERS = buildCombinedSetRegistry();
 
 export const LOCAL_TOOL_SET_NAMES = new Set(Object.keys(TOOL_SET_MEMBERS));
 
@@ -135,18 +125,15 @@ export function resolveToolPolicyToToolNames(
     const allowSetNames = policy.allow ?? [];
     const allowedTools = new Set<string>();
     for (const setName of allowSetNames) {
-      // Add explicit members from TOOL_SET_MEMBERS
       const members = TOOL_SET_MEMBERS[setName.toLowerCase()];
       if (members !== undefined) {
         for (const tool of members) allowedTools.add(tool);
       }
-      // Also add the bare name (handles concrete tool names and MCP prefix matches)
       allowedTools.add(setName);
     }
     return { allowedTools: [...allowedTools], deniedTools: [] };
   }
 
-  // deny_list mode
   const denySetNames = policy.deny ?? [];
   const deniedTools = new Set<string>();
   for (const setName of denySetNames) {

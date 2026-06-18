@@ -95,7 +95,7 @@ function buildBuiltInInventory(
 ): readonly BuiltInToolInventoryEntry[] {
   return BUILT_IN_TOOLS.map((tool) => {
     const requested = requestedSets.some(
-      (set) => set === "all" || set === tool.name || set === tool.category,
+      (set) => set === "all" || set === tool.name || (Array.isArray(tool.toolsets) && tool.toolsets.includes(set)),
     );
     const permitted = toolAllowedByProfilePolicy(tool.name, profile.toolPolicy);
     const selected = selectedNames.has(tool.name) || (requested && permitted);

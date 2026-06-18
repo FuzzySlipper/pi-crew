@@ -19,7 +19,7 @@ class McpDelegatedChildToolProvider implements ToolProvider {
   constructor(private readonly deps: DelegatedChildToolProviderDeps) {}
 
   resolveTools(toolNames: readonly string[]): AgentTool[] {
-    const requested = expandToolNames(toolNames);
+    const requested = expandToolNames(toolNames, this.deps.toolRegistry);
     const unique = [...new Set(requested)];
     const localTools = createLocalCodeTools().filter((tool) => unique.includes(tool.name));
     const mcpTools = this.deps.toolRegistry
@@ -51,11 +51,13 @@ class McpDelegatedChildToolProvider implements ToolProvider {
   }
 }
 
-function expandToolNames(toolNames: readonly string[]): string[] {
+function expandToolNames(toolNames: readonly string[], registry?: McpToolRegistry): string[] {
   const expanded: string[] = [];
   for (const name of toolNames) {
     if (name === "den") {
-      expanded.push(...safeDenToolNames);
+      // Derive "den" tools dynamically from the registry if available;
+      // fall back to the known safe set for backward compatibility.
+      expanded.push(...(registry !== undefined ? denToolsFromRegistry(registry) : safeDenToolNames));
       continue;
     }
     if (name === "delegation") continue;
@@ -105,3 +107,37 @@ const safeDenToolNames = [
 ];
 
 export const delegatedChildLocalToolNames = localCodeToolNames;
+
+/**
+ * Derive the set of "den" tools from the connected MCP tool registry.
+ *
+ * Returns tools whose name starts with `mcp_den_` or `den_`, plus any
+ * tool that isn't a known local/runtime tool (catch-all for "den MCP").
+ *
+ * Relies on the registry being populated from the MCP server's
+ * `list_tools` response. Falls back to {@link safeDenToolNames} when
+ * the registry is empty (e.g. MCP not connected yet).
+ */
+function denToolsFromRegistry(registry: McpToolRegistry): string[] {
+  const tools = registry.listTools();
+  if (tools.length === 0) return [...safeDenToolNames];
+
+  const LOCAL_SURFACE_TOOLS = new Set([
+    "read_file",
+    "write_file",
+    "search_files",
+    "terminal",
+    "git_status",
+    "git_diff",
+    "todo",
+    "session_search",
+    "web_search",
+    "web_extract",
+    ...safeDenToolNames,
+    ...localCodeToolNames,
+  ]);
+
+  return tools
+    .filter((tool) => !LOCAL_SURFACE_TOOLS.has(tool.name))
+    .map((tool) => tool.name);
+}

@@ -42,7 +42,7 @@ function schemaWithDefaultedDenArgsOptional(
   toolName: string,
   schema: AgentTool["parameters"],
 ): AgentTool["parameters"] {
-  if (!isDenWriteTool(toolName) || !isRecord(schema)) return schema;
+  if (!isDenWriteTool(toolName, schema) || !isRecord(schema)) return schema;
   const required = schema["required"];
   if (!Array.isArray(required)) return schema;
   return {
@@ -65,7 +65,21 @@ function withDefaultDenArgs(
   return normalized;
 }
 
-function isDenWriteTool(toolName: string): boolean {
+function isDenWriteTool(toolName: string, parameters?: AgentTool["parameters"]): boolean {
+  // DESIGN: Dynamic detection via schema fields.
+  // Instead of maintaining a hardcoded list of Den write tool names, detect
+  // them by checking whether the tool's input schema includes `sender` and
+  // `project_id` — the fields that Den write tools require for default injection.
+  // Rationale: new Den write tools automatically get defaults without code changes.
+  if (parameters !== undefined && isRecord(parameters)) {
+    const props = parameters.properties as Record<string, unknown> | undefined;
+    if (props !== undefined) {
+      const hasSender = typeof props["sender"] === "object" && props["sender"] !== null;
+      const hasProjectId = typeof props["projectId"] === "object" && props["projectId"] !== null;
+      if (hasSender || hasProjectId) return true;
+    }
+  }
+  // Fallback: legacy hardcoded list for tools whose schema doesn't expose these fields.
   const normalized = stripMcpPrefix(toolName.toLowerCase());
   return (
     normalized === "send_message" ||

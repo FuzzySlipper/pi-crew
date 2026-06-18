@@ -130,6 +130,7 @@ const InstallConfigSchema = z.object({
 const ProfilesConfigSchema = z
   .object({
     root: z.string().min(1).optional(),
+    skillsRoot: z.string().min(1).optional(),
   })
   .default({});
 
@@ -247,6 +248,7 @@ const DelegationConfigSchema = z
     llmApiKey: z.string().optional(),
     llmModelName: z.string().optional(),
     projection: DelegationProjectionConfigSchema.default({}),
+    maxSpawnDepth: z.number().int().positive().default(1),
   })
   .default({});
 

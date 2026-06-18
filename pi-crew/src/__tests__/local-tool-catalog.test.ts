@@ -153,7 +153,7 @@ describe("local tool catalog", () => {
     expect(inventory.builtInTools.map((tool) => tool.name)).toEqual(localModelCallableToolNames());
     expect(
       inventory.builtInTools.every(
-        (tool) => tool.implementedIn.length > 0 && tool.policyGate.length > 0,
+        (tool) => tool.implementedIn.length > 0 && tool.toolsets.length > 0,
       ),
     ).toBe(true);
   });

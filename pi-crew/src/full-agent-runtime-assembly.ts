@@ -64,6 +64,7 @@ export interface ResolveFullAgentRuntimeInput {
   readonly agent: CrewConfig["fullAgents"][number];
   readonly profilesRoot?: string;
   readonly installRoot?: string;
+  readonly skillsRoot?: string;
   readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -97,6 +98,7 @@ export interface BuildFullAgentResponderFactoryForAgentsInput {
   readonly agents: readonly CrewConfig["fullAgents"][number][];
   readonly profilesRoot?: string;
   readonly installRoot?: string;
+  readonly skillsRoot?: string;
   readonly mcpSurfaceManager: McpSurfaceManager;
   readonly logger: Logger;
   readonly eventBus: EventBus;
@@ -224,7 +226,7 @@ export function resolveFullAgentRuntime(
   const surface = input.mcpSurfaceManager.surfaceForProfile(profile);
   const model = resolveModelConfig(input.agent, profile, input.env ?? process.env);
   const executionPolicy = buildFullAgentExecutionPolicy(input.agent, profile);
-  const skillsRoot = input.installRoot ? join(input.installRoot, "skills") : undefined;
+  const skillsRoot = input.skillsRoot ?? (input.installRoot ? join(input.installRoot, "skills") : undefined);
   const tools = selectFullAgentTools({
     allow: input.agent.runtime.tools.additionalAllow,
     profileToolPolicy: profile.toolPolicy,
@@ -471,11 +473,6 @@ function resolveModelConfig(
   if (provider === undefined || modelName === undefined) {
     throw new ConfigurationError(
       `Full agent "${agent.agentId}" requires a resolved runtime provider and model`,
-    );
-  }
-  if (profile.toolPolicy === undefined) {
-    throw new ConfigurationError(
-      `Full agent "${agent.agentId}" requires profile toolPolicy when runtime.toolPolicy.mode is profile`,
     );
   }
   const apiKey = resolveApiKey(agent.runtime.apiKeyEnv ?? profile.modelConfig?.apiKeyEnv, env);
