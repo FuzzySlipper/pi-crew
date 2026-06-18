@@ -9,9 +9,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FakeEventBus, FakeLogger } from "@pi-crew/core";
 import { ServiceWorkConsumer } from "../service-work-consumer.js";
 import type { ChannelProvider } from "@pi-crew/core";
-import type { BackgroundReviewStarted } from "../service-work-consumer.js";
+import type { ServiceWorkConsumerOptions } from "../service-work-consumer.js";
 
 // ── Helpers ────────────────────────────────────────────────────
+
+/** All-required defaults for tests — mirrors BackgroundReviewConfig defaults. */
+function defaultOptions(overrides?: Partial<ServiceWorkConsumerOptions>): ServiceWorkConsumerOptions {
+  return {
+    baseUrl: "http://test:8080",
+    channelId: "7276",
+    claimTTLMs: 60_000,
+    enabled: true,
+    agentIdentity: "test-agent",
+    pollIntervalMs: 15_000,
+    pollLimit: 20,
+    startupDelayMs: 2_000,
+    ...overrides,
+  };
+}
 
 function createFakeChannelProvider(): ChannelProvider & { sentMessages: Array<{ channelId: string; text: string }> } {
   const sentMessages: Array<{ channelId: string; text: string }> = [];
@@ -54,49 +69,59 @@ describe("ServiceWorkConsumer", () => {
   // ── Lifecycle ──────────────────────────────────────────────
 
   it("starts and logs when enabled", () => {
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, {
-      enabled: true,
-      channelId: "7276",
-      baseUrl: "http://test:8080",
-    });
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions());
 
     consumer.start();
     expect(logger.entries.some((e) => e.message === "ServiceWorkConsumer starting")).toBe(true);
   });
 
   it("skips start when disabled", () => {
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, {
-      enabled: false,
-      channelId: "7276",
-    });
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({ enabled: false }));
 
     consumer.start();
     expect(logger.entries.some((e) => e.message === "ServiceWorkConsumer disabled — skipping start")).toBe(true);
   });
 
   it("stops cleanly", () => {
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, { enabled: true, channelId: "test" });
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions());
     consumer.start();
     consumer.stop();
     expect(logger.entries.some((e) => e.message === "ServiceWorkConsumer stopped")).toBe(true);
   });
 
   it("is idempotent — starting twice logs once", () => {
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, { enabled: true, channelId: "test" });
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions());
     consumer.start();
     consumer.start(); // second start should be no-op
     const starts = logger.entries.filter((e) => e.message === "ServiceWorkConsumer starting");
     expect(starts).toHaveLength(1);
   });
 
+  // ── Config threading ───────────────────────────────────────
+
+  it("uses configured pollIntervalMs in start log", () => {
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({ pollIntervalMs: 5_000 }));
+    consumer.start();
+    const startLog = logger.entries.find((e) => e.message === "ServiceWorkConsumer starting");
+    expect(startLog).toBeDefined();
+    expect(startLog?.context).toMatchObject({ pollIntervalMs: 5_000 });
+  });
+
+  it("uses configured channelId in start log", () => {
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({ channelId: "custom-channel" }));
+    consumer.start();
+    const startLog = logger.entries.find((e) => e.message === "ServiceWorkConsumer starting");
+    expect(startLog).toBeDefined();
+    expect(startLog?.context).toMatchObject({ channelId: "custom-channel" });
+  });
+
   // ── Sends messages via channel provider ─────────────────────
 
   it("creates consumer without crashes when enabled=false and no fetch happens", () => {
-    // Should never call fetch, never log warnings
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, {
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({
       enabled: false,
       channelId: "service-work",
-    });
+    }));
 
     consumer.start();
     expect(channelProvider.sentMessages).toHaveLength(0);
@@ -106,33 +131,26 @@ describe("ServiceWorkConsumer", () => {
   // ── Events ──────────────────────────────────────────────────
 
   it("emits service_work events when the consumer is wired to the bus", () => {
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, {
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({
       enabled: false,
       channelId: "service-work",
-    });
+    }));
 
-    // The consumer registers EventBus listeners during start
     consumer.start();
-
-    // Simulate what happens when a claim is posted
-    // (the channel provider's sendMessage call inside #claimTrigger emits the event)
-    // Since we can't trigger the full pipeline without fetch, verify the EventBus wiring is intact
     expect(eventBus).toBeDefined();
   });
 
   // ── Error handling ──────────────────────────────────────────
 
   it("handles fetch failures gracefully without crashing", async () => {
-    // Use a port that will refuse connection
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, {
-      enabled: true,
-      channelId: "nonexistent",
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({
       baseUrl: "http://127.0.0.1:1",
-    });
+      channelId: "nonexistent",
+    }));
 
     consumer.start();
 
-    // Advance past the initial 2s delay + one poll interval (15s)
+    // Advance past the initial startup delay + one poll interval
     await vi.advanceTimersByTimeAsync(60_000);
 
     // Should log warnings but not crash
@@ -145,25 +163,21 @@ describe("ServiceWorkConsumer", () => {
   // ── Den Channels API integration ───────────────────────────
 
   it("constructs background_review_started message correctly", () => {
-    // Verify the message shape that would be posted by constructing it manually
-    // and checking it passes through the channel provider
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, {
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({
       enabled: false,
       channelId: "service-work",
       agentIdentity: "test-agent",
-    });
+    }));
 
-    // We can't call #claimTrigger directly, but we can verify the consumer was created
     expect(consumer).toBeDefined();
   });
 
   it("sets correct channel id for service-work", () => {
-    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, {
+    consumer = new ServiceWorkConsumer(logger, eventBus, channelProvider, defaultOptions({
       enabled: false,
       channelId: "service-work",
-    });
+    }));
     consumer.start();
-    // Verify no crash — the consumer is configured
     consumer.stop();
   });
 });

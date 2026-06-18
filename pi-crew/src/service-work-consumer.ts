@@ -73,11 +73,31 @@ export const ServiceWorkEvents = {
   TriggerAlreadyClaimed: "service_work.trigger_already_claimed",
 } as const;
 
-// ── Constants ──────────────────────────────────────────────────
+// ── Options ────────────────────────────────────────────────────
 
-const POLL_INTERVAL_MS = 15_000;
-const POLL_LIMIT = 20;
-const DEFAULT_CLAIM_TTL_MS = 60_000;
+/**
+ * Required configuration for ServiceWorkConsumer.
+ * All fields are required — no hardcoded fallbacks.
+ * Values should come from BackgroundReviewConfig in config.ts.
+ */
+export interface ServiceWorkConsumerOptions {
+  /** Base URL for the Den Channels API (e.g. "http://192.168.1.10:18081"). */
+  readonly baseUrl: string;
+  /** Channel ID to poll for service-work messages. */
+  readonly channelId: string;
+  /** TTL in ms for claim idempotence — triggers older than this are ignored. */
+  readonly claimTTLMs: number;
+  /** Whether the consumer should start polling. */
+  readonly enabled: boolean;
+  /** Agent identity used when claiming triggers. */
+  readonly agentIdentity: string;
+  /** Interval in ms between poll cycles. */
+  readonly pollIntervalMs: number;
+  /** Max messages to fetch per poll cycle. */
+  readonly pollLimit: number;
+  /** Delay in ms before the first poll after start(). */
+  readonly startupDelayMs: number;
+}
 
 // ── ServiceWorkConsumer ─────────────────────────────────────────
 
@@ -98,6 +118,9 @@ export class ServiceWorkConsumer {
   readonly #claimTTLMs: number;
   readonly #enabled: boolean;
   readonly #agentIdentity: string;
+  readonly #pollIntervalMs: number;
+  readonly #pollLimit: number;
+  readonly #startupDelayMs: number;
   #pollTimer: ReturnType<typeof setInterval> | null = null;
   #running = false;
 
@@ -105,22 +128,19 @@ export class ServiceWorkConsumer {
     logger: Logger,
     eventBus: EventBus,
     channelProvider: ChannelProvider,
-    options?: {
-      readonly baseUrl?: string;
-      readonly channelId?: string;
-      readonly claimTTLMs?: number;
-      readonly enabled?: boolean;
-      readonly agentIdentity?: string;
-    },
+    options: ServiceWorkConsumerOptions,
   ) {
     this.#logger = logger;
     this.#eventBus = eventBus;
     this.#channelProvider = channelProvider;
-    this.#baseUrl = options?.baseUrl ?? "http://192.168.1.10:18081";
-    this.#channelId = options?.channelId ?? "7276";
-    this.#claimTTLMs = options?.claimTTLMs ?? DEFAULT_CLAIM_TTL_MS;
-    this.#enabled = options?.enabled ?? true;
-    this.#agentIdentity = options?.agentIdentity ?? "pi-crew";
+    this.#baseUrl = options.baseUrl;
+    this.#channelId = options.channelId;
+    this.#claimTTLMs = options.claimTTLMs;
+    this.#enabled = options.enabled;
+    this.#agentIdentity = options.agentIdentity;
+    this.#pollIntervalMs = options.pollIntervalMs;
+    this.#pollLimit = options.pollLimit;
+    this.#startupDelayMs = options.startupDelayMs;
   }
 
   /** Start polling the service-work channel. */
@@ -133,12 +153,12 @@ export class ServiceWorkConsumer {
 
     this.#logger.info("ServiceWorkConsumer starting", {
       channelId: this.#channelId,
-      pollIntervalMs: POLL_INTERVAL_MS,
+      pollIntervalMs: this.#pollIntervalMs,
     });
 
     this.#running = true;
-    setTimeout(() => void this.#poll(), 2_000);
-    this.#pollTimer = setInterval(() => void this.#poll(), POLL_INTERVAL_MS);
+    setTimeout(() => void this.#poll(), this.#startupDelayMs);
+    this.#pollTimer = setInterval(() => void this.#poll(), this.#pollIntervalMs);
   }
 
   /** Stop polling and clean up. */
@@ -185,7 +205,6 @@ export class ServiceWorkConsumer {
       }
 
       // Process unclaimed triggers
-      const claimedIds = new Set(completions.map((c) => c.reviewId.split("-").slice(0, -1).join("-")));
       const startedIds = new Set(
         messages
           .map((m) => this.#parseMessage<BackgroundReviewStarted>(m, "background_review_started"))
@@ -222,7 +241,7 @@ export class ServiceWorkConsumer {
    * Fetch recent messages from the #service-work channel via the Den Channels API.
    */
   async #fetchChannelMessages(): Promise<ReadonlyArray<Record<string, unknown>>> {
-    const url = `${this.#baseUrl}/api/channels/${this.#channelId}/messages?limit=${POLL_LIMIT}`;
+    const url = `${this.#baseUrl}/api/channels/${this.#channelId}/messages?limit=${this.#pollLimit}`;
     const response = await fetch(url);
     if (!response.ok) {
       this.#logger.warn("ServiceWorkConsumer fetch failed", {

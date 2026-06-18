@@ -461,15 +461,27 @@ export class Crew {
       },
     });
 
+    // DESIGN: Validate serviceWorkUrl when background review is enabled.
+    // Rationale: No hardcoded fallback — explicit failure is better than silent misconfiguration.
+    if (config.backgroundReview.enabled && !config.backgroundReview.serviceWorkUrl) {
+      throw new ConfigurationError(
+        "backgroundReview.serviceWorkUrl is required when backgroundReview.enabled is true",
+      );
+    }
+
     this.#serviceWorkConsumer = new ServiceWorkConsumer(
       this.#logger,
       this.#eventBus,
       this.#channelProvider,
       {
+        baseUrl: config.backgroundReview.serviceWorkUrl ?? "",
         channelId: config.backgroundReview.serviceWorkChannel,
-        baseUrl: config.backgroundReview.serviceWorkUrl,
+        claimTTLMs: config.backgroundReview.triggerClaimTTLMs,
         enabled: config.backgroundReview.enabled,
         agentIdentity: "pi-crew",
+        pollIntervalMs: config.backgroundReview.pollIntervalMs,
+        pollLimit: config.backgroundReview.pollLimit,
+        startupDelayMs: config.backgroundReview.startupDelayMs,
       },
     );
 
