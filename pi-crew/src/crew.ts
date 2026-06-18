@@ -414,6 +414,7 @@ export class Crew {
           channelProvider: this.#channelProvider,
           denseMemoryStore: this.#denseMemoryStore,
           config: config as unknown as BackgroundReviewRunner["config"],
+          denRouterUrl: config.mcp.endpoint?.replace("/mcp", "/v1") ?? "http://127.0.0.1:18082/v1",
         })
       : (null as unknown as BackgroundReviewRunner);
 

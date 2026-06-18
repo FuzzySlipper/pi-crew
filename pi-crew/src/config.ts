@@ -260,6 +260,18 @@ const BackgroundReviewConfigSchema = z.object({
   serviceWorkUrl: z.string().url().optional(),
   defaultMaxTokens: z.number().int().positive().default(5000),
   triggerClaimTTLMs: z.number().int().positive().default(60_000),
+  mode: z.enum(["static", "llm"]).default("static"),
+  static: z.object({
+    maxEntryLength: z.number().int().positive().default(200),
+    capacityAlertPercent: z.number().int().min(0).max(100).default(80),
+    patternChecks: z.array(z.string()).default(["TBD", "TODO", "FIXME"]),
+  }).default({}),
+  llm: z.object({
+    reviewModel: z.string().optional(),
+    maxTokens: z.number().int().positive().optional(),
+    memoryPromptSlug: z.string().default("background-review-memory-prompt"),
+    skillPromptSlug: z.string().default("background-review-skill-prompt"),
+  }).default({}),
 }).default({});
 
 export type BackgroundReviewConfig = z.infer<typeof BackgroundReviewConfigSchema>;

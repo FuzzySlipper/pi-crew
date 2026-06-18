@@ -1,32 +1,43 @@
 /**
  * Background review runner — spawns review analyses in the Crew process.
  *
- * When a trigger is claimed (memory or skill nudge), this runner:
- * 1. Reads the target profile's dense profile memories
- * 2. Analyzes entry quality, staleness, and completeness
- * 3. Posts structured review results to channel 7276
- * 4. Proposes improvements via Den Memories (den_memory_propose) when
- *    MCP connectivity is available
- *
- * This runs in-process in the Crew, not as a spawned subagent. The
- * ServiceWorkConsumer owns trigger claim/dedup/cooldown; this runner
- * owns the actual review analysis and posting.
+ * Supports two modes (config.backgroundReview.mode):
+ * - "static": in-process static analysis of dense profile memories
+ * - "llm":   HTTP call to the configured review model with a review prompt
  *
  * @module pi-crew/background-review-runner
  */
 
-import type { Logger } from "@pi-crew/core";
-import type { EventBus } from "@pi-crew/core";
+import type { Logger, EventBus } from "@pi-crew/core";
 import type { ChannelProvider } from "@pi-crew/core";
 import type { DenseProfileMemoryStore } from "@pi-crew/memory";
 import type { DenseMemoryTarget } from "@pi-crew/memory";
+
+// ── Types ─────────────────────────────────────────────────────
+
+export type ReviewMode = "static" | "llm";
 
 export interface BackgroundReviewRunnerConfig {
   readonly backgroundReview: {
     readonly enabled: boolean;
     readonly serviceWorkChannel?: string;
-    readonly reviewModel?: string;
     readonly defaultMaxTokens?: number;
+    readonly mode: ReviewMode;
+    readonly static: {
+      readonly maxEntryLength: number;
+      readonly capacityAlertPercent: number;
+      readonly patternChecks: string[];
+    };
+    readonly llm: {
+      readonly reviewModel?: string;
+      readonly maxTokens?: number;
+      readonly memoryPromptSlug: string;
+      readonly skillPromptSlug: string;
+    };
+  };
+  readonly runtime?: {
+    readonly modelProvider?: string;
+    readonly modelName?: string;
   };
 }
 
@@ -36,7 +47,7 @@ export interface BackgroundReviewRunnerOptions {
   readonly channelProvider: ChannelProvider;
   readonly denseMemoryStore: DenseProfileMemoryStore;
   readonly config: BackgroundReviewRunnerConfig;
-  readonly backgroundReviewPrompt?: string;
+  readonly denRouterUrl?: string;
 }
 
 interface ReviewPayload {
@@ -46,11 +57,19 @@ interface ReviewPayload {
   readonly reviewId: string;
 }
 
-const DEFAULT_REVIEW_PROMPT = `Review the agent's current dense profile memories for:
-1. **Quality** — are entries well-written, specific, and actionable?
-2. **Staleness** — are any entries outdated or superseded?
-3. **Gaps** — what important facts are missing?
-4. **Suggestions** — what should be added, updated, or removed?`;
+// ── Prompt templates ──────────────────────────────────────────
+
+const MEMORY_REVIEW_PROMPT = `You are a memory curator. Review the agent's dense profile memories below for:
+1. Quality — are entries well-written, specific, and actionable?
+2. Staleness — are any entries outdated or superseded?
+3. Gaps — what important facts are missing?
+4. Suggestions — what should be added, updated, or removed?
+
+Return your analysis as JSON with keys: findings (array of objects with severity/description/suggestion), quality (overall rating: good/fair/poor), and summary (brief sentence).`;
+
+const SKILL_REVIEW_PROMPT = `You are a skill curator. Review the agent's loaded skills for quality, staleness, and coverage. NOTE: skill inspection tools are not yet available (#2633, #2634). Return: {"findings":[{"severity":"info","description":"Skill review not yet implemented","suggestion":"Implement skill_manage/skill_view tools"}],"summary":"Skill review pending skill tools"}`;
+
+// ── Runner ────────────────────────────────────────────────────
 
 export class BackgroundReviewRunner {
   readonly #eventBus: EventBus;
@@ -58,7 +77,7 @@ export class BackgroundReviewRunner {
   readonly #channelProvider: ChannelProvider;
   readonly #denseMemoryStore: DenseProfileMemoryStore;
   readonly #config: BackgroundReviewRunnerConfig;
-  readonly #reviewPrompt: string;
+  readonly #denRouterUrl: string;
 
   constructor(options: BackgroundReviewRunnerOptions) {
     this.#eventBus = options.eventBus;
@@ -66,70 +85,61 @@ export class BackgroundReviewRunner {
     this.#channelProvider = options.channelProvider;
     this.#denseMemoryStore = options.denseMemoryStore;
     this.#config = options.config;
-    this.#reviewPrompt = options.backgroundReviewPrompt ?? DEFAULT_REVIEW_PROMPT;
+    this.#denRouterUrl = options.denRouterUrl ?? "http://127.0.0.1:18082/v1";
   }
 
-  /**
-   * Run a background review for the given trigger payload.
-   * Called by #handleTriggerClaimed after counter reset.
-   */
-  async runReview(payload: ReviewPayload): Promise<void> {
-    const { profileId, sessionId, triggerType, reviewId } = payload;
-    const logMeta = { reviewId, profileId, sessionId, triggerType };
+  // ── Public entry point ─────────────────────────────────────
 
-    this.#logger.info("Background review runner starting", logMeta);
+  async runReview(payload: ReviewPayload): Promise<void> {
+    const { profileId, triggerType, reviewId } = payload;
+    const logMeta = { reviewId, profileId, sessionId: payload.sessionId, triggerType };
+
+    this.#logger.info("Background review runner starting", { ...logMeta, mode: this.#config.backgroundReview.mode });
 
     try {
-      // Post "running" status to channel 7276
       await this.#postToChannel(profileId, triggerType, reviewId, "running");
 
-      const findings: string[] = [];
+      let findings: string[] = [];
+      const mode = this.#config.backgroundReview.mode;
 
-      if (triggerType === "memory" || triggerType === "combined") {
-        const memoryFindings = await this.#reviewMemories(profileId, reviewId);
-        findings.push(...memoryFindings);
+      if (mode === "llm") {
+        findings = await this.#spawnLLMReview(payload);
+      } else {
+        findings = await this.#runStaticAnalysis(payload);
       }
 
-      if (triggerType === "skill" || triggerType === "combined") {
-        // Skill review will be added when skill_manage/skill_view tools land (#2633/#2634)
-        findings.push("Skill review not yet implemented — pending skill_manage/skill_view tools (#2633, #2634)");
-      }
-
-      // Post completion to channel 7276
       const summary = findings.length > 0
         ? `Reviewed ${triggerType} for ${profileId}: ${findings.length} finding(s)`
         : `No issues found for ${profileId} ${triggerType} review`;
 
-      await this.#postToChannel(profileId, triggerType, reviewId, "completed", {
-        summary,
-        findings,
-      });
+      await this.#postToChannel(profileId, triggerType, reviewId, "completed", { summary, findings });
 
-      this.#logger.info("Background review runner completed", {
-        ...logMeta,
-        findingCount: findings.length,
-        summary,
-      });
+      this.#logger.info("Background review runner completed", { ...logMeta, findingCount: findings.length, summary });
     } catch (err) {
-      this.#logger.error("Background review runner failed", {
-        ...logMeta,
-        error: String(err),
-      });
-
-      await this.#postToChannel(profileId, triggerType, reviewId, "failed", {
-        error: String(err),
-      }).catch((postErr) => {
-        this.#logger.warn("Failed to post review failure to channel", {
-          error: String(postErr),
-        });
-      });
+      this.#logger.error("Background review runner failed", { ...logMeta, error: String(err) });
+      await this.#postToChannel(profileId, triggerType, reviewId, "failed", { error: String(err) })
+        .catch((postErr: unknown) => this.#logger.warn("Failed to post review failure", { error: String(postErr) }));
     }
   }
 
-  /**
-   * Review the agent's dense profile memories for quality, staleness, gaps.
-   */
-  async #reviewMemories(profileId: string, reviewId: string): Promise<string[]> {
+  // ── Static analysis strategy ───────────────────────────────
+
+  async #runStaticAnalysis(payload: ReviewPayload): Promise<string[]> {
+    const findings: string[] = [];
+
+    if (payload.triggerType === "memory" || payload.triggerType === "combined") {
+      findings.push(...await this.#analyzeMemories(payload.profileId, payload.reviewId));
+    }
+
+    if (payload.triggerType === "skill" || payload.triggerType === "combined") {
+      findings.push("Skill review not yet implemented — pending skill_manage/skill_view tools (#2633, #2634)");
+    }
+
+    return findings;
+  }
+
+  async #analyzeMemories(profileId: string, reviewId: string): Promise<string[]> {
+    const cfg = this.#config.backgroundReview.static;
     const findings: string[] = [];
 
     try {
@@ -140,7 +150,6 @@ export class BackgroundReviewRunner {
         return findings;
       }
 
-      // Basic quality checks
       const entries = memory.content.split("\n").filter(Boolean);
 
       if (entries.length === 0) {
@@ -148,47 +157,127 @@ export class BackgroundReviewRunner {
         return findings;
       }
 
-      // Check for oversized entries
-      const overLong = entries.filter((e: string) => e.length > 200);
+      const overLong = entries.filter((e: string) => e.length > cfg.maxEntryLength);
       if (overLong.length > 0) {
-        findings.push(`${overLong.length} entry/entries exceeded 200 characters — dense memories should be compact`);
+        findings.push(`${overLong.length} entry/entries exceeded ${cfg.maxEntryLength} characters — dense memories should be compact`);
       }
 
-      // Check for generic placeholders
-      const genericPatterns = ["TBD", "TODO", "FIXME", "to be determined"];
-      const genericEntries = entries.filter((e: string) =>
-        genericPatterns.some((p) => e.toUpperCase().includes(p)),
+      const upped = entries.map((e: string) => e.toUpperCase());
+      const genericEntries = upped.filter((e: string) =>
+        cfg.patternChecks.some((p: string) => e.includes(p.toUpperCase())),
       );
       if (genericEntries.length > 0) {
-        findings.push(`${genericEntries.length} entry/entries contain placeholders (TBD/TODO/FIXME)`);
+        findings.push(`${genericEntries.length} entry/entries contain placeholder patterns (${cfg.patternChecks.join(", ")})`);
       }
 
-      // Check used bytes vs cap
       const usagePct = memory.capBytes > 0 ? Math.round((memory.usedBytes / memory.capBytes) * 100) : 0;
-      if (usagePct > 80) {
+      if (usagePct > cfg.capacityAlertPercent) {
         findings.push(`Memory store is ${usagePct}% full (${memory.usedBytes}/${memory.capBytes} bytes) — consider pruning stale entries`);
       }
 
-      this.#logger.debug("Memory review completed", {
-        reviewId,
-        entryCount: entries.length,
-        usagePct,
-        findings: findings.length,
-      });
+      this.#logger.debug("Memory review completed", { reviewId, entryCount: entries.length, usagePct, findings: findings.length });
     } catch (err) {
-      this.#logger.warn("Memory review failed", {
-        reviewId,
-        error: String(err),
-      });
+      this.#logger.warn("Memory review failed", { reviewId, error: String(err) });
       findings.push(`Memory review error: ${String(err)}`);
     }
 
     return findings;
   }
 
-  /**
-   * Post a structured review lifecycle message to the service-work channel.
-   */
+  // ── LLM review strategy ────────────────────────────────────
+
+  async #spawnLLMReview(payload: ReviewPayload): Promise<string[]> {
+    const findings: string[] = [];
+
+    const profileId = payload.profileId;
+    const reviewId = payload.reviewId;
+    const llmCfg = this.#config.backgroundReview.llm;
+
+    // Read the agent's memories
+    let memoryContent = "";
+    try {
+      const memory = await this.#denseMemoryStore.read(profileId, "memory");
+      memoryContent = memory?.content ?? "(no memories saved)";
+    } catch (err) {
+      findings.push(`Failed to read memories for LLM review: ${String(err)}`);
+      return findings;
+    }
+
+    // Build the review prompt
+    const systemPrompt = payload.triggerType === "memory" || payload.triggerType === "combined"
+      ? MEMORY_REVIEW_PROMPT
+      : SKILL_REVIEW_PROMPT;
+
+    const userPrompt = `Agent profile: ${profileId}
+Review type: ${payload.triggerType}
+Review ID: ${reviewId}
+
+Current memory contents:
+--- START MEMORY ---
+${memoryContent}
+--- END MEMORY ---
+
+${systemPrompt}`;
+
+    // Call the LLM via the Den Router
+    const maxTokens = llmCfg.maxTokens ?? this.#config.backgroundReview.defaultMaxTokens ?? 5000;
+    const modelName = llmCfg.reviewModel ?? "qwen-max";
+
+    try {
+      const response = await fetch(`${this.#denRouterUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [
+            { role: "user", content: userPrompt },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.3,
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "unknown");
+        findings.push(`LLM review call failed (HTTP ${response.status}): ${body.slice(0, 200)}`);
+        return findings;
+      }
+
+      const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+      const llmText = data?.choices?.[0]?.message?.content ?? "(empty response)";
+
+      // Try to parse as JSON for structured findings
+      try {
+        const parsed = JSON.parse(llmText) as { findings?: Array<{ description?: string }>; summary?: string };
+        if (Array.isArray(parsed.findings)) {
+          for (const f of parsed.findings) {
+            findings.push(f.description ?? JSON.stringify(f));
+          }
+        }
+        if (parsed.summary) {
+          findings.push(`LLM summary: ${parsed.summary}`);
+        }
+      } catch {
+        // Not valid JSON — include raw LLM output as a single finding
+        findings.push(`LLM review output: ${llmText.slice(0, 500)}`);
+      }
+
+      this.#logger.info("LLM review completed", {
+        reviewId,
+        model: modelName,
+        findingCount: findings.length,
+      });
+    } catch (err) {
+      findings.push(`LLM review error: ${String(err)}`);
+      this.#logger.warn("LLM review failed", { reviewId, error: String(err) });
+    }
+
+    return findings;
+  }
+
+  // ── Channel messaging ──────────────────────────────────────
+
   async #postToChannel(
     profileId: string,
     triggerType: string,
@@ -212,11 +301,7 @@ export class BackgroundReviewRunner {
       kind: "text",
       text: JSON.stringify(payload),
     }).catch((err: unknown) => {
-      this.#logger.warn("Failed to post review status to channel", {
-        channelId,
-        status,
-        error: String(err),
-      });
+      this.#logger.warn("Failed to post review status to channel", { channelId, status, error: String(err) });
     });
   }
 }
