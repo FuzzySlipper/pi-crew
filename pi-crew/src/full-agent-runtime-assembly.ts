@@ -41,6 +41,9 @@ import { selectFullAgentTools } from "./full-agent-tool-selection.js";
 import { todoContextMessage } from "./todo-tool.js";
 import type { DenChannelReadbackToolConfig } from "./den-channel-readback-tool.js";
 import type { McpSurfaceManager } from "./mcp-surface-manager.js";
+import {
+  resolveToolPolicyToToolNames,
+} from "./tool-set-registry.js";
 import { buildEffectiveToolInventory, type EffectiveToolInventory } from "./tool-inventory.js";
 import {
   requestedToolSets,
@@ -538,11 +541,13 @@ function buildFullAgentExecutionPolicy(
   agent: CrewConfig["fullAgents"][number],
   profile: Profile,
 ): ExecutionPolicy {
+  const resolved = resolveToolPolicyToToolNames(profile.toolPolicy);
   const input: FullAgentPolicyInput = {
     policyId: `conv-${agent.agentId}-${agent.session.sessionId}`,
     rootPath: "/",
     allowedPaths: ["/"],
-    deniedTools: [...(profile.toolPolicy?.deny ?? [])],
+    allowedTools: [...resolved.allowedTools],
+    deniedTools: [...resolved.deniedTools, ...(profile.toolPolicy?.deny ?? [])],
   };
   return createFullAgentPolicy(input);
 }

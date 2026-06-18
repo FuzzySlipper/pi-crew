@@ -108,3 +108,53 @@ export function toolMatchesSelectedSet(toolName: string, toolSet: string): boole
 export function toolRequestedBySets(toolName: string, sets: readonly string[]): boolean {
   return sets.some((set) => toolMatchesSelectedSet(toolName, set));
 }
+
+// ── Policy expansion ───────────────────────────────────────────
+
+/**
+ * Resolve a ToolPolicy's set-name-based allow/deny lists into concrete
+ * tool names for use by {@link FullAgentPolicyInput}.
+ *
+ * For `"allow_list"` mode, expands each set name to the concrete tool
+ * names from {@link TOOL_SET_MEMBERS} plus the set name itself (in case
+ * it's already a concrete tool name).
+ *
+ * For `"deny_list"` mode, expands each set name the same way.
+ *
+ * Returns empty arrays for `"allow_all"` mode (the sandbox allows everything).
+ */
+export function resolveToolPolicyToToolNames(
+  policy: { readonly mode?: string; readonly allow?: readonly string[]; readonly deny?: readonly string[] } | undefined,
+): { readonly allowedTools: readonly string[]; readonly deniedTools: readonly string[] } {
+  if (policy === undefined) return { allowedTools: [], deniedTools: [] };
+  const mode = policy.mode ?? "allow_all";
+
+  if (mode === "allow_all") return { allowedTools: [], deniedTools: [] };
+
+  if (mode === "allow_list") {
+    const allowSetNames = policy.allow ?? [];
+    const allowedTools = new Set<string>();
+    for (const setName of allowSetNames) {
+      // Add explicit members from TOOL_SET_MEMBERS
+      const members = TOOL_SET_MEMBERS[setName.toLowerCase()];
+      if (members !== undefined) {
+        for (const tool of members) allowedTools.add(tool);
+      }
+      // Also add the bare name (handles concrete tool names and MCP prefix matches)
+      allowedTools.add(setName);
+    }
+    return { allowedTools: [...allowedTools], deniedTools: [] };
+  }
+
+  // deny_list mode
+  const denySetNames = policy.deny ?? [];
+  const deniedTools = new Set<string>();
+  for (const setName of denySetNames) {
+    const members = TOOL_SET_MEMBERS[setName.toLowerCase()];
+    if (members !== undefined) {
+      for (const tool of members) deniedTools.add(tool);
+    }
+    deniedTools.add(setName);
+  }
+  return { allowedTools: [], deniedTools: [...deniedTools] };
+}
