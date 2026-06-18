@@ -220,15 +220,30 @@ backgroundReview:
   defaultSkillNudgeInterval: 10
   maxConcurrentReviews: 3
   serviceWorkChannel: "7276"
+  serviceWorkUrl: "http://192.168.1.10:18081"
   defaultMaxTokens: 5000
   triggerClaimTTLMs: 60000
-  # LLM mode config — denRouterUrl is required when mode: "llm"
-  # mode: "static"
+  pollIntervalMs: 15000
+  pollLimit: 20
+  startupDelayMs: 2000
+  mode: "static"
+  static:
+    maxEntryLength: 200
+    capacityAlertPercent: 80
+    patternChecks: ["TBD", "TODO", "FIXME"]
+  llm:
+    reviewModel: "qwen-max"
+    memoryPromptSlug: "background-review-memory-prompt"
+    skillPromptSlug: "background-review-skill-prompt"
+    combinedPromptSlug: "background-review-combined-prompt"
+    denMcpUrl: "http://192.168.1.10:5199/mcp"
+    requestTimeoutMs: 120000
+    promptFetchTimeoutMs: 10000
+    promptProjectId: "pi-crew"
+  # Uncomment denRouterUrl and set mode to "llm" for LLM-based reviews:
+  # mode: "llm"
   # llm:
   #   denRouterUrl: "http://192.168.1.10:18082/v1"
-  #   requestTimeoutMs: 120000
-  #   promptFetchTimeoutMs: 10000
-  #   promptProjectId: "pi-crew"
 
 # ── Curator (memory/conversation maintenance) ────────────────────
 # Periodic cleanup of stale sessions, snapshots, and archived data.

@@ -288,6 +288,7 @@ const BackgroundReviewConfigSchema = z.object({
     maxTokens: z.number().int().positive().optional(),
     memoryPromptSlug: z.string().default("background-review-memory-prompt"),
     skillPromptSlug: z.string().default("background-review-skill-prompt"),
+    combinedPromptSlug: z.string().default("background-review-combined-prompt"),
     denMcpUrl: z.string().default("http://192.168.1.10:5199/mcp"),
     denRouterUrl: z.string().url().optional(),
     requestTimeoutMs: z.number().int().positive().default(120_000),

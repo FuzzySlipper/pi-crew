@@ -1,10 +1,22 @@
-# Caretaker profile YAML definition
+# Caretaker profile YAML — service-level background review lifecycle agent
+# This is the profile used by the service-caretaker full agent.
+# Duplicates /home/agents/pi-crew/profiles/caretaker.profile.yaml (live service).
 name: "Service Caretaker"
 description: >-
   Background review lifecycle agent. Monitors review counters posted
   to the #service-work channel, claims review triggers via idempotent
   first-claimer semantics, spawns review subagents, and resets counters
   at review start. Does NOT itself generate review triggers.
+displayName: "Service Caretaker"
+profileIdentity: service-caretaker
+memberIdentity: service-caretaker
+memberRole: agent
+sessionDefaults:
+  ownerId: "owner:den-k8plus:pi-crew-service"
+  maxHistoryMessages: 50
+  turnTimeoutMs: 300000
+channelDefaults:
+  wakePolicy: subscription
 systemPrompt: >-
   You are the Service Caretaker. Your role is to monitor the #service-work
   channel for background review triggers, claim unclaimed triggers with
@@ -15,6 +27,8 @@ skills: []
 modelConfig:
   temperature: 0.3
   maxTokens: 5000
+  provider: openai-codex
+  model: gpt-5.5
 backgroundReview:
   enabled: false
 toolPolicy:

@@ -34,6 +34,7 @@ export interface BackgroundReviewRunnerConfig {
       readonly maxTokens?: number;
       readonly memoryPromptSlug: string;
       readonly skillPromptSlug: string;
+      readonly combinedPromptSlug: string;
       readonly denMcpUrl: string;
       readonly denRouterUrl?: string;
       readonly requestTimeoutMs: number;
@@ -74,6 +75,20 @@ const MEMORY_REVIEW_PROMPT = `You are a memory curator. Review the agent's dense
 Return your analysis as JSON with keys: findings (array of objects with severity/description/suggestion), quality (overall rating: good/fair/poor), and summary (brief sentence).`;
 
 const SKILL_REVIEW_PROMPT = `You are a skill curator. Review the agent's loaded skills for quality, staleness, and coverage. NOTE: skill inspection tools are not yet available (#2633, #2634). Return: {"findings":[{"severity":"info","description":"Skill review not yet implemented","suggestion":"Implement skill_manage/skill_view tools"}],"summary":"Skill review pending skill tools"}`;
+
+const COMBINED_REVIEW_PROMPT = `You are a knowledge curator. Review the agent's dense profile memories AND loaded skills for quality, staleness, gaps, and coverage.
+
+**Memories:** Evaluate for quality, staleness, gaps, and suggestions. Flag vague, generic, or duplicate entries. Look for missing project conventions the agent keeps rediscovering.
+
+**Skills:** Evaluate for quality (clear triggers, numbered steps, exact commands, pitfalls), staleness (outdated references), and coverage (repeated manual workflows that should be a skill).
+
+Be concise. A good combined review costs <1500 tokens. Return JSON with keys:
+- memoryFindings: array of {severity, description, suggestion?}
+- skillFindings: array of {severity, description, suggestion?}
+- quality: "good" | "fair" | "poor"
+- summary: brief sentence (<200 chars)
+
+If no issues, return {"memoryFindings": [], "skillFindings": [], "quality": "good", "summary": "Knowledge store looks healthy."}`;
 
 // ── Runner ────────────────────────────────────────────────────
 
@@ -281,12 +296,18 @@ export class BackgroundReviewRunner {
     }
 
     // Load the review prompt from Den docs (with hardcoded fallback)
-    const promptSlug = payload.triggerType === "memory" || payload.triggerType === "combined"
-      ? llmCfg.memoryPromptSlug
-      : llmCfg.skillPromptSlug;
-    const promptFallback = payload.triggerType === "memory" || payload.triggerType === "combined"
-      ? MEMORY_REVIEW_PROMPT
-      : SKILL_REVIEW_PROMPT;
+    let promptSlug: string;
+    let promptFallback: string;
+    if (payload.triggerType === "combined") {
+      promptSlug = llmCfg.combinedPromptSlug;
+      promptFallback = COMBINED_REVIEW_PROMPT;
+    } else if (payload.triggerType === "memory") {
+      promptSlug = llmCfg.memoryPromptSlug;
+      promptFallback = MEMORY_REVIEW_PROMPT;
+    } else {
+      promptSlug = llmCfg.skillPromptSlug;
+      promptFallback = SKILL_REVIEW_PROMPT;
+    }
     const systemPrompt = await this.#loadPromptFromDenDoc(promptSlug, promptFallback);
 
     const userPrompt = `Agent profile: ${profileId}
