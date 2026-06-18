@@ -78,6 +78,7 @@ import type { DenPoolMemberConfig } from "./den-pool-source.js";
 import { createCrewDiagnostics } from "./crew-diagnostics.js";
 import { resolveFullAgentRuntime } from "./full-agent-runtime-assembly.js";
 import { createDenAdminEvidencePoster } from "./den-admin-evidence-poster.js";
+import { BackgroundReviewRunner } from "./background-review-runner.js";
 import { DefaultMcpSurfaceManager, type McpSurfaceManager } from "./mcp-surface-manager.js";
 import { SteerFollowUpBridge } from "./steer-followup-bridge.js";
 import { createCrewAgentWorkerExecutor } from "./agent-worker-executor-factory.js";
@@ -134,6 +135,7 @@ export class Crew {
   readonly #counterService: CounterService;
   readonly #denseMemoryStore: SqliteDenseProfileMemoryStore;
   readonly #backgroundReviewUnsubscribers: (() => void)[];
+  readonly #backgroundReviewRunner: BackgroundReviewRunner;
   readonly #serviceWorkConsumer: ServiceWorkConsumer;
   readonly #curator: CuratorService | null = null;
   #started = false;
@@ -403,6 +405,19 @@ export class Crew {
         skillNudgeInterval: config.backgroundReview.defaultSkillNudgeInterval,
       });
     }
+
+    // ── Background review runner ──────────────────────────────
+    this.#backgroundReviewRunner = config.backgroundReview.enabled
+      ? new BackgroundReviewRunner({
+          eventBus: this.#eventBus,
+          logger: this.#logger,
+          channelProvider: this.#channelProvider,
+          denseMemoryStore: this.#denseMemoryStore,
+          config: config as unknown as BackgroundReviewRunner["config"],
+        })
+      : (null as unknown as BackgroundReviewRunner);
+
+    // ── Event bus subscriptions ───────────────────────────────
     this.#backgroundReviewUnsubscribers = [
       this.#eventBus.on("turn.completed", (payload) => {
         if (!config.backgroundReview.enabled) return;
@@ -890,6 +905,19 @@ export class Crew {
           profileId: payload.profileId,
           sessionId: payload.sessionId,
           triggerType: payload.triggerType,
+        });
+
+        // Spawn the background review analysis
+        void this.#backgroundReviewRunner.runReview({
+          profileId: payload.profileId,
+          sessionId: payload.sessionId,
+          triggerType: payload.triggerType as "memory" | "skill" | "combined",
+          reviewId: payload.reviewId,
+        }).catch((error: unknown) => {
+          this.#logger.error("Background review runner error", {
+            reviewId: payload.reviewId,
+            error: String(error),
+          });
         });
       })
       .catch((error: unknown) => {
