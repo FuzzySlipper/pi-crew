@@ -223,7 +223,7 @@ export function resolveFullAgentRuntime(
   const executionPolicy = buildFullAgentExecutionPolicy(input.agent, profile);
   const skillsRoot = input.installRoot ? join(input.installRoot, "skills") : undefined;
   const tools = selectFullAgentTools({
-    allow: input.agent.runtime.tools.allow,
+    allow: input.agent.runtime.tools.additionalAllow,
     profileToolPolicy: profile.toolPolicy,
     mcpTools: surface.registry.listTools(),
     mcpClient: surface.client,
@@ -344,7 +344,7 @@ function addChannelReadbackTool(
   channelReadback: DenChannelReadbackRuntimeConfig | undefined,
 ): ResolvedFullAgentRuntime {
   if (channelReadback === undefined) return runtime;
-  const requestedSets = requestedToolSets(agent.runtime.tools.allow, runtime.profile.toolPolicy);
+  const requestedSets = requestedToolSets(agent.runtime.tools.additionalAllow, runtime.profile.toolPolicy);
   if (!requestedSets.some((entry) => toolMatchesSelectedSet("den_channels_read_recent", entry)))
     return runtime;
   if (!toolAllowedByProfilePolicy("den_channels_read_recent", runtime.profile.toolPolicy))
@@ -409,7 +409,7 @@ function agentAllowsDelegation(
   agent: CrewConfig["fullAgents"][number],
   runtime: ResolvedFullAgentRuntime,
 ): boolean {
-  const requestedSets = requestedToolSets(agent.runtime.tools.allow, runtime.profile.toolPolicy);
+  const requestedSets = requestedToolSets(agent.runtime.tools.additionalAllow, runtime.profile.toolPolicy);
   const requested = requestedSets.some(
     (entry) =>
       entry === "all" ||

@@ -104,7 +104,7 @@ describe("full agent config schema", () => {
             provider: "openai",
             model: "gpt-4.1-mini",
             systemPromptSource: "profile",
-            tools: { allow: ["den"] },
+            tools: { additionalAllow: ["den"] },
             toolPolicy: { mode: "profile" },
           },
           lifecycle: {
@@ -148,7 +148,7 @@ describe("full agent config schema", () => {
             provider: "openai",
             model: "gpt-4.1-mini",
             systemPromptSource: "profile",
-            tools: { allow: ["den"] },
+            tools: { additionalAllow: ["den"] },
           },
           lifecycle: { turnTimeoutMs: 300000 },
         },
@@ -224,7 +224,7 @@ describe("resolveFullAgentRuntime", () => {
         runtime: {
           mode: "agent",
           systemPromptSource: "profile",
-          tools: { allow: ["den"] },
+          tools: { additionalAllow: ["den"] },
           toolPolicy: { mode: "profile" },
         },
         lifecycle: {
@@ -274,7 +274,7 @@ describe("resolveFullAgentRuntime", () => {
       agent: parsedAgent("custom-profile", {
         mode: "agent",
         systemPromptSource: "profile",
-        tools: { allow: [] },
+        tools: { additionalAllow: [] },
         toolPolicy: { mode: "profile" },
       }),
       profilesRoot,
@@ -311,7 +311,7 @@ describe("resolveFullAgentRuntime", () => {
       agent: parsedAgent("gpt-profile", {
         mode: "agent",
         systemPromptSource: "profile",
-        tools: { allow: [] },
+        tools: { additionalAllow: [] },
         toolPolicy: { mode: "profile" },
       }),
       profilesRoot,
@@ -370,7 +370,7 @@ describe("resolveFullAgentRuntime", () => {
         runtime: {
           mode: "agent",
           systemPromptSource: "profile",
-          tools: { allow: ["den"] },
+          tools: { additionalAllow: ["den"] },
           toolPolicy: { mode: "profile" },
         },
         lifecycle: {
@@ -412,7 +412,7 @@ describe("resolveFullAgentRuntime", () => {
           provider: "not-a-provider",
           model: "not-a-model",
           systemPromptSource: "profile",
-          tools: { allow: [] },
+          tools: { additionalAllow: [] },
           toolPolicy: { mode: "profile" },
         }),
         profilesRoot,
@@ -457,7 +457,7 @@ describe("resolveFullAgentRuntime", () => {
           runtime: {
             mode: "agent",
             systemPromptSource: "profile",
-            tools: { allow: [] },
+            tools: { additionalAllow: [] },
             toolPolicy: { mode: "profile" },
           },
           lifecycle: {
@@ -499,7 +499,7 @@ describe("buildFullAgentResponderFactory", () => {
         parsedAgent("runner-profile", {
           mode: "agent",
           systemPromptSource: "profile",
-          tools: { allow: [] },
+          tools: { additionalAllow: [] },
           toolPolicy: { mode: "profile" },
         }),
       ],
@@ -560,7 +560,7 @@ describe("buildFullAgentResponderFactory", () => {
           provider: "openai",
           model: "gpt-4.1-mini",
           systemPromptSource: "profile",
-          tools: { allow: [] },
+          tools: { additionalAllow: [] },
           toolPolicy: { mode: "profile" },
         },
         lifecycle: {

@@ -65,7 +65,7 @@ export function buildEffectiveToolInventory(input: {
   readonly selectedToolNames: ReadonlySet<string>;
 }): EffectiveToolInventory {
   const requestedSets = requestedToolSets(
-    input.agent.runtime.tools.allow,
+    input.agent.runtime.tools.additionalAllow,
     input.profile.toolPolicy,
   );
   return {

@@ -135,7 +135,7 @@ describe("local tool catalog", () => {
         memberIdentity: "prime",
         session: { ownerId: "owner", sessionId: "sess-prime", maxHistoryMessages: 20 },
         channels: [],
-        runtime: { mode: "agent", tools: { allow: ["all"] }, toolPolicy: { mode: "profile" } },
+        runtime: { mode: "agent", tools: { additionalAllow: ["all"] }, toolPolicy: { mode: "profile" } },
         lifecycle: { turnTimeoutMs: 1 },
       },
       profile: {
@@ -167,7 +167,7 @@ describe("local tool catalog", () => {
       memberIdentity: "prime",
       session: { ownerId: "owner", sessionId: "sess-prime", maxHistoryMessages: 20 },
       channels: [],
-      runtime: { mode: "agent", systemPromptSource: "profile", tools: { allow: ["memory"] }, toolPolicy: { mode: "profile" } },
+      runtime: { mode: "agent", systemPromptSource: "profile", tools: { additionalAllow: ["memory"] }, toolPolicy: { mode: "profile" } },
       lifecycle: { singleFlight: true, turnTimeoutMs: 1, onStartup: "rehydrate_or_create", onShutdownStatus: "offline" },
     } as const;
     const inventory = buildEffectiveToolInventory({

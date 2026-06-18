@@ -11,13 +11,30 @@ export interface ToolSelectionEntry {
   readonly reason: "selected" | "not_requested" | "profile_denied";
 }
 
+/**
+ * Determine the effective tool sets requested for a full agent.
+ *
+ * Precedence (profile canonical):
+ * 1. If the profile's `toolPolicy.mode` is `"allow_list"`, the requested sets
+ *    start with the profile's `allow` entries.
+ * 2. The agent's `runtime.tools.additionalAllow` is merged in as an *additive*
+ *    layer — it can grant additional tool sets but cannot revoke profile-level
+ *    grants.
+ * 3. If neither source specifies anything, returns `["all"]` (allow everything).
+ */
 export function requestedToolSets(
-  runtimeAllow: readonly string[],
+  runtimeAdditionalAllow: readonly string[],
   profilePolicy: ToolPolicy | undefined,
 ): readonly string[] {
-  if (runtimeAllow.length > 0) return runtimeAllow;
-  if (profilePolicy?.mode === "allow_list") return profilePolicy.allow ?? [];
-  return ["all"];
+  const fromProfile = profilePolicy?.mode === "allow_list" ? (profilePolicy.allow ?? []) : [];
+  const fromRuntime = runtimeAdditionalAllow.length > 0 ? runtimeAdditionalAllow : [];
+
+  // If neither source provides explicit sets, default to "all"
+  if (fromProfile.length === 0 && fromRuntime.length === 0) return ["all"];
+
+  // Merge: profile sets first, then runtime adds any unique entries
+  const merged = new Set([...fromProfile, ...fromRuntime]);
+  return [...merged];
 }
 
 export function selectToolsBeforeSessionPolicy(input: {
