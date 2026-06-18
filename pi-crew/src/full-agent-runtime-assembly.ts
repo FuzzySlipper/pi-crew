@@ -540,6 +540,8 @@ function buildFullAgentExecutionPolicy(
 ): ExecutionPolicy {
   const input: FullAgentPolicyInput = {
     policyId: `conv-${agent.agentId}-${agent.session.sessionId}`,
+    rootPath: "/",
+    allowedPaths: ["/"],
     deniedTools: [...(profile.toolPolicy?.deny ?? [])],
   };
   return createFullAgentPolicy(input);

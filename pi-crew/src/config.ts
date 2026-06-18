@@ -261,6 +261,9 @@ const BackgroundReviewConfigSchema = z.object({
   serviceWorkUrl: z.string().url().optional(),
   defaultMaxTokens: z.number().int().positive().default(5000),
   triggerClaimTTLMs: z.number().int().positive().default(60_000),
+  pollIntervalMs: z.number().int().positive().default(15_000),
+  pollLimit: z.number().int().positive().default(20),
+  startupDelayMs: z.number().int().nonnegative().default(2_000),
   mode: z.enum(["static", "llm"]).default("static"),
   static: z.object({
     maxEntryLength: z.number().int().positive().default(200),
