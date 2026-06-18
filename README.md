@@ -157,6 +157,7 @@ Current runtime-local model-callable catalog:
 
 | Tool | Category | Surfaces | Policy gate | Implemented in |
 | ---- | -------- | -------- | ----------- | -------------- |
+| `patch` | local | full-agent, delegated-child | runtime.tools.allow/profile toolPolicy must request filesystem, local, or concrete tool name | `pi-crew/src/patch-tool.ts` |
 | `spawn_subagent` | delegation | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or spawn_subagent | `pi-service/src/workers/delegated-spawn-tool.ts` |
 | `fan_out_subagents` | delegation | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or fan_out_subagents | `pi-service/src/workers/delegated-fan-out-tool.ts` |
 | `scout_codebase` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request delegation or scout_codebase | `pi-service/src/workers/delegated-helper-tools.ts` |

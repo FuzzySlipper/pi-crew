@@ -4,6 +4,7 @@ import { resolve, relative } from "node:path";
 import { promisify } from "node:util";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { localModelCallableToolNames } from "./local-tool-catalog.js";
+import { createPatchTool } from "./patch-tool.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,6 +15,7 @@ export const localCodeToolNames = localModelCallableToolNames("local") as readon
   "terminal",
   "git_status",
   "git_diff",
+  "patch",
 ];
 
 type LocalCodeToolName = (typeof localCodeToolNames)[number];
@@ -61,6 +63,8 @@ function createLocalCodeTool(
       return gitStatusTool(rootPath, defaultTimeoutMs, truncate);
     case "git_diff":
       return gitDiffTool(rootPath, defaultTimeoutMs, truncate);
+    case "patch":
+      return createPatchTool({ rootPath, maxOutputChars });
   }
 }
 

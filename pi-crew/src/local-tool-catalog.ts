@@ -25,6 +25,18 @@ export interface ControlCommandCatalogEntry {
 
 export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolCatalogEntry[] = [
   {
+    name: "patch",
+    category: "local",
+    toolsets: ["filesystem", "local"],
+    modelCallable: true,
+    implementedIn: "pi-crew/src/patch-tool.ts",
+    assembledIn: [
+      "pi-crew/src/local-code-tools.ts",
+    ],
+    intendedSurfaces: ["full-agent", "delegated-child"],
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
     name: "spawn_subagent",
     category: "delegation",
     toolsets: ["delegation"],
