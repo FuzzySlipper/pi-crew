@@ -1,6 +1,6 @@
 /** Central catalog for pi-crew runtime-local tool and control surfaces. */
 
-export type LocalToolCategory = "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session" | "memory";
+export type LocalToolCategory = "delegation" | "helper" | "local" | "planning" | "web" | "browser" | "session" | "memory" | "skills";
 export type LocalToolSurface = "full-agent" | "delegated-child" | "worker";
 
 export interface LocalModelCallableToolCatalogEntry {
@@ -279,8 +279,37 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
     policyGate: "runtime.tools.allow/profile toolPolicy must request helper or curator_execute",
     inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
   },
-  ...[
-    "browser_navigate",
+  {
+    name: "skills_list",
+    category: "skills" as const,
+    modelCallable: true,
+    implementedIn: "pi-crew/src/skills-list-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request skills or skills_list",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "skill_view",
+    category: "skills" as const,
+    modelCallable: true,
+    implementedIn: "pi-crew/src/skill-view-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request skills or skill_view",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  {
+    name: "skill_manage",
+    category: "skills" as const,
+    modelCallable: true,
+    implementedIn: "pi-crew/src/skill-manage-tool.ts",
+    assembledIn: ["pi-crew/src/runtime-local-tools.ts"],
+    intendedSurfaces: ["full-agent"],
+    policyGate: "runtime.tools.allow/profile toolPolicy must request skills or skill_manage",
+    inventoryTest: "pi-crew/src/__tests__/local-tool-catalog.test.ts",
+  },
+  ...(["browser_navigate",
     "browser_snapshot",
     "browser_click",
     "browser_type",
@@ -289,7 +318,7 @@ export const LOCAL_MODEL_CALLABLE_TOOL_CATALOG: readonly LocalModelCallableToolC
     "browser_scroll",
     "browser_back",
     "browser_press",
-  ].map((name): LocalModelCallableToolCatalogEntry => ({
+  ] as const).map((name): LocalModelCallableToolCatalogEntry => ({
     name,
     category: "browser",
     modelCallable: true,

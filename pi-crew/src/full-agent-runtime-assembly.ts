@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getModels, getProviders } from "@earendil-works/pi-ai";
 import type { Api, KnownProvider, Model } from "@earendil-works/pi-ai";
@@ -218,6 +219,7 @@ export function resolveFullAgentRuntime(
   const surface = input.mcpSurfaceManager.surfaceForProfile(profile);
   const model = resolveModelConfig(input.agent, profile, input.env ?? process.env);
   const executionPolicy = buildFullAgentExecutionPolicy(input.agent, profile);
+  const skillsRoot = input.profilesRoot ? join(input.profilesRoot, "skills") : undefined;
   const tools = selectFullAgentTools({
     allow: input.agent.runtime.tools.allow,
     profileToolPolicy: profile.toolPolicy,
@@ -234,6 +236,7 @@ export function resolveFullAgentRuntime(
     counterService: input.counterService,
     denseMemoryEnabled: profile.memoryConfig?.enabled !== false,
     denseMemoryStore: input.denseMemoryStore,
+    skillsRoot,
   });
   const selectedNames = new Set(tools.map((tool) => tool.name));
 

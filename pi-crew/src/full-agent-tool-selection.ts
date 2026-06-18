@@ -27,6 +27,7 @@ export interface SelectFullAgentToolsInput {
   /** When false or undefined, the dense_profile_memory tool is not added. */
   readonly denseMemoryEnabled?: boolean;
   readonly denseMemoryStore?: DenseProfileMemoryStore;
+  readonly skillsRoot?: string;
 }
 
 export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentTool[] {
@@ -38,6 +39,7 @@ export function selectFullAgentTools(input: SelectFullAgentToolsInput): AgentToo
     denMemory: memoryConfig(input),
     counterService: input.counterService,
     denseMemoryStore: input.denseMemoryEnabled !== false ? input.denseMemoryStore : undefined,
+    skillsRoot: input.skillsRoot,
   });
   const localToolNameSet = new Set<string>(runtimeLocalToolNames);
   const beforePolicy = selectToolsBeforeSessionPolicy({

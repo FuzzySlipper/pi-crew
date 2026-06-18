@@ -11,6 +11,9 @@ import { localModelCallableToolNames } from "./local-tool-catalog.js";
 import { createTodoTool } from "./todo-tool.js";
 import { createSessionSearchTool } from "./session-search-tool.js";
 import { createWebTools } from "./web-tools.js";
+import { createSkillsListTool } from "./skills-list-tool.js";
+import { createSkillViewTool } from "./skill-view-tool.js";
+import { createSkillManageTool } from "./skill-manage-tool.js";
 
 export interface RuntimeLocalToolConfig {
   readonly sessionId: string;
@@ -21,6 +24,7 @@ export interface RuntimeLocalToolConfig {
   readonly counterService?: CounterService;
   readonly curatorService?: CuratorService;
   readonly denseMemoryStore?: DenseProfileMemoryStore;
+  readonly skillsRoot?: string;
 }
 
 export const runtimeLocalToolNames = localModelCallableToolNames();
@@ -56,6 +60,13 @@ export function createRuntimeLocalTools(config: RuntimeLocalToolConfig): AgentTo
     profileId: config.profileId,
   });
   tools.push(denseMemoryTool);
+
+  // Skills tools (when skillsRoot is known)
+  if (config.skillsRoot) {
+    tools.push(createSkillsListTool({ skillsRoot: config.skillsRoot }));
+    tools.push(createSkillViewTool({ skillsRoot: config.skillsRoot }));
+    tools.push(createSkillManageTool({ skillsRoot: config.skillsRoot }));
+  }
 
   return tools;
 }

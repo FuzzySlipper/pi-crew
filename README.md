@@ -180,6 +180,9 @@ Current runtime-local model-callable catalog:
 | `counter_reset` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request helper or counter_reset or backgroundReview.enabled | `pi-crew/src/counter-reset-tool.ts` |
 | `dense_profile_memory` | memory | full-agent | available when DenseProfileMemoryStore exists (profile memoryConfig not disabled) | `pi-tools/src/dense-profile-memory-tool.ts` |
 | `curator_execute` | helper | full-agent | runtime.tools.allow/profile toolPolicy must request helper or curator_execute | `pi-crew/src/curator-execute-tool.ts` |
+| `skills_list` | skills | full-agent | runtime.tools.allow/profile toolPolicy must request skills or skills_list | `pi-crew/src/skills-list-tool.ts` |
+| `skill_view` | skills | full-agent | runtime.tools.allow/profile toolPolicy must request skills or skill_view | `pi-crew/src/skill-view-tool.ts` |
+| `skill_manage` | skills | full-agent | runtime.tools.allow/profile toolPolicy must request skills or skill_manage | `pi-crew/src/skill-manage-tool.ts` |
 | `browser_navigate` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_snapshot` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
 | `browser_click` | browser | full-agent | runtime.tools.allow/profile toolPolicy must request browser or the concrete browser action | `pi-crew/src/browser-tools.ts` |
