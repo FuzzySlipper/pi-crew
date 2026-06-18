@@ -228,6 +228,12 @@ export function resolveFullAgentRuntime(
   const model = resolveModelConfig(input.agent, profile, input.env ?? process.env);
   const executionPolicy = buildFullAgentExecutionPolicy(input.agent, profile);
   const skillsRoot = input.skillsRoot ?? (input.installRoot ? join(input.installRoot, "skills") : undefined);
+  // Derive per-agent defaultDenProjectId from the agent's first channel projectId,
+  // falling back to the global default. This lets agents on other projects (e.g.
+  // agora-prime on agora-os, den-services-runner on den-services) use their own
+  // project context for Den MCP tool calls and den-memory operations.
+  const agentProjectId = input.agent.channels.find((ch) => ch.projectId !== undefined)?.projectId
+    ?? input.defaultDenProjectId;
   const tools = selectFullAgentTools({
     allow: input.agent.runtime.tools.additionalAllow,
     profileToolPolicy: profile.toolPolicy,
@@ -239,7 +245,7 @@ export function resolveFullAgentRuntime(
     profileId: input.agent.profileId,
     defaultSender: input.agent.profileIdentity ?? input.agent.profileId,
     sessionSearchRepository: input.sessionSearchRepository,
-    defaultProjectId: input.defaultDenProjectId,
+    defaultProjectId: agentProjectId,
     memory: input.memory,
     counterService: input.counterService,
     denseMemoryEnabled: profile.memoryConfig?.enabled !== false,
