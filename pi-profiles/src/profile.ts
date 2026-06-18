@@ -216,6 +216,10 @@ export interface Profile {
   /** Default channel-level configuration for agents using this profile. */
   channelDefaults?: {
     wakePolicy?: "subscription" | "direct_polling";
+    /** Default Den project ID for agents using this profile. Agents assigned to other
+     * projects (e.g. agora-prime on agora-os) should set this so Den MCP tool calls
+     * and den-memory context use the correct project scope. */
+    projectId?: string;
   };
 }
 

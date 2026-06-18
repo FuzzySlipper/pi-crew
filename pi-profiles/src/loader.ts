@@ -380,6 +380,9 @@ function parseProfile(definition: ResolvedProfileDefinition, globalSkillsDir: st
           ...(rawChannelDefaults["wakePolicy"] !== undefined
             ? { wakePolicy: rawChannelDefaults["wakePolicy"] as "subscription" | "direct_polling" }
             : {}),
+          ...(rawChannelDefaults["projectId"] !== undefined
+            ? { projectId: String(rawChannelDefaults["projectId"]) }
+            : {}),
         }
       : undefined;
 
