@@ -30,7 +30,7 @@ export interface BackgroundReviewRunnerConfig {
       readonly patternChecks: string[];
     };
     readonly llm: {
-      readonly reviewModel?: string;
+      readonly reviewModel: string;
       readonly maxTokens?: number;
       readonly memoryPromptSlug: string;
       readonly skillPromptSlug: string;
@@ -302,7 +302,7 @@ ${systemPrompt}`;
 
     // Call the LLM via the Den Router — reviewModel default is in schema now
     const maxTokens = llmCfg.maxTokens ?? this.#config.backgroundReview.defaultMaxTokens ?? 5000;
-    const modelName = llmCfg.reviewModel ?? "qwen-max";
+    const modelName = llmCfg.reviewModel;
 
     try {
       const response = await fetch(`${this.#denRouterUrl}/chat/completions`, {
