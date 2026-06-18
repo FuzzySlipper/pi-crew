@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@pi-crew/core": "*",
+    "@pi-crew/memory": "*",
     "js-yaml": "^4.2.0"
   },
   "scripts": {

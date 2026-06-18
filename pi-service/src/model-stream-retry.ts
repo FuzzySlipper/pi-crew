@@ -20,6 +20,19 @@ export interface StreamRetryConfig {
   readonly retryableHttpStatuses: readonly number[];
 }
 
+/**
+ * Default stream retry configuration used when no config is provided.
+ * Matches the config.yaml `streamRetry` defaults.
+ */
+export const DEFAULT_STREAM_RETRY_CONFIG: StreamRetryConfig = {
+  enabled: true,
+  maxAttempts: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 5000,
+  jitterRatio: 0.2,
+  retryableHttpStatuses: [408, 429, 502, 503, 504],
+};
+
 export interface StreamRetryCorrelation {
   readonly sessionId: string;
   readonly profileId?: string;

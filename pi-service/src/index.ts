@@ -18,6 +18,7 @@ export {
 export { createServiceRegistry, type ServiceRegistry, type CreateRegistryOptions } from "./di.js";
 export {
   classifyStreamError,
+  DEFAULT_STREAM_RETRY_CONFIG,
   retryDelayMs,
   withRetryingStream,
   type RetryingStreamOptions,

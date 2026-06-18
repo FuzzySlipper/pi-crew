@@ -15,7 +15,7 @@ import type { Profile } from "./profile.js";
 import {
   DEFAULT_MEMORY_CAP_BYTES,
   DEFAULT_USER_CAP_BYTES,
-} from "@pi-crew/pi-memory";
+} from "@pi-crew/memory";
 
 // ── Dense memory context ───────────────────────────────────────
 
