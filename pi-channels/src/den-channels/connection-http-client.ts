@@ -48,12 +48,8 @@ interface LifecycleEventPayload {
   readonly eventType: string;
   readonly projectId?: string | null;
   readonly taskId?: number | null;
-  readonly assignmentId?: string | null;
-  readonly workerRunId?: string | null;
-  readonly workerRole?: string | null;
   readonly profileIdentity?: string | null;
   readonly agentInstanceId?: string | null;
-  readonly poolMemberId?: string | null;
   readonly sessionId?: string | null;
   readonly sourceMessageId: string;
   readonly directAgentEventId: string;
@@ -67,10 +63,7 @@ interface LegacyLifecycleActivityPayload {
   readonly projectId?: string | null;
   readonly agentIdentity: string;
   readonly deliveryRequestId: string;
-  readonly workerRunId?: string | null;
-  readonly workerRole?: string | null;
   readonly taskId?: number | null;
-  readonly assignmentId?: string | null;
   readonly eventType: "lifecycle_status";
   readonly status: string;
   readonly deliveryStage: "observability";
@@ -185,12 +178,8 @@ export class HttpDirectAgentClient {
       eventType,
       projectId: item.targetProjectId ?? item.sourceProjectId,
       taskId: parseOptionalLong(item.targetTaskId),
-      assignmentId: item.assignmentId,
-      workerRunId: item.workerRunId,
-      workerRole: item.workerRole,
       profileIdentity: item.profileIdentity,
       agentInstanceId: item.agentInstanceId,
-      poolMemberId: item.poolMemberId,
       sessionId: item.sessionId,
       sourceMessageId: String(sourceRequestId),
       directAgentEventId: String(sourceRequestId),
@@ -247,10 +236,7 @@ export class HttpDirectAgentClient {
       projectId: payload.projectId,
       agentIdentity: payload.agentIdentity,
       deliveryRequestId: payload.directAgentEventId,
-      workerRunId: payload.workerRunId,
-      workerRole: payload.workerRole,
       taskId: payload.taskId,
-      assignmentId: payload.assignmentId,
       eventType: "lifecycle_status",
       status: legacyLifecycleStatus(payload.eventType),
       deliveryStage: "observability",
@@ -264,7 +250,6 @@ export class HttpDirectAgentClient {
         stalenessDeadline: payload.stalenessDeadline,
         profileIdentity: payload.profileIdentity,
         agentInstanceId: payload.agentInstanceId,
-        poolMemberId: payload.poolMemberId,
         sessionId: payload.sessionId,
       }),
       dedupeKey: `pi-crew-http:lifecycle:${payload.eventType}:${payload.directAgentEventId}`,
@@ -300,6 +285,59 @@ export class HttpDirectAgentClient {
     }
   }
 
+  async postChannelMessage(
+    channelId: number,
+    senderIdentity: string,
+    body: string,
+    sourceKind: string,
+    sourceId: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const payload = {
+      senderType: "agent",
+      senderIdentity,
+      body,
+      messageKind: "agent_text",
+      sourceKind,
+      deliveryRequestId: sourceId,
+      dedupeKey: `pi-crew-http:${sourceKind}:${sourceId}`,
+    };
+
+    try {
+      const response = await this.#fetchWithTimeout(
+        `${this.#baseUrl()}/api/channels/${String(channelId)}/messages`,
+        {
+          method: "POST",
+          headers: this.#jsonHeaders(),
+          body: JSON.stringify(payload),
+          signal,
+        },
+      );
+
+      if (!response.ok) {
+        const responseBody = await boundedResponseText(response);
+        this.#logger.warn("Channel message POST returned non-OK", {
+          sourceKind,
+          channelId,
+          senderIdentity,
+          sourceId,
+          status: response.status,
+          statusText: response.statusText,
+          responseBody,
+          bodyLength: body.length,
+        });
+      }
+    } catch (err: unknown) {
+      if (isAbortError(err)) return;
+      this.#logger.warn("Channel message POST failed", {
+        sourceKind,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  /** @deprecated Banned route — use postChannelMessage instead. Will be removed in a future phase.
+   * Posts to the retired /api/gateway/system-messages compatibility endpoint. */
   async postGatewaySystemMessage(
     channelId: number,
     sourceKind: string,

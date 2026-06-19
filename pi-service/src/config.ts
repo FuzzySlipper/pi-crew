@@ -52,8 +52,27 @@ const DenConfigSchema = z.object({
    * (e.g. "ws://den-k8plus:4201"). An empty or missing value disables
    * the live WebSocket connection; the gateway falls back to a simulated
    * connection suitable for tests and offline development.
+   *
+   * **Conversation API only.** This URL is used for channel messages,
+   * memberships, subscriptions, cursors, and direct-agent event polling.
+   * It must NOT be used as the implicit delivery/gateway/runtime URL.
    */
   channelsUrl: ChannelsUrlSchema,
+  /**
+   * Den Gateway base URL for executable actuation (delivery intent/claim,
+   * adapter binding heartbeat, direct-agent event posting for actuator
+   * wake). When absent, defaults to the channelsUrl value as a temporary
+   * compatibility fallback — this fallback is deprecated and will be
+   * removed in a future phase.
+   */
+  gatewayUrl: z.string().url().optional(),
+  /**
+   * Den Delivery base URL for delivery intent/claim/terminalization
+   * lifecycle. When absent, defaults to the gatewayUrl value (or
+   * channelsUrl if gatewayUrl is also absent) as a temporary compatibility
+   * fallback.
+   */
+  deliveryUrl: z.string().url().optional(),
   /**
    * Auth token for the Den Channels Gateway. Do NOT commit real tokens —
    * provide them from the service environment or user-scoped config.
@@ -105,8 +124,6 @@ const DenConfigSchema = z.object({
   channelsSessionId: z.string().default(""),
   /** Deterministic subscription identity for the active ordinary-channel subscription. */
   channelsSubscriptionIdentity: z.string().default(""),
-  /** Explicit compatibility escape hatch for deployments without Channels v8 registration routes. */
-  channelsAllowLegacyDirectPolling: z.boolean().default(false),
   /** Whether to refuse startup if Den is unreachable. */
   requiredAtStartup: z.boolean().default(true),
 });

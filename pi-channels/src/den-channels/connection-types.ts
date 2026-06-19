@@ -267,17 +267,35 @@ export interface DenHttpSubscriptionConfig {
  * a cursor so restarts do not replay handled events.
  */
 export interface DenHttpConnectionConfig {
-  /** Den Channels HTTP base URL (e.g. `http://192.168.1.10:18081`). */
+  /** Den Channels HTTP base URL (e.g. `http://192.168.1.10:18081`).
+   *
+   * **Conversation API only.** Used for channel messages, memberships,
+   * subscriptions, cursors, and direct-agent event polling.
+   * Must NOT be used as the implicit delivery/gateway/runtime URL. */
   readonly baseUrl: string;
+
+  /**
+   * Den Gateway base URL for executable actuation (delivery intent/claim,
+   * adapter binding heartbeat, direct-agent wake posting).
+   *
+   * When absent, defaults to `baseUrl` as a temporary compatibility fallback.
+   * This fallback is deprecated; future deployments should set this explicitly.
+   */
+  readonly gatewayUrl?: string;
+
+  /**
+   * Den Delivery base URL for delivery intent/claim/terminalization lifecycle.
+   *
+   * When absent, defaults to `gatewayUrl` (or `baseUrl` if `gatewayUrl` is
+   * also absent) as a temporary compatibility fallback.
+   */
+  readonly deliveryUrl?: string;
 
   /** Project ID to scope direct-agent-events polling against. */
   readonly projectId: string;
 
   /** Member identity for direct-agent event delivery/wake. */
   readonly memberIdentity: string;
-
-  /** Additional configured fullAgent member identities accepted by this runtime. */
-  readonly memberIdentities?: readonly string[];
 
   /** Authentication token for the Den Channels Gateway. */
   readonly token: string;
@@ -303,8 +321,30 @@ export interface DenHttpConnectionConfig {
   /** Staleness window for lifecycle event stalenessDeadline (ms). Default 60_000. */
   readonly lifecycleStalenessMs?: number;
 
-  /** Explicit compatibility escape hatch for deployments without Channels v8 routes. */
-  readonly allowLegacyDirectPolling?: boolean;
+  /**
+   * Whether to start the event polling loop on connect.
+   *
+   * Per-agent connections should set this to `false` — only the primary
+   * connection polls for events.  Per-agent connections still register
+   * subscriptions and send outbound messages, but do not independently
+   * consume the event stream (the primary provider's ChannelRouter
+   * distributes events to the correct session).
+   *
+   * Default `true`.
+   */
+  readonly pollEnabled?: boolean;
+
+  /**
+   * Additional member identities whose wake events should be accepted
+   * by this connection's poll loop.
+   *
+   * The primary polling connection must accept events for all configured
+   * agent members (pi-crew-runner, prime-coder, etc.), not just its own
+   * memberIdentity. Per-agent connections with pollEnabled=false don't
+   * poll independently — the primary connection polls once and the
+   * ChannelRouter distributes events to the correct agent session.
+   */
+  readonly acceptAgents?: readonly string[];
 }
 
 // ── Cursor persistence ──────────────────────────────────────────

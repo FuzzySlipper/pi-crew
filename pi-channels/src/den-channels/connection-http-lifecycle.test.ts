@@ -19,7 +19,14 @@ function makeConfig(): DenHttpConnectionConfig {
     token: "test-token",
     pollIntervalMs: 5000,
     pollLimit: 1,
-    allowLegacyDirectPolling: true,
+    subscription: {
+      channelId: "642",
+      profileIdentity: "pi-crew-gateway",
+      agentInstanceId: "inst-lifecycle-test",
+      sessionOwnerId: "owner:test:pi-crew-gateway",
+      sessionId: "sess-lifecycle-test",
+      subscriptionIdentity: "pi-crew-gateway:ordinary:sess-lifecycle-test",
+    },
   };
 }
 
@@ -87,6 +94,23 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
         if (typeof init?.body === "string") gatewayBodies.push(init.body);
         return Promise.resolve(new Response("ok", { status: 200 }));
       }
+      // Subscription registration endpoints
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+        if (init?.method === "POST" || init?.method === undefined) {
+          return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, channelId: 642, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+        }
+        // GET — read subscriptions
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 642, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-lifecycle-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-lifecycle-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 642, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+        return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 642, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-lifecycle-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-lifecycle-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
       return Promise.resolve(new Response("ok", { status: 200 }));
     });
 
@@ -108,8 +132,8 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
     ]);
     expect(payloads.every((payload) => payload.projectId === "pi-crew")).toBe(true);
     expect(payloads.every((payload) => payload.taskId === 2040)).toBe(true);
-    expect(payloads.every((payload) => payload.assignmentId === "assignment-2040")).toBe(true);
-    expect(payloads.every((payload) => payload.workerRunId === "piw_2040_lifecycle")).toBe(true);
+    expect(payloads.every((payload) => payload.assignmentId === undefined)).toBe(true);
+    expect(payloads.every((payload) => payload.workerRunId === undefined)).toBe(true);
     expect(payloads.every((payload) => payload.agentInstanceId === "pi-crew-gateway-live")).toBe(
       true,
     );
@@ -125,7 +149,7 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
   it("logs gateway failure diagnostics when final message delivery returns non-OK", async () => {
     const mockFetch = vi.fn((input: string | URL) => {
       const urlStr = urlFromInput(input);
-      if (urlStr.includes("/api/gateway/system-messages")) {
+      if (urlStr.includes("/api/channels/642/messages")) {
         return Promise.resolve(new Response("constraint failed", { status: 500 }));
       }
       return Promise.resolve(new Response("ok", { status: 200 }));
@@ -140,10 +164,10 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
     });
 
     expect(logger.entries.map((entry) => entry.message)).toContain(
-      "Gateway system-message POST returned non-OK",
+      "Channel message POST returned non-OK",
     );
     const warning = logger.entries.find(
-      (entry) => entry.message === "Gateway system-message POST returned non-OK",
+      (entry) => entry.message === "Channel message POST returned non-OK",
     );
     expect(warning?.context).toMatchObject({
       channelId: 642,
@@ -186,6 +210,20 @@ describe("DenHttpDirectAgentConnection lifecycle telemetry", () => {
       if (urlStr.includes("/api/gateway/system-messages")) {
         if (typeof init?.body === "string") gatewayBodies.push(init.body);
         return Promise.resolve(new Response("ok", { status: 200 }));
+      }
+      // Subscription registration endpoints
+      if (urlStr.includes("/api/channel-subscriptions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 642, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-lifecycle-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-lifecycle-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+        return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 642, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+      }
+      // Channels subscription POST/PUT (subscription client ignores response body on write)
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+        return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, status: "active" }), { status: 201 }));
       }
       return Promise.resolve(new Response("ok", { status: 200 }));
     });

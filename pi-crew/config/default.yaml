@@ -23,11 +23,28 @@ den:
   # Set PI_DEN_CORE_URL env var to override.
   coreUrl: "http://192.168.1.10:18080/den-core-api"
 
-  # Den Channels HTTP base URL for live direct-agent-events cursor polling.
+  # ── Den Channels HTTP conversation API base ─────────────────────
+  # Den Channels HTTP base URL for channel messages, memberships,
+  # subscriptions, cursors, and direct-agent event polling.
   # Use http:// or https:// for HTTP cursor/polling; ws:// or wss:// remains
   # supported only for legacy WebSocket deployments. Set to empty string to use
   # a simulated connection (tests/dev only).
+  #
+  # *** Conversation API only ***
+  # This URL is NOT the implicit delivery/gateway/runtime URL. Use the
+  # explicit gatewayUrl/deliveryUrl keys below for executable actuation.
   channelsUrl: "http://192.168.1.10:18081"
+
+  # Den Gateway base URL for executable actuation (delivery intent/claim,
+  # adapter binding heartbeat, direct-agent wake).
+  # Optional — defaults to channelsUrl as a temporary compatibility
+  # fallback. This fallback is deprecated.
+  # gatewayUrl: "http://192.168.1.10:18081"
+
+  # Den Delivery base URL for delivery intent/claim/terminalization lifecycle.
+  # Optional — defaults to gatewayUrl (or channelsUrl if gatewayUrl is also
+  # absent) as a temporary compatibility fallback.
+  # deliveryUrl: "http://192.168.1.10:18081"
 
   # Auth token for the Den Channels Gateway.
   # Override via PI_DEN_CHANNELS_TOKEN env var. Do NOT commit real tokens.
@@ -60,9 +77,6 @@ den:
   channelsSessionOwnerId: "owner:den-k8plus:pi-crew-runner"
   channelsSessionId: "sess-pi-crew-runner-live"
   channelsSubscriptionIdentity: "pi-crew-runner:ordinary:sess-pi-crew-runner-live"
-
-  # Compatibility fallback for pre-v8 Channels deployments. Keep false for green path.
-  channelsAllowLegacyDirectPolling: false
 
   # Live Channels reconnect / heartbeat settings.
   channelsRetryMaxAttempts: 5

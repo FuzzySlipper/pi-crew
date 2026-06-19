@@ -9,7 +9,6 @@
 
 import type { Logger } from "@pi-crew/core";
 import { ConfigurationError } from "@pi-crew/core";
-import { CompoundDenConnection } from "@pi-crew/channels/den-channels/connection-compound";
 import { DenWebSocketConnection } from "@pi-crew/channels/den-channels/connection-websocket";
 import { SimulatedDenConnection } from "@pi-crew/channels/den-channels/connection-simulated";
 import { DenHttpDirectAgentConnection } from "@pi-crew/channels/den-channels/connection-http";
@@ -20,6 +19,7 @@ import type {
   DenHttpConnectionConfig,
 } from "@pi-crew/channels/den-channels/connection-types";
 import type { DenConfig, RuntimeDb } from "@pi-crew/service";
+import type { ResolvedAgentFields } from "./full-agent-sessions.js";
 
 /**
  * Build a Den connection from configuration.
@@ -35,8 +35,7 @@ export function buildDenConnection(
   den: DenConfig,
   logger: Logger,
   cursorStore: CursorStore,
-  memberIdentities: readonly string[] = [],
-  additionalProjectIds: readonly string[] = [],
+  agentMemberIdentities?: readonly string[],
 ): DenConnection {
   if (den.channelsUrl.length === 0) {
     logger.info("No channelsUrl configured — using simulated connection");
@@ -48,7 +47,7 @@ export function buildDenConnection(
     return buildWebSocketConnection(den, logger);
   }
   if (url.protocol === "http:" || url.protocol === "https:") {
-    return buildHttpConnection(den, logger, cursorStore, memberIdentities, additionalProjectIds);
+    return buildHttpConnection(den, logger, cursorStore, agentMemberIdentities);
   }
 
   throw new ConfigurationError(
@@ -107,8 +106,7 @@ function buildHttpConnection(
   den: DenConfig,
   logger: Logger,
   cursorStore: CursorStore,
-  memberIdentities: readonly string[],
-  additionalProjectIds: readonly string[],
+  agentMemberIdentities?: readonly string[],
 ): DenConnection {
   validateHttpConfig(den);
   logger.info("Creating live Den HTTP direct-agent connection", {
@@ -118,54 +116,88 @@ function buildHttpConnection(
     pollIntervalMs: den.channelsPollIntervalMs,
     pollLimit: den.channelsPollLimit,
     subscriptionChannelId: den.channelsSubscriptionChannelId,
-    legacyDirectPolling: den.channelsAllowLegacyDirectPolling,
-    additionalProjects: additionalProjectIds,
+    agentCount: agentMemberIdentities?.length,
   });
 
-  const baseConfig = {
+  const config: DenHttpConnectionConfig = {
     baseUrl: den.channelsUrl,
+    gatewayUrl: den.gatewayUrl,
+    deliveryUrl: den.deliveryUrl,
+    projectId: den.channelsProjectId,
     memberIdentity: den.channelsMemberIdentity,
-    memberIdentities,
     token: den.channelsToken,
     pollIntervalMs: den.channelsPollIntervalMs,
     pollLimit: den.channelsPollLimit,
-    subscription: den.channelsAllowLegacyDirectPolling
-      ? undefined
-      : {
-          channelId: den.channelsSubscriptionChannelId,
-          profileIdentity: den.channelsProfileIdentity,
-          memberRole: den.channelsMemberRole.length === 0 ? undefined : den.channelsMemberRole,
-          agentInstanceId: den.channelsAgentInstanceId,
-          sessionOwnerId: den.channelsSessionOwnerId,
-          sessionId: den.channelsSessionId,
-          subscriptionIdentity: den.channelsSubscriptionIdentity,
-        },
-    allowLegacyDirectPolling: den.channelsAllowLegacyDirectPolling,
+    acceptAgents: agentMemberIdentities,
+    subscription: {
+      channelId: den.channelsSubscriptionChannelId,
+      profileIdentity: den.channelsProfileIdentity,
+      memberRole: den.channelsMemberRole.length === 0 ? undefined : den.channelsMemberRole,
+      agentInstanceId: den.channelsAgentInstanceId,
+      sessionOwnerId: den.channelsSessionOwnerId,
+      sessionId: den.channelsSessionId,
+      subscriptionIdentity: den.channelsSubscriptionIdentity,
+    },
   };
 
-  const primary = new DenHttpDirectAgentConnection(
-    { ...baseConfig, projectId: den.channelsProjectId } satisfies DenHttpConnectionConfig & { readonly memberIdentities: readonly string[] },
-    logger,
-    cursorStore,
-  );
+  return new DenHttpDirectAgentConnection(config, logger, cursorStore);
+}
 
-  const additional: DenConnection[] = [];
-  for (const projectId of additionalProjectIds) {
-    if (projectId === den.channelsProjectId) continue; // already have primary
-    const conn = new DenHttpDirectAgentConnection(
-      {
-        ...baseConfig,
-        projectId,
-        cursorPersistenceKey: `den_channels_cursor_${projectId}`,
-      } satisfies DenHttpConnectionConfig & { readonly memberIdentities: readonly string[] },
-      logger,
-      cursorStore,
+/**
+ * Build a {@link DenConnection} for a single full agent, using the shared
+ * Den config for transport settings and the agent's resolved fields for
+ * per-agent identities (member identity, subscription, profile, etc.).
+ *
+ * Each agent gets its own standalone connection with an independent cursor
+ * persistence key so event delivery is isolated per agent.
+ *
+ * @param den         Shared Den config (baseUrl, token, poll settings).
+ * @param agent       Resolved agent fields (identities, session, channel).
+ * @param cursorStore Shared cursor store (keys scoped per agent).
+ * @param logger      Logger for connection diagnostics.
+ */
+export function buildAgentDenConnection(
+  den: DenConfig,
+  agent: ResolvedAgentFields,
+  cursorStore: CursorStore,
+  logger: Logger,
+): DenConnection {
+  const firstChannel = agent.channels[0];
+  if (firstChannel === undefined) {
+    throw new ConfigurationError(
+      `Agent ${agent.memberIdentity} has no channels configured`,
     );
-    additional.push(conn);
   }
 
-  if (additional.length === 0) return primary;
-  return new CompoundDenConnection(primary, additional, logger);
+  logger.info("Building per-agent Den connection", {
+    agent: agent.memberIdentity,
+    channelId: firstChannel.channelId,
+    subscriptionIdentity: firstChannel.subscriptionIdentity,
+  });
+
+  const config: DenHttpConnectionConfig = {
+    baseUrl: den.channelsUrl,
+    gatewayUrl: den.gatewayUrl,
+    deliveryUrl: den.deliveryUrl,
+    projectId: firstChannel.projectId ?? den.channelsProjectId,
+    memberIdentity: agent.memberIdentity,
+    token: den.channelsToken,
+    pollIntervalMs: den.channelsPollIntervalMs,
+    pollLimit: den.channelsPollLimit,
+    pollEnabled: false,
+    cursorPersistenceKey: `den_channels_cursor_${agent.memberIdentity}`,
+    subscription: {
+      channelId: firstChannel.channelId,
+      profileIdentity: agent.profileIdentity,
+      memberRole: agent.memberRole.length === 0 ? undefined : agent.memberRole,
+      agentInstanceId: `agent-${agent.memberIdentity}`,
+      sessionOwnerId: agent.ownerId,
+      sessionId: agent.sessionId,
+      subscriptionIdentity: firstChannel.subscriptionIdentity,
+    },
+  };
+
+  return new DenHttpDirectAgentConnection(config, logger, cursorStore);
 }
 
 function validateHttpConfig(den: DenConfig): void {
@@ -179,7 +211,6 @@ function validateHttpConfig(den: DenConfig): void {
       "den.channelsMemberIdentity is required when channelsUrl uses http:// or https://",
     );
   }
-  if (den.channelsAllowLegacyDirectPolling) return;
   const requiredFields: ReadonlyArray<readonly [string, string]> = [
     ["channelsSubscriptionChannelId", den.channelsSubscriptionChannelId],
     ["channelsProfileIdentity", den.channelsProfileIdentity],

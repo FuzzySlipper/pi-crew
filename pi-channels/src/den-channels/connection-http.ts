@@ -15,7 +15,7 @@ import {
   type DirectAgentEventItem,
   type HttpDirectAgentClientOptions,
 } from "./connection-http-client.js";
-import { HttpSubscriptionClient } from "./connection-http-subscription-client.js";
+import { HttpSubscriptionClient } from "../den/membership.js";
 import {
   type ActiveSubscriptionState,
   cursorJsonForEvent,
@@ -91,15 +91,23 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     this.#open = true;
     this.#emit("connected");
     const interval = this.#config.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    this.#pollState.timer = setInterval(() => {
+    const pollEnabled = this.#config.pollEnabled ?? true;
+    if (pollEnabled) {
+      this.#pollState.timer = setInterval(() => {
+        void this.#poll();
+      }, interval);
       void this.#poll();
-    }, interval);
-    void this.#poll();
+    } else {
+      this.#logger.debug("Per-agent connection — event polling disabled", {
+        memberIdentity: this.#config.memberIdentity,
+      });
+    }
     this.#logger.info("Den HTTP direct-agent connection opened", {
       baseUrl: this.#config.baseUrl,
       projectId: this.#config.projectId,
       pollIntervalMs: interval,
       cursor: this.#lastCursor,
+      pollEnabled: this.#config.pollEnabled ?? true,
     });
   }
   async close(): Promise<void> {
@@ -118,12 +126,12 @@ export class DenHttpDirectAgentConnection implements DenConnection {
   async sendMessage(channelId: string, payload: DenOutboundPayload): Promise<DenSendResult> {
     const text = denContentToText(payload.content);
     const sourceId = `http-delivery-${String(Date.now())}`;
-    await this.#client.postGatewaySystemMessage(
+    await this.#client.postChannelMessage(
       Number(channelId),
+      senderIdentityFromMetadata(payload.metadata) ?? this.#config.memberIdentity,
+      text,
       "gateway_delivery",
       sourceId,
-      text,
-      senderIdentityFromMetadata(payload.metadata) ?? this.#config.memberIdentity,
       this.#pollState.controller.signal,
     );
     return { id: sourceId };
@@ -178,19 +186,15 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     return this.#subscriptionClient.upsertMembership(input, this.#pollState.controller.signal);
   }
   async upsertSubscription(input: ChannelSubscriptionUpsert): Promise<ChannelSubscription> {
-    if (this.#config.allowLegacyDirectPolling) return { ...input,
-      subscriptionId: `${input.channelId}:${input.subscriptionIdentity}`, status: input.status ?? "active", updatedAt: new Date() };
     return this.#subscriptionClient.upsertSubscription(input, this.#pollState.controller.signal);
   }
   async releaseSubscription(input: ChannelSubscriptionRelease): Promise<void> {
-    if (this.#config.allowLegacyDirectPolling) return;
     await this.#subscriptionClient.releaseSubscription(input, this.#pollState.controller.signal);
   }
   async getPresence(input: ChannelPresenceQuery): Promise<readonly ChannelPresence[]> {
     return this.#subscriptionClient.getPresence(input, this.#pollState.controller.signal);
   }
   async updateSubscriptionStatus(input: ChannelSubscriptionStatusUpdate): Promise<void> {
-    if (this.#config.allowLegacyDirectPolling) return;
     await this.#subscriptionClient.updateSubscriptionStatus(
       input,
       this.#pollState.controller.signal,
@@ -198,61 +202,45 @@ export class DenHttpDirectAgentConnection implements DenConnection {
   }
 
   async #registerSubscription(): Promise<void> {
-    if (this.#config.allowLegacyDirectPolling) {
-      this.#logger.info("Den HTTP direct-agent connection using current cursor mode", { projectId: this.#config.projectId });
-      return;
+    const result = await this.#subscriptionClient.register(this.#pollState.controller.signal);
+    const readback = await this.#subscriptionClient.readSubscriptions(
+      this.#pollState.controller.signal,
+    );
+    this.#activeSubscription = selectActiveSubscription(
+      this.#config,
+      readback.subscriptions,
+      result.membershipId,
+    );
+    if (this.#activeSubscription === null) {
+      throw new ConnectionError(
+        "Registered subscription was not discoverable in channel-subscriptions readback",
+      );
     }
+    // Cursor readback is advisory — WARN on failure, do not block startup.
+    // The Den backend may not expose the list-subscription-cursors endpoint.
     try {
-      const result = await this.#subscriptionClient.register(this.#pollState.controller.signal);
-      const readback = await this.#subscriptionClient.readSubscriptions(
+      const cursors = await this.#subscriptionClient.listSubscriptionCursors(
+        this.#activeSubscription.subscriptionId,
         this.#pollState.controller.signal,
       );
-      this.#activeSubscription = selectActiveSubscription(
-        this.#config,
-        readback.subscriptions,
-        result.membershipId,
-      );
-      if (this.#activeSubscription === null) {
-        throw new ConnectionError(
-          "Registered subscription was not discoverable in channel-subscriptions readback",
-        );
+      const cursor = readSubscriptionMessageCursor(cursors);
+      if (cursor !== null) {
+        this.#lastCursor = cursor;
+        await this.#persistCursor();
       }
-      // Cursor readback is advisory — WARN on failure, do not block startup.
-      // The Den backend may not expose the list-subscription-cursors endpoint.
-      try {
-        const cursors = await this.#subscriptionClient.listSubscriptionCursors(
-          this.#activeSubscription.subscriptionId,
-          this.#pollState.controller.signal,
-        );
-        const cursor = readSubscriptionMessageCursor(cursors);
-        if (cursor !== null) {
-          this.#lastCursor = cursor;
-          await this.#persistCursor();
-        }
-        this.#logger.info("Den HTTP subscription cursor ready", {
-          subscriptionId: this.#activeSubscription.subscriptionId,
-          channelId: this.#activeSubscription.channelId,
-          cursor: this.#lastCursor,
-        });
-      } catch (cursorErr: unknown) {
-        this.#logger.warn(
-          "Subscription cursor readback failed (advisory — continuing)",
-          { error: errorMessage(cursorErr) },
-        );
-      }
-    } catch (err: unknown) {
-      if (!this.#config.allowLegacyDirectPolling) throw err;
-      this.#activeSubscription = null;
+      this.#logger.info("Den HTTP subscription cursor ready", {
+        subscriptionId: this.#activeSubscription.subscriptionId,
+        channelId: this.#activeSubscription.channelId,
+        cursor: this.#lastCursor,
+      });
+    } catch (cursorErr: unknown) {
       this.#logger.warn(
-        "Subscription registration failed; using explicit legacy polling fallback",
-        {
-          error: errorMessage(err),
-        },
+        "Subscription cursor readback failed (advisory — continuing)",
+        { error: errorMessage(cursorErr) },
       );
     }
   }
   async #releaseSubscription(): Promise<void> {
-    if (this.#config.allowLegacyDirectPolling) return;
     try {
       await this.#subscriptionClient.release(this.#pollState.controller.signal);
     } catch (err: unknown) {
@@ -354,10 +342,12 @@ export class DenHttpDirectAgentConnection implements DenConnection {
     const isGatewayIngress = sourceKind === "gateway_delivery" && isIngressIntent(item.intent);
     if (!isWake && !isGatewayIngress) return false;
     const target = targetMemberIdentity(item);
-    return (
-      target !== null &&
-      [this.#config.memberIdentity, ...(this.#config.memberIdentities ?? [])].includes(target)
-    );
+    if (target === null) return false;
+    // Accept events targeting this connection's own member identity
+    if (this.#config.memberIdentity === target) return true;
+    // Accept events targeting any configured per-agent member identity
+    if (this.#config.acceptAgents !== undefined && this.#config.acceptAgents.includes(target)) return true;
+    return false;
   }
   #mapEventToMessage(item: DirectAgentEventItem): DenInboundMessage {
     return {
@@ -414,7 +404,7 @@ export class DenHttpDirectAgentConnection implements DenConnection {
           cursor: item.id,
           error: errorMessage(err),
         });
-        if (!this.#config.allowLegacyDirectPolling) throw err;
+        throw err;
       }
     }
     await this.#persistCursor();
