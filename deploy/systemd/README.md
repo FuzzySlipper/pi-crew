@@ -134,7 +134,7 @@ systemctl --user status pi-crew.service --no-pager
 systemctl --user is-active pi-crew.service
 journalctl --user -u pi-crew.service -n 100 --no-pager
 journalctl --user -u pi-crew.service -f
-curl -fsS http://127.0.0.1:9236/
+curl -fsS http://192.168.1.22:9236/
 ```
 
 Expected health response shape:
@@ -154,7 +154,7 @@ npm ci
 npm run build
 systemctl --user restart pi-crew.service
 systemctl --user status pi-crew.service --no-pager
-curl -fsS http://127.0.0.1:9236/
+curl -fsS http://192.168.1.22:9236/
 ```
 
 ## Unit validation

@@ -19,7 +19,7 @@ interface ParsedCommand {
   readonly limit?: number;
 }
 
-const DEFAULT_BASE_URL = "http://127.0.0.1:9237";
+const DEFAULT_BASE_URL = "http://192.168.1.22:9237";
 
 export async function runPiCrewDebug(options: DebugCliOptions): Promise<number> {
   const parsed = parseArgs(options.args);
