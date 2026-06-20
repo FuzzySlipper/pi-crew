@@ -31,7 +31,14 @@ function makeConfig(
     token: "test-token",
     pollIntervalMs: 5000,
     pollLimit: 10,
-    allowLegacyDirectPolling: true,
+    subscription: {
+      channelId: "604",
+      profileIdentity: "pi-crew-gateway",
+      agentInstanceId: "inst-test",
+      sessionOwnerId: "owner:test:pi-crew-gateway",
+      sessionId: "sess-test",
+      subscriptionIdentity: "pi-crew-gateway:ordinary:sess-test",
+    },
     ...overrides,
   };
 }
@@ -66,7 +73,20 @@ function mockFetchFromJson(
         new Response(JSON.stringify(pollJson), { status: 200 }),
       );
     }
-    return Promise.resolve(new Response("ok", { status: 200 }));
+    // Subscription registration endpoints
+    if (urlStr.includes("/api/channel-subscriptions?")) {
+      return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 604, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-test", subscriptionStatus: "active" }] }), { status: 200 }));
+    }
+    if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+      return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+    }
+    if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+      return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 604, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+    }
+    if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+      return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, status: "active" }), { status: 201 }));
+    }
+    return Promise.resolve(new Response("null", { status: 200 }));
   });
 }
 
@@ -269,7 +289,20 @@ describe("DenHttpDirectAgentConnection", () => {
         const bodyText = typeof init?.body === "string" ? init.body : "";
         postedGatewayBodies.push(bodyText);
       }
-      return Promise.resolve(new Response("ok", { status: 200 }));
+      // Subscription registration endpoints
+      if (urlStr.includes("/api/channel-subscriptions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 604, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+        return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 604, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+        return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, status: "active" }), { status: 201 }));
+      }
+      return Promise.resolve(new Response("null", { status: 200 }));
     });
 
     const received: DenInboundMessage[] = [];
@@ -319,7 +352,20 @@ describe("DenHttpDirectAgentConnection", () => {
           ),
         );
       }
-      return Promise.resolve(new Response("ok", { status: 200 }));
+      // Subscription registration endpoints
+      if (urlStr.includes("/api/channel-subscriptions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 604, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+        return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 604, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+        return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, status: "active" }), { status: 201 }));
+      }
+      return Promise.resolve(new Response("null", { status: 200 }));
     });
 
     const conn = new DenHttpDirectAgentConnection(
@@ -376,7 +422,20 @@ describe("DenHttpDirectAgentConnection", () => {
         if (typeof init?.body === "string") legacyBodies.push(init.body);
         return Promise.resolve(new Response("{\"status\":\"recorded\"}", { status: 200 }));
       }
-      return Promise.resolve(new Response("ok", { status: 200 }));
+      // Subscription registration endpoints
+      if (urlStr.includes("/api/channel-subscriptions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 604, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+        return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 604, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+        return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, status: "active" }), { status: 201 }));
+      }
+      return Promise.resolve(new Response("null", { status: 200 }));
     });
 
     const conn = new DenHttpDirectAgentConnection(
@@ -427,7 +486,20 @@ describe("DenHttpDirectAgentConnection", () => {
         if (headers) capturedHeaders.push(headers);
         return Promise.resolve(new Response("[]", { status: 200 }));
       }
-      return Promise.resolve(new Response("ok", { status: 200 }));
+      // Subscription registration endpoints
+      if (urlStr.includes("/api/channel-subscriptions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 604, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+        return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 604, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+        return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, status: "active" }), { status: 201 }));
+      }
+      return Promise.resolve(new Response("null", { status: 200 }));
     });
 
     const conn = new DenHttpDirectAgentConnection(
@@ -459,7 +531,20 @@ describe("DenHttpDirectAgentConnection", () => {
         pollUrls.push(urlStr);
         return Promise.resolve(new Response("[]", { status: 200 }));
       }
-      return Promise.resolve(new Response("ok", { status: 200 }));
+      // Subscription registration endpoints
+      if (urlStr.includes("/api/channel-subscriptions?")) {
+        return Promise.resolve(new Response(JSON.stringify({ memberIdentity: "pi-crew-gateway", subscriptions: [{ subscriptionId: 55, channelId: 604, memberIdentity: "pi-crew-gateway", profileIdentity: "pi-crew-gateway", agentInstanceId: "inst-test", subscriptionIdentity: "pi-crew-gateway:ordinary:sess-test", subscriptionStatus: "active" }] }), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channel-subscriptions/") && urlStr.includes("/cursors")) {
+        return Promise.resolve(new Response(JSON.stringify([{ streamKind: "subscription_messages", lastSeenId: 0 }]), { status: 200 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/memberships")) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 42, channelId: 604, memberIdentity: "pi-crew-gateway", status: "active" }), { status: 201 }));
+      }
+      if (urlStr.includes("/api/channels/") && urlStr.includes("/subscriptions")) {
+        return Promise.resolve(new Response(JSON.stringify({ subscriptionId: 55, status: "active" }), { status: 201 }));
+      }
+      return Promise.resolve(new Response("null", { status: 200 }));
     });
 
     const conn = new DenHttpDirectAgentConnection(

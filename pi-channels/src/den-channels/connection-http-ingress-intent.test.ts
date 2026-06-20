@@ -31,8 +31,17 @@ describe("DenHttpDirectAgentConnection ingress intent metadata", () => {
     const fetchMock = vi.fn((url: string | URL) => {
       const path = url.toString();
       seen.push({ path });
-      if (path.includes("/api/subscriptions")) {
-        return response({ success: true, subscription: { id: "sub-1" } });
+      if (path.includes("/api/channel-subscriptions?")) {
+        return response({ memberIdentity: "pi-crew-runner", subscriptions: [{ subscriptionId: 55, channelId: 604, memberIdentity: "pi-crew-runner", profileIdentity: "pi-crew-runner", agentInstanceId: "ingress-test-inst", subscriptionIdentity: "pi-crew-runner:ordinary:sess-ingress-test", subscriptionStatus: "active" }] });
+      }
+      if (path.includes("/api/channel-subscriptions/") && path.includes("/cursors")) {
+        return response([{ streamKind: "subscription_messages", lastSeenId: 0 }]);
+      }
+      if (path.includes("/api/channels/") && path.includes("/memberships")) {
+        return response({ id: 42, channelId: 604, memberIdentity: "pi-crew-runner", status: "active" });
+      }
+      if (path.includes("/api/channels/") && path.includes("/subscriptions")) {
+        return response({ subscriptionId: 55, status: "active" });
       }
       if (path.includes("/api/direct-agent-events")) {
         return response({
@@ -64,7 +73,14 @@ describe("DenHttpDirectAgentConnection ingress intent metadata", () => {
         memberIdentity: "pi-crew-runner",
         token: "test-token",
         pollIntervalMs: 5000,
-        allowLegacyDirectPolling: true,
+        subscription: {
+          channelId: "604",
+          profileIdentity: "pi-crew-runner",
+          agentInstanceId: "ingress-test-inst",
+          sessionOwnerId: "owner:test:pi-crew-runner",
+          sessionId: "sess-ingress-test",
+          subscriptionIdentity: "pi-crew-runner:ordinary:sess-ingress-test",
+        },
       },
       new FakeLogger(),
       new MemoryCursorStore(),

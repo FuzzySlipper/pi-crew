@@ -193,31 +193,6 @@ describe("DenHttpDirectAgentConnection subscription registration", () => {
     expect(calls).toEqual(["http://192.168.1.10:18081/api/channels/604/memberships"]);
   });
 
-  it("uses current HTTP cursor mode without subscription or membership registration", async () => {
-    const urls: string[] = [];
-    const mockFetch = vi.fn((input: string | URL) => {
-      const url = urlFromInput(input);
-      urls.push(url);
-      if (url.includes("/api/direct-agent-events")) {
-        return Promise.resolve(new Response("[]", { status: 200 }));
-      }
-      return Promise.resolve(new Response("not found", { status: 404 }));
-    });
-    const conn = new DenHttpDirectAgentConnection(
-      makeConfig({ allowLegacyDirectPolling: true }),
-      logger,
-      cursorStore,
-      { fetchFn: mockFetch as unknown as typeof fetch },
-    );
-
-    await conn.open();
-    await new Promise<void>((resolve) => setTimeout(resolve, 25));
-    await conn.close();
-
-    expect(urls).toEqual(["http://192.168.1.10:18081/api/direct-agent-events?projectId=pi-crew&limit=1"]);
-    expect(logger.entries.some((entry) => entry.message.includes("Subscription registration failed"))).toBe(false);
-  });
-
   it("releases the runtime subscription on close without leaving membership", async () => {
     const calls: Array<{ readonly url: string; readonly body: Record<string, unknown> | null }> = [];
     const mockFetch = vi.fn((input: string | URL, init?: RequestInit) => {

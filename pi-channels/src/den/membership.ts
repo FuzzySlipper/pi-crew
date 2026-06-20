@@ -1,4 +1,17 @@
-/** HTTP client helpers for Den Channels v8 membership/subscription routes. */
+/**
+ * Den Channels membership/subscription client.
+ *
+ * Subscriptions are a per-agent identity concern, not a transport concern.
+ * This module manages the HTTP calls for:
+ * - Membership upsert/release (/api/channels/{id}/memberships)
+ * - Subscription upsert/release (/api/channels/{id}/subscriptions)
+ * - Subscription readback (/api/channel-subscriptions)
+ * - Subscription cursor readback/upsert
+ * - Presence queries
+ *
+ * @module pi-channels/den/membership
+ */
+
 import {
   ConnectionError,
   type ChannelMembership,
@@ -12,7 +25,9 @@ import {
   type Logger,
 } from "@pi-crew/core";
 
-import type { DenHttpConnectionConfig, DenHttpSubscriptionConfig } from "./connection-types.js";
+import type { DenHttpConnectionConfig, DenHttpSubscriptionConfig } from "../den-channels/connection-types.js";
+
+// ── Wire types ───────────────────────────────────────────────────
 
 interface MembershipWireResponse {
   readonly id?: number;
@@ -22,6 +37,8 @@ interface MembershipWireResponse {
 interface SubscriptionRegistrationResult {
   readonly membershipId: number | null;
 }
+
+// ── Exported readback types ──────────────────────────────────────
 
 export interface ChannelSubscriptionReadbackItem {
   readonly subscriptionId: number;
@@ -54,7 +71,11 @@ export interface HttpSubscriptionClientOptions {
   readonly timeoutMs?: number;
 }
 
+// ── Constants ────────────────────────────────────────────────────
+
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
+
+// ── HttpSubscriptionClient ───────────────────────────────────────
 
 export class HttpSubscriptionClient {
   readonly #config: DenHttpConnectionConfig;
@@ -327,10 +348,12 @@ export class HttpSubscriptionClient {
   }
 }
 
-function requireSubscription(config: DenHttpConnectionConfig): DenHttpSubscriptionConfig {
+// ── Standalone helpers ───────────────────────────────────────────
+
+export function requireSubscription(config: DenHttpConnectionConfig): DenHttpSubscriptionConfig {
   const subscription = config.subscription;
   if (subscription === undefined) {
-    throw new ConnectionError("Den HTTP subscription registration is required unless legacy polling fallback is explicit");
+    throw new ConnectionError("Den HTTP subscription registration config is required; the legacy direct-polling fallback has been removed");
   }
   const required: Array<keyof DenHttpSubscriptionConfig> = [
     "channelId",

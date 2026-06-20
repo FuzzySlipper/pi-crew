@@ -140,3 +140,25 @@ export function createDenChannelsProvider(
 ): DenChannelsAdapter {
   return new DenChannelsAdapter(denConnection, logger, config);
 }
+
+/**
+ * Create a {@link DenChannelsAdapter} for a single full agent.
+ *
+ * Each per-agent provider uses a unique providerId based on the agent's
+ * member identity so the {@link ChannelRouter} and session manager can
+ * distinguish inbound messages from different agents.
+ *
+ * @param connection       Den connection built for this agent.
+ * @param logger           Logger for provider diagnostics.
+ * @param agentIdentity    Agent member identity (used as providerId).
+ */
+export function createPerAgentDenChannelsProvider(
+  connection: DenConnection,
+  logger: Logger,
+  agentIdentity: string,
+): DenChannelsAdapter {
+  return new DenChannelsAdapter(connection, logger, {
+    name: `Agent: ${agentIdentity}`,
+    providerId: agentIdentity,
+  });
+}

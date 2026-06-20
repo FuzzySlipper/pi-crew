@@ -85,7 +85,6 @@ describe("Den Channels production connection config", () => {
       expect(result.data.den.channelsSessionOwnerId).toBe("");
       expect(result.data.den.channelsSessionId).toBe("");
       expect(result.data.den.channelsSubscriptionIdentity).toBe("");
-      expect(result.data.den.channelsAllowLegacyDirectPolling).toBe(false);
     }
   });
 
@@ -275,26 +274,6 @@ describe("Den Channels production connection config", () => {
         }),
       );
     }).toThrow(ConfigurationError);
-  });
-
-  it("allows explicit legacy HTTP direct polling without subscription registration fields", () => {
-    const testLogger = new FakeLogger();
-    const liveCrew = new Crew(
-      makeTestCrewConfig({
-        den: {
-          coreUrl: "http://localhost:3030",
-          requiredAtStartup: false,
-          channelsUrl: "http://192.168.1.10:18081",
-          channelsProjectId: "pi-crew",
-          channelsMemberIdentity: "pi-crew-gateway",
-          channelsAllowLegacyDirectPolling: true,
-        },
-      }),
-      testLogger,
-      new FakeEventBus(),
-    );
-
-    expect(liveCrew.channelProvider).toBeDefined();
   });
 
   it("loads default.yaml with live Channels settings", () => {

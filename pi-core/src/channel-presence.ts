@@ -5,7 +5,10 @@ export type ChannelSubscriptionPurpose =
   | "ordinary_channel"
   | "worker_pool_control"
   | "target_work"
-  | "coordination_call";
+  | "coordination_call"
+  | "agent_commons"
+  | "workflow_analysis"
+  | "observer";
 
 export type ChannelSubscriptionStatus =
   | "active"

@@ -87,24 +87,16 @@ describe("DenChannelsAdapter — disconnect/reconnect/edges", () => {
     expect(await adapter.channelExists("any-channel")).toBe(true);
   });
 
-  it("sendTypingIndicator is a no-op that logs debug", async () => {
+  it("sendTypingIndicator is a silent no-op (Den does not support)", async () => {
     await adapter.connect();
     await adapter.sendTypingIndicator("ch1");
-
-    const debug = logger.entries.filter(
-      (e) => e.level === "debug" && e.message.includes("Typing indicator"),
-    );
-    expect(debug.length).toBeGreaterThan(0);
+    // Den does not expose a typing-indicator endpoint — no-op is correct
   });
 
-  it("clearTypingIndicator is a no-op that logs debug", async () => {
+  it("clearTypingIndicator is a silent no-op (Den does not support)", async () => {
     await adapter.connect();
     await adapter.clearTypingIndicator("ch1");
-
-    const debug = logger.entries.filter(
-      (e) => e.level === "debug" && e.message.includes("Clear typing"),
-    );
-    expect(debug.length).toBeGreaterThan(0);
+    // Den does not expose a typing-indicator endpoint — no-op is correct
   });
 
   // ── reconnect event coverage ───────────────────────────────

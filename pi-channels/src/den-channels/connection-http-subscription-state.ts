@@ -3,7 +3,7 @@ import type { DirectAgentEventItem } from "./connection-http-client.js";
 import type {
   ChannelSubscriptionCursorReadback,
   ChannelSubscriptionReadbackItem,
-} from "./connection-http-subscription-client.js";
+} from "../den/membership.js";
 import type { DenHttpConnectionConfig } from "./connection-types.js";
 
 export interface ActiveSubscriptionState {

@@ -491,17 +491,14 @@ export class SessionManagerImpl implements SessionManager {
       return existing;
     }
 
-    const newSession = await this.create({
-      profileId: this.fallbackProfileId,
-      kind: "full",
-      channelBindings: [this.bindingFor(channelId)],
-    });
-    this.emitRouting(newSession.id, channelId, "fallback_created");
-    this.logger.info("Fallback session created for routing", {
-      sessionId: newSession.id,
-      channelId,
-    });
-    return newSession;
+    // ── No fallback session creation ─────────────────────
+    // The ChannelRouter filters unauthorized channels before
+    // they reach the session manager. If we get here with no
+    // match, the router has a gap — fail loudly.
+    throw new Error(
+      `No configured or existing session for channel ${channelId}; ` +
+      "the ChannelRouter should have dropped this message.",
+    );
   }
 
   private async resolveConfiguredSession(

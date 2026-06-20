@@ -6,7 +6,6 @@ import { CrewConfigSchema, type CrewConfig } from "./config.js";
 export function createFallbackChannelBinding(
   config: GatewayConfig,
 ): ((channelId: string) => ChannelBinding) | null {
-  if (config.den.channelsAllowLegacyDirectPolling) return null;
   if (config.den.channelsSubscriptionIdentity.length === 0) return null;
   return (channelId: string): ChannelBinding => ({
     providerId: "den-channels",

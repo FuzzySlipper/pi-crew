@@ -110,19 +110,4 @@ export function configureFullSessionManager(manager: unknown, config: CrewConfig
   );
 }
 
-export function configuredFullAgentMemberIdentities(config: CrewConfig, profilesRoot: string): readonly string[] {
-  return [...new Set(
-    config.fullAgents
-      .filter((agent) => agent.enabled)
-      .map((agent) => resolveAgentFields(agent, profilesRoot).memberIdentity),
-  )];
-}
 
-export function configuredFullAgentAdditionalProjectIds(config: CrewConfig, profilesRoot: string, primaryProjectId: string): readonly string[] {
-  return [...new Set(
-    config.fullAgents
-      .filter((agent) => agent.enabled)
-      .flatMap((agent) => resolveAgentFields(agent, profilesRoot).channels.map((ch) => ch.projectId))
-      .filter((pid): pid is string => pid !== undefined && pid !== primaryProjectId),
-  )];
-}

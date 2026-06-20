@@ -171,16 +171,22 @@ export class DenChannelsAdapter implements ChannelProvider, ChannelMembershipPro
   // ── Channel discovery ─────────────────────────────────────────
 
   async listChannels(): Promise<ChannelInfo[]> {
-    // Den Channels doesn't have a channel-listing protocol yet;
-    // channels are discovered via inbound messages and breadcrumbs.
+    // Den Channels does not expose a /api/channels listing endpoint.
+    // Channels are discovered via inbound messages and breadcrumbs.
+    // When den-channels adds the endpoint, query it here.
+    // Tracking: den-channels roadmap issue #channel-discovery
     await Promise.resolve();
     return [];
   }
 
   async channelExists(channelId: string): Promise<boolean> {
-    // In the current Den Channels design, channels exist implicitly
-    // as they appear in messages.
-    void channelId; // used for future lookup
+    // Den Channels does not expose a channel-existence endpoint.
+    // Return true optimistically — if a message arrives from a channel
+    // we don't know, existence is the safer assumption.
+    // Once /api/channel-subscriptions?channelId= exists for non-members,
+    // query it here instead.
+    // Tracking: den-channels roadmap issue #channel-discovery
+    void channelId;
     await Promise.resolve();
     return true;
   }
@@ -234,19 +240,18 @@ export class DenChannelsAdapter implements ChannelProvider, ChannelMembershipPro
     await this.#connection.updateBreadcrumb(breadcrumbId, update);
   }
 
-  // ── Typing indicators (optional) ──────────────────────────────
+  // ── Typing indicators (optional — Den does not support) ───────
 
   async sendTypingIndicator(channelId: string): Promise<void> {
-    this.#logger.debug("Typing indicator requested (unsupported)", {
-      channelId,
-    });
+    // Den Channels does not expose a typing-indicator endpoint.
+    // Telegram implements this via sendChatAction.
+    // No-op is correct for Den.
+    void channelId;
     await Promise.resolve();
   }
 
   async clearTypingIndicator(channelId: string): Promise<void> {
-    this.#logger.debug("Clear typing indicator (unsupported)", {
-      channelId,
-    });
+    void channelId;
     await Promise.resolve();
   }
 

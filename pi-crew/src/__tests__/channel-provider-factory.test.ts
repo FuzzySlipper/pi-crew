@@ -15,9 +15,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { FakeLogger, FakeEventBus, ConfigurationError } from "@pi-crew/core";
 import { AuthenticationError } from "@pi-crew/core";
 import { TelegramChannelProvider } from "@pi-crew/channels/telegram/telegram-channel-provider";
+import { SimulatedDenConnection } from "@pi-crew/channels/den-channels/connection-simulated";
+import { DenChannelsAdapter } from "@pi-crew/channels/den-channels/den-channels-adapter";
 import {
   createChannelProvider,
   createAdditionalChannelProviders,
+  createPerAgentDenChannelsProvider,
   AdditionalChannelProviderSchema,
   ChannelProvidersConfigSchema,
 } from "../channel-provider-factory.js";
@@ -216,6 +219,37 @@ describe("channel-provider-factory", () => {
       if (result.success) {
         expect(result.data).toHaveLength(1);
       }
+    });
+  });
+
+  describe("createPerAgentDenChannelsProvider", () => {
+    it("creates a DenChannelsAdapter with agent identity as providerId", () => {
+      const connection = new SimulatedDenConnection(new FakeLogger());
+      const logger = new FakeLogger();
+
+      const provider = createPerAgentDenChannelsProvider(
+        connection,
+        logger,
+        "prime-coder",
+      );
+
+      expect(provider).toBeInstanceOf(DenChannelsAdapter);
+      expect(provider.providerId).toBe("prime-coder");
+      expect(provider.name).toBe("Agent: prime-coder");
+    });
+
+    it("uses the given agent identity for providerId", () => {
+      const connection = new SimulatedDenConnection(new FakeLogger());
+      const logger = new FakeLogger();
+
+      const provider = createPerAgentDenChannelsProvider(
+        connection,
+        logger,
+        "caretaker",
+      );
+
+      expect(provider.providerId).toBe("caretaker");
+      expect(provider.name).toBe("Agent: caretaker");
     });
   });
 });
