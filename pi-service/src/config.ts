@@ -74,6 +74,14 @@ const DenConfigSchema = z.object({
    */
   deliveryUrl: z.string().url().optional(),
   /**
+   * Den Observation base URL for posting agent activity breadcrumbs.
+   * Required for observation/adapter telemetry. When absent, observation
+   * events are silently dropped (no-op mode for minimal-footprint runtimes).
+   * Expects an http:// or https:// URL pointing to the den-services
+   * observation service (e.g. "http://den-srv:8082").
+   */
+  observationUrl: z.string().url().optional(),
+  /**
    * Auth token for the Den Channels Gateway. Do NOT commit real tokens —
    * provide them from the service environment or user-scoped config.
    */

@@ -46,6 +46,13 @@ den:
   # absent) as a temporary compatibility fallback.
   # deliveryUrl: "http://192.168.1.10:18081"
 
+  # Den Observation base URL for agent activity breadcrumbs (den-services
+  # observation service). When set, pi-crew emits typed agent_activity.v1
+  # events for startup/shutdown, session lifecycle, worker assignments,
+  # delegation, and adapter connectivity.
+  # Optional — when absent, observation events are silently dropped.
+  # observationUrl: "http://192.168.1.10:8082"
+
   # Auth token for the Den Channels Gateway.
   # Override via PI_DEN_CHANNELS_TOKEN env var. Do NOT commit real tokens.
   channelsToken: ""
